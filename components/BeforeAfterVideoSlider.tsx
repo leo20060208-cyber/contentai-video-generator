@@ -1,0 +1,177 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { Play, Pause } from 'lucide-react';
+
+interface BeforeAfterVideoSliderProps {
+    beforeVideoUrl: string;
+    afterVideoUrl: string;
+    className?: string;
+}
+
+export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, className = '' }: BeforeAfterVideoSliderProps) {
+    const [sliderPosition, setSliderPosition] = useState(50); // 0-100%
+    const [isDragging, setIsDragging] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [showLabels, setShowLabels] = useState(true); // Control label visibility
+    const [isHovering, setIsHovering] = useState(false); // Control hover state
+    const containerRef = useRef<HTMLDivElement>(null);
+    const beforeVideoRef = useRef<HTMLVideoElement>(null);
+    const afterVideoRef = useRef<HTMLVideoElement>(null);
+
+    // Handle drag events
+    const handleMouseDown = () => {
+        setIsDragging(true);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!isDragging || !containerRef.current) return;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+        setSliderPosition(percentage);
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    // Touch events for mobile
+    const handleTouchMove = (e: TouchEvent) => {
+        if (!isDragging || !containerRef.current) return;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.touches[0].clientX - rect.left;
+        const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
+        setSliderPosition(percentage);
+    };
+
+    useEffect(() => {
+        if (isDragging) {
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.addEventListener('touchmove', handleTouchMove);
+            document.addEventListener('touchend', handleMouseUp);
+        }
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener('touchmove', handleTouchMove);
+            document.removeEventListener('touchend', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    // Sync video playback
+    const togglePlayPause = () => {
+        if (!beforeVideoRef.current || !afterVideoRef.current) return;
+
+        if (isPlaying) {
+            beforeVideoRef.current.pause();
+            afterVideoRef.current.pause();
+        } else {
+            beforeVideoRef.current.play();
+            afterVideoRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    // Sync video times
+    const handleTimeUpdate = () => {
+        if (!beforeVideoRef.current || !afterVideoRef.current) return;
+
+        // Keep videos in sync
+        const timeDiff = Math.abs(beforeVideoRef.current.currentTime - afterVideoRef.current.currentTime);
+        if (timeDiff > 0.1) {
+            afterVideoRef.current.currentTime = beforeVideoRef.current.currentTime;
+        }
+    };
+
+    // Handle video end
+    const handleVideoEnd = () => {
+        setIsPlaying(false);
+        if (beforeVideoRef.current && afterVideoRef.current) {
+            beforeVideoRef.current.currentTime = 0;
+            afterVideoRef.current.currentTime = 0;
+        }
+    };
+
+    return (
+        <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 ${className}`}>
+            <div
+                ref={containerRef}
+                className="relative w-full mx-auto"
+                style={{
+                    aspectRatio: '9/16',
+                    maxHeight: '70vh',
+                    width: 'auto'
+                }}
+                onMouseEnter={() => setIsHovering(true)}
+                onMouseLeave={() => setIsHovering(false)}
+            >
+                {/* After Video (Background Layer) */}
+                <video
+                    ref={afterVideoRef}
+                    src={afterVideoUrl}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loop
+                    playsInline
+                    onEnded={handleVideoEnd}
+                />
+
+                {/* Before Video (Clipped Layer) */}
+                <div
+                    className="absolute inset-0 overflow-hidden"
+                    style={{
+                        clipPath: `inset(0 ${100 - sliderPosition}% 0 0)`,
+                    }}
+                >
+                    <video
+                        ref={beforeVideoRef}
+                        src={beforeVideoUrl}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        loop
+                        playsInline
+                        onTimeUpdate={handleTimeUpdate}
+                        onEnded={handleVideoEnd}
+                    />
+                </div>
+
+                {/* Slider Line - Only visible on hover or while dragging */}
+                <div
+                    className={`absolute top-0 bottom-0 w-0.5 bg-white/80 cursor-ew-resize z-20 transition-opacity duration-300 ${isHovering || isDragging ? 'opacity-100' : 'opacity-0'
+                        }`}
+                    style={{ left: `${sliderPosition}%` }}
+                    onMouseDown={handleMouseDown}
+                    onTouchStart={handleMouseDown}
+                />
+
+                {/* Labels - Conditional - MOVED HIGHER */}
+                {showLabels && (
+                    <>
+                        <div className="absolute top-6 left-4 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white text-xs font-semibold z-10">
+                            Before
+                        </div>
+                        <div className="absolute top-6 right-4 px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-semibold z-10">
+                            After
+                        </div>
+                    </>
+                )}
+
+                {/* Play/Pause Button - SMALLER and AT BOTTOM CENTER */}
+                <button
+                    onClick={togglePlayPause}
+                    className={`absolute bottom-16 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/60 transition-all shadow-lg z-10 group ${isHovering ? 'opacity-100' : 'opacity-0'
+                        }`}
+                >
+                    {isPlaying ? (
+                        <Pause className="w-4 h-4 text-white" />
+                    ) : (
+                        <Play className="w-4 h-4 text-white ml-0.5" />
+                    )}
+                </button>
+            </div>
+        </div>
+    );
+}

@@ -1,0 +1,26 @@
+{
+  "templates": [
+    {
+      "id": "example-1",
+      "title": "Example Template",
+      "description": "Sube tu primer video aquí",
+      "category": "social-media",
+      "tags": ["example"],
+      "duration": 10,
+      "aspectRatio": "9:16",
+      "videoFile": "example.mp4",
+      "hiddenPrompt": "Prompt de ejemplo - reemplaza con el análisis de tu video"
+    }
+  ],
+  
+  "_categories": [
+    "social-media",
+    "youtube",
+    "content-creators",
+    "ecommerce",
+    "fashion",
+    "dropshipping"
+  ],
+  
+  "_instructions": "1. Pon tus videos en public/templates/videos/  2. Añade la info aquí con videoFile igual al nombre del archivo"
+}

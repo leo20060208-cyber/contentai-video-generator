@@ -1,0 +1,12 @@
+﻿
+C:\Users\Convidats\Downloads\videosandanimations\videosandanimations\app\studio\page.tsx
+   13:5   error    'Scissors' is defined but never used                                                                                                                                             @typescript-eslint/no-unused-vars
+   64:11  error    'ChatMessage' is defined but never used                                                                                                                                          @typescript-eslint/no-unused-vars
+  105:12  error    'saveStatus' is assigned a value but never used                                                                                                                                  @typescript-eslint/no-unused-vars
+  106:12  error    'lastSaved' is assigned a value but never used                                                                                                                                   @typescript-eslint/no-unused-vars
+  152:8   warning  React Hook useEffect has a missing dependency: 'loadVideoById'. Either include it or remove the dependency array                                                                 react-hooks/exhaustive-deps
+  161:8   warning  React Hook useEffect has missing dependencies: 'audioTracks.length', 'currentVideoId', 'isExtractingAudio', and 'videoFile'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  173:8   warning  React Hook useEffect has a missing dependency: 'saveProject'. Either include it or remove the dependency array                                                                   react-hooks/exhaustive-deps
+
+Ô£û 7 problems (4 errors, 3 warnings)
+

@@ -1,0 +1,237 @@
+# VideoAI SaaS - Cursor Rules
+
+## Contexto del Proyecto
+Este es un SaaS de generación de video con IA construido con Next.js 15, TypeScript, Tailwind CSS y Zustand.
+
+### Stack Tecnológico
+- Framework: Next.js 15 (App Router)
+- Lenguaje: TypeScript (strict mode)
+- Estilos: Tailwind CSS + Shadcn UI
+- Estado: Zustand
+- Animaciones: Framer Motion
+- Iconos: Lucide React
+
+### Arquitectura
+- Dos flujos principales: Templates (image-to-video) y Animation (text-to-video)
+- Separación clara entre componentes de templates y animation
+- Store centralizado con Zustand (video, template, ui)
+- API routes para generación y polling de jobs
+
+## Reglas de Código
+
+### TypeScript
+- Siempre usar tipos explícitos, nunca `any`
+- Todas las interfaces en archivos `types/*.types.ts`
+- Usar `type` para unions, `interface` para objetos
+- Exportar todas las interfaces y tipos
+
+### Componentes React
+- Componentes funcionales con TypeScript
+- Props siempre tipadas con interfaces
+- Usar 'use client' solo cuando sea necesario (interactividad)
+- Componentes de layout pueden ser Server Components
+- Separar lógica en custom hooks cuando sea complejo
+
+### Estilos
+- Usar Tailwind CSS exclusivamente, no CSS modules
+- Usar la utilidad `cn()` para merge de clases condicionales
+- Seguir la paleta de colores definida en tailwind.config.ts
+- Mobile-first approach
+- Usar variantes responsive (sm:, md:, lg:)
+
+### Estructura de Archivos
+- Componentes shared en `components/shared/`
+- Componentes específicos en `components/templates/` o `components/animation/`
+- Hooks personalizados en `lib/hooks/`
+- Utilidades en `lib/utils/`
+- Tipos en `types/`
+- Stores en `store/`
+
+### Naming Conventions
+- Componentes: PascalCase (ej: `VideoPlayer.tsx`)
+- Hooks: camelCase con prefijo 'use' (ej: `useVideoGeneration.ts`)
+- Utils: camelCase (ej: `formatDuration.ts`)
+- Types: PascalCase con sufijo (ej: `VideoTemplate`, `GenerationJob`)
+- Archivos de config: kebab-case (ej: `site-config.ts`)
+
+### Estado (Zustand)
+- Un store por dominio (video, template, ui)
+- Acciones verbosas: `startGeneration`, `setSelectedTemplate`
+- Usar persist middleware solo para datos que deben sobrevivir refresh
+- No persistir estados transitorios (loading, polling)
+
+### API Routes
+- Validar todos los inputs en el servidor
+- Retornar siempre estructura consistente: `{ success, data, error }`
+- Manejar errores con try/catch
+- Logs apropiados para debugging
+- Rate limiting cuando sea necesario
+
+### Animaciones (Framer Motion)
+- Usar `motion` components para animaciones
+- Definir variants para animaciones reutilizables
+- Stagger para listas/grids
+- Transiciones suaves (duration: 0.3-0.5s)
+- Respetar prefers-reduced-motion
+
+### Accesibilidad
+- Siempre incluir `aria-label` en botones sin texto
+- Alt text en imágenes
+- Keyboard navigation funcional
+- Focus indicators visibles
+- Semantic HTML
+
+### Performance
+- Lazy loading de componentes pesados
+- Optimizar imágenes con next/image
+- Code splitting por rutas
+- Memoization cuando sea necesario (useMemo, useCallback)
+- Evitar re-renders innecesarios
+
+## Patterns Específicos del Proyecto
+
+### Generación de Video
+```typescript
+// Siempre seguir este patrón
+const { generate, isGenerating } = useVideoGeneration();
+
+await generate({
+  type: 'text-to-video' | 'image-to-video',
+  prompt?: string,
+  imageUrl?: string,
+  styleId?: string,
+});
+```
+
+### Polling de Jobs
+```typescript
+// El store maneja el polling automáticamente
+startGeneration() // inicia polling
+// polling se detiene automáticamente cuando status = completed/failed
+```
+
+### Notificaciones
+```typescript
+// Usar el store de UI
+const addNotification = useUIStore(state => state.addNotification);
+
+addNotification({
+  type: 'success' | 'error' | 'warning' | 'info',
+  title: string,
+  message?: string,
+});
+```
+
+### Validación
+```typescript
+// Usar utilidades de lib/utils/validators.ts
+import { validateImage, validatePrompt } from '@/lib/utils/validators';
+
+const validation = validateImage(file);
+if (!validation.isValid) {
+  // mostrar error
+}
+```
+
+## Guías de UI/UX
+
+### Colores
+- Background: `bg-background` (#0a0a0a)
+- Surface: `bg-surface` (#1a1a1a)
+- Primary: `bg-primary` (#6366f1)
+- Text: `text-white`, `text-zinc-400`, `text-zinc-500`
+
+### Efectos
+- Glassmorphism: `bg-surface/70 backdrop-blur-xl border border-border/40`
+- Gradientes: `bg-gradient-to-r from-primary to-purple-600`
+- Shadows: `hover:shadow-lg hover:shadow-primary/50`
+
+### Espaciado
+- Usar múltiplos de 4: `p-4`, `gap-6`, `mb-8`
+- Container: `container mx-auto px-4`
+- Secciones: `py-24` en desktop, `py-12` en mobile
+
+### Componentes Shadcn
+- Instalar con: `npx shadcn-ui@latest add [component]`
+- Customizar en `components/ui/`
+- Usar la utilidad `cn()` para estilos adicionales
+
+## Flujos de Trabajo
+
+### Añadir Nueva Feature
+1. Definir tipos en `types/`
+2. Crear componentes necesarios
+3. Añadir al store si necesita estado global
+4. Crear API route si necesita backend
+5. Integrar en página correspondiente
+6. Testear flujo completo
+
+### Debugging
+1. Check store state con Redux DevTools
+2. Check network requests en DevTools
+3. Check console logs (usar logging apropiado)
+4. Check types (npm run type-check)
+
+### Antes de Commit
+1. `npm run lint` pasa
+2. `npm run type-check` pasa
+3. `npm run build` exitoso
+4. Testeado visualmente en mobile y desktop
+5. Sin console.errors
+
+## Documentación
+
+### Al crear componente nuevo
+- Añadir comentario JSDoc describiendo propósito
+- Documentar props complejas
+- Incluir ejemplo de uso si es reutilizable
+
+### Al crear función/hook
+- Comentario JSDoc con descripción
+- Documentar parámetros y retorno
+- Incluir ejemplo si no es obvio
+
+## Prioridades
+
+1. **Type Safety**: Nunca usar `any`, siempre tipos explícitos
+2. **User Experience**: Animaciones suaves, feedback inmediato
+3. **Performance**: Lazy loading, memoization, optimización
+4. **Accesibilidad**: Keyboard nav, ARIA, semantic HTML
+5. **Mantenibilidad**: Código limpio, comentarios cuando sea necesario
+
+## Anti-patterns a Evitar
+
+❌ Usar `any` en TypeScript
+❌ Inline styles (usar Tailwind)
+❌ CSS modules (usar Tailwind)
+❌ Fetch directo en componentes (usar hooks)
+❌ Estado local cuando debería ser global
+❌ Re-renders innecesarios
+❌ Componentes > 300 líneas (refactorizar)
+❌ Mezclar lógica de templates y animation
+
+## Referencias Rápidas
+
+- Documentación: Ver `/INDEX.md`
+- Arquitectura: Ver `/ARCHITECTURE.md`
+- Quick Start: Ver `/QUICK_START.md`
+- Componentes: Ver `/COMPONENT_EXAMPLES.md`
+- API Integration: Ver `/API_INTEGRATION.md`
+- Flujo de Datos: Ver `/DATA_FLOW.md`
+
+## Comandos Útiles
+
+```bash
+npm run dev          # Desarrollo
+npm run build        # Build de producción
+npm run type-check   # Check de tipos
+npm run lint         # Linting
+```
+
+## Version
+
+Proyecto: VideoAI SaaS
+Version: 1.0.0
+Next.js: 15.x
+TypeScript: 5.x
+
