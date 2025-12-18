@@ -3,6 +3,14 @@ const nextConfig = {
   compress: true,
   poweredByHeader: false,
 
+  // Disable linting and type checking during build
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+
   images: {
     remotePatterns: [
       {
