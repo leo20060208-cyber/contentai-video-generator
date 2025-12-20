@@ -151,12 +151,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const loginWithGoogle = async (nextPath?: string) => {
         const next = nextPath && nextPath.trim().length > 0 ? nextPath : '/profile';
-        await supabase.auth.signInWithOAuth({
+        const { data, error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+                // Be explicit so we always navigate even if Supabase returns a URL.
+                skipBrowserRedirect: true,
             },
         });
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        if (data?.url) {
+            window.location.href = data.url;
+            return;
+        }
+
+        throw new Error('Could not start Google sign-in.');
     };
 
     const logout = async () => {
