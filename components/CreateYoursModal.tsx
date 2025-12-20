@@ -675,7 +675,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                 {currentStep < 3 ? (
                                     <Button
                                         onClick={() => setCurrentStep(currentStep + 1)}
-                                        disabled={currentStep === 1 ? !canProceedStep1 : !canProceedStep2}
+                                        // Step 2 masking is optional; don't block navigation here.
+                                        // Final validation happens on "Generate".
+                                        disabled={currentStep === 1 ? !canProceedStep1 : false}
                                         className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600"
                                     >
                                         Next
