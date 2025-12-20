@@ -14,6 +14,20 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+const sanitizeStorageFileName = (inputName: string): string => {
+    // Supabase Storage object keys are picky: avoid spaces, emojis, and special chars.
+    // Keep it stable and readable.
+    const normalized = (inputName || 'file')
+        .normalize('NFKD')
+        // Replace anything not safe for storage keys
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+    // Avoid empty names
+    return normalized.length > 0 ? normalized : 'file';
+};
+
 interface CreateYoursModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -189,7 +203,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
                 const blob = new Blob([bytes], { type: file.type || 'image/png' });
 
-                const uploadPath = `products/${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name}`;
+                const safeName = sanitizeStorageFileName(file.name);
+                const uploadPath = `products/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
                 const { error: prodUploadError } = await supabase.storage
                     .from('videos')
                     .upload(uploadPath, blob, { contentType: file.type || 'image/png', upsert: true });
@@ -240,7 +255,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             const token = session?.access_token;
 
             // Upload video to permanent location
-            const fileName = `user-videos/${Date.now()}_${videoFile!.name}`;
+            const safeVideoName = sanitizeStorageFileName(videoFile!.name);
+            const fileName = `user-videos/${Date.now()}_${safeVideoName}`;
             const { error: uploadError } = await supabase.storage
                 .from('videos')
                 .upload(fileName, videoFile!, {
