@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
     Mail,
@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function LoginPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { login, loginWithGoogle } = useAuth();
 
     const [email, setEmail] = useState('');
@@ -37,13 +38,15 @@ export default function LoginPage() {
             setError(result.error);
             setIsLoading(false);
         } else {
-            router.push('/profile');
+            const next = searchParams.get('next') ?? '/profile';
+            router.push(next);
         }
     };
 
     const handleGoogleLogin = async () => {
         setIsGoogleLoading(true);
-        await loginWithGoogle();
+        const next = searchParams.get('next') ?? '/profile';
+        await loginWithGoogle(next);
     };
 
     return (

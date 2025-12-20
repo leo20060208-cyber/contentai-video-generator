@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
-import { getProfile, Profile } from '@/lib/db/profiles';
+import { getOrCreateProfile, Profile } from '@/lib/db/profiles';
 
 interface AuthContextType {
     user: User | null;
@@ -12,7 +12,7 @@ interface AuthContextType {
     isLoading: boolean;
     login: (email: string, password: string) => Promise<{ error: string | null }>;
     signup: (name: string, email: string, password: string) => Promise<{ error: string | null }>;
-    loginWithGoogle: () => Promise<void>;
+    loginWithGoogle: (nextPath?: string) => Promise<void>;
     logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
 }
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const refreshProfile = async () => {
         if (user) {
-            const userProfile = await getProfile(user.id);
+            const userProfile = await getOrCreateProfile({ userId: user.id, user });
             setProfile(userProfile);
         }
     };
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                     if (session?.user) {
                         // Non-blocking profile fetch
-                        getProfile(session.user.id).then(setProfile);
+                        getOrCreateProfile({ userId: session.user.id, user: session.user }).then(setProfile);
                     }
 
                     setIsLoading(false);
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 // Non-blocking profile fetch
                 if (session?.user) {
-                    getProfile(session.user.id).then(setProfile);
+                    getOrCreateProfile({ userId: session.user.id, user: session.user }).then(setProfile);
                 } else {
                     setProfile(null);
                 }
@@ -149,11 +149,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: null };
     };
 
-    const loginWithGoogle = async () => {
+    const loginWithGoogle = async (nextPath?: string) => {
+        const next = nextPath && nextPath.trim().length > 0 ? nextPath : '/profile';
         await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/auth/callback`,
+                redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
             },
         });
     };
