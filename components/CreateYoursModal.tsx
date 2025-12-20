@@ -28,11 +28,35 @@ const sanitizeStorageFileName = (inputName: string): string => {
     return normalized.length > 0 ? normalized : 'file';
 };
 
-const getUserIdOrThrow = async (): Promise<string> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (!userId) throw new Error('Not authenticated');
-    return userId;
+const uploadToStorageViaApi = async (params: {
+    token: string;
+    file: File;
+    prefix: 'user-videos' | 'frames' | 'products';
+}): Promise<{ storagePath: string; signedUrl: string }> => {
+    const form = new FormData();
+    form.append('file', params.file);
+    form.append('prefix', params.prefix);
+
+    const res = await fetch('/api/storage/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${params.token}` },
+        body: form
+    });
+
+    const raw = await res.text();
+    const data: unknown = raw ? JSON.parse(raw) : {};
+    if (!res.ok) {
+        const msg =
+            typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                ? (data as { error: string }).error
+                : (raw || 'Upload failed');
+        throw new Error(msg);
+    }
+    const parsed = data as { success?: boolean; storagePath?: unknown; signedUrl?: unknown };
+    const storagePath = typeof parsed.storagePath === 'string' ? parsed.storagePath : null;
+    const signedUrl = typeof parsed.signedUrl === 'string' ? parsed.signedUrl : null;
+    if (!storagePath || !signedUrl) throw new Error('Upload did not return signedUrl/storagePath');
+    return { storagePath, signedUrl };
 };
 
 interface CreateYoursModalProps {
@@ -144,7 +168,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
         setIsExtractingFrame(true);
         try {
-            const userId = await getUserIdOrThrow();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) throw new Error('Not authenticated');
             // Create canvas to capture frame
             const video = videoRef.current;
             const canvas = document.createElement('canvas');
@@ -165,21 +191,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 }, 'image/jpeg', 0.95);
             });
 
-            // Upload to Supabase
-            const fileName = `frames/${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-            const { error: uploadError } = await supabase.storage
-                .from('videos')
-                .upload(fileName, blob, {
-                    contentType: 'image/jpeg'
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('videos')
-                .getPublicUrl(fileName);
-
-            setExtractedFrameUrl(publicUrl);
+            // Upload via backend (service role) to avoid Storage/RLS issues
+            const frameFile = new File([blob], `frame_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            const uploaded = await uploadToStorageViaApi({ token, file: frameFile, prefix: 'frames' });
+            setExtractedFrameUrl(uploaded.signedUrl);
             setShowVideoSegmentModal(true);
         } catch (error) {
             console.error('Error extracting frame:', error);
@@ -202,28 +217,13 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
             setShowProductSegmentModal(true);
 
-            // Upload original product image to Supabase to avoid huge base64 payloads to /api/video/generate
-            // (Also makes it easier for providers to fetch, especially when the backend signs URLs.)
+            // Upload original product image via backend to avoid Storage/RLS + huge base64 payloads
             try {
-                const userId = await getUserIdOrThrow();
-                const base64Data = base64.split(',')[1];
-                const byteString = atob(base64Data);
-                const bytes = new Uint8Array(byteString.length);
-                for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
-                const blob = new Blob([bytes], { type: file.type || 'image/png' });
-
-                const safeName = sanitizeStorageFileName(file.name);
-                const uploadPath = `products/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
-                const { error: prodUploadError } = await supabase.storage
-                    .from('videos')
-                    .upload(uploadPath, blob, { contentType: file.type || 'image/png', upsert: true });
-
-                if (!prodUploadError) {
-                    const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(uploadPath);
-                    setProductImageUrl(publicUrl);
-                } else {
-                    console.warn('Product upload failed (will fallback to base64):', prodUploadError);
-                }
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                if (!token) return;
+                const uploaded = await uploadToStorageViaApi({ token, file, prefix: 'products' });
+                setProductImageUrl(uploaded.signedUrl);
             } catch (err) {
                 console.warn('Product upload exception (will fallback to base64):', err);
             }
@@ -262,25 +262,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
-            const userId = session?.user?.id;
-            if (!userId) throw new Error('Not authenticated');
+            if (!token) throw new Error('Not authenticated');
 
             // Upload video to permanent location
-            const safeVideoName = sanitizeStorageFileName(videoFile!.name);
-            const fileName = `user-videos/${userId}/${Date.now()}_${safeVideoName}`;
-            const { error: uploadError } = await supabase.storage
-                .from('videos')
-                .upload(fileName, videoFile!, {
-                    contentType: videoFile!.type || 'video/mp4'
-                });
+            const uploadedVideo = await uploadToStorageViaApi({ token, file: videoFile!, prefix: 'user-videos' });
+            const fileName = uploadedVideo.storagePath;
+            const signedUrl = uploadedVideo.signedUrl;
 
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('videos')
-                .getPublicUrl(fileName);
-
-            setGenModal(prev => ({ ...prev, sourceVideoUrl: publicUrl, sourceVideoPath: fileName }));
+            setGenModal(prev => ({ ...prev, sourceVideoUrl: signedUrl, sourceVideoPath: fileName }));
 
             // IMPORTANT:
             // - Segmentation returns a *mask overlay*, not the product image.
@@ -299,7 +288,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 body: JSON.stringify({
                     model: 'kwaivgi/kling-video-o1/video-edit',
                     images: [productReferenceImage],
-                    audio_url: publicUrl, // Original video for Video Edit
+                    audio_url: signedUrl, // Signed URL for provider access
                     audio_storage_path: fileName, // Allows server to create a signed URL (works even if bucket is private)
                     prompt: prompt || 'Recreate this video with the new product',
                     duration: Math.min(videoDuration, 10),
@@ -331,7 +320,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 // Avoid TS narrowing issues inside state updater closure
                 setGenModal(prev => ({ ...prev, taskId, provider }));
                 // Start polling
-                startPolling(taskId, provider, publicUrl, fileName);
+                startPolling(taskId, provider, signedUrl, fileName);
             } else {
                 throw new Error('No taskId returned from server');
             }
