@@ -242,7 +242,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Handle generation
     const handleGenerate = async () => {
-        if (!videoUrl || !videoFile || !videoMaskUrl || !productMaskUrl) {
+        const productReferenceImage = productImageUrl || productImage || productMaskUrl;
+        if (!videoUrl || !videoFile || !extractedFrameUrl || !productReferenceImage) {
             alert('Please complete all steps');
             return;
         }
@@ -274,10 +275,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             // IMPORTANT:
             // - Segmentation returns a *mask overlay*, not the product image.
             // - Video-edit expects a reference image of the product (texture/color), so prefer the original product image.
-            const productReferenceImage = productImageUrl || productImage || productMaskUrl;
-            if (!productReferenceImage) {
-                throw new Error('Missing product reference image');
-            }
+            // Note: Product masking is optional; the model needs a product reference image.
+            // Prefer the uploaded URL when available.
+            if (!productReferenceImage) throw new Error('Missing product reference image');
 
             const response = await fetch('/api/video/generate', {
                 method: 'POST',
@@ -438,8 +438,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         pollingIntervalRef.current = interval;
     };
 
-    const canProceedStep1 = videoUrl && extractedFrameUrl;
-    const canProceedStep2 = productMaskUrl;
+    const canProceedStep1 = !!(videoUrl && extractedFrameUrl);
+    // Masking is optional for step 2; allow proceeding with product image (or uploaded URL).
+    const canProceedStep2 = !!(productImageUrl || productImage);
     const canGenerate = canProceedStep1 && canProceedStep2;
 
     return (
