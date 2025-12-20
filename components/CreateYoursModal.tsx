@@ -50,14 +50,36 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         status: 'processing' | 'mixing_audio' | 'completed' | 'failed';
         videoUrl: string | null;
         taskId: string | null;
+        provider: string | null;
+        errorMessage: string | null;
+        sourceVideoUrl: string | null;
     }>({
         isOpen: false,
         status: 'processing',
         videoUrl: null,
         taskId: null
+        ,
+        provider: null,
+        errorMessage: null,
+        sourceVideoUrl: null
     });
 
     const videoRef = useRef<HTMLVideoElement>(null);
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Cleanup polling when modal closes/unmounts
+    useEffect(() => {
+        if (!genModal.isOpen && pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, [genModal.isOpen]);
 
     // Handle video upload
     const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,13 +189,21 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Handle generation
     const handleGenerate = async () => {
-        if (!videoUrl || !videoMaskUrl || !productMaskUrl) {
+        if (!videoUrl || !videoFile || !videoMaskUrl || !productMaskUrl) {
             alert('Please complete all steps');
             return;
         }
 
         setIsGenerating(true);
-        setGenModal({ isOpen: true, status: 'processing', videoUrl: null, taskId: null });
+        setGenModal({
+            isOpen: true,
+            status: 'processing',
+            videoUrl: null,
+            taskId: null,
+            provider: null,
+            errorMessage: null,
+            sourceVideoUrl: null
+        });
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -183,13 +213,17 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             const fileName = `user-videos/${Date.now()}_${videoFile!.name}`;
             const { error: uploadError } = await supabase.storage
                 .from('videos')
-                .upload(fileName, videoFile!);
+                .upload(fileName, videoFile!, {
+                    contentType: videoFile!.type || 'video/mp4'
+                });
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
                 .from('videos')
                 .getPublicUrl(fileName);
+
+            setGenModal(prev => ({ ...prev, sourceVideoUrl: publicUrl }));
 
             const response = await fetch('/api/video/generate', {
                 method: 'POST',
@@ -207,31 +241,62 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 })
             });
 
-            if (!response.ok) throw new Error('Generation failed');
-            const data = await response.json();
+            const rawText = await response.text();
+            let data: unknown = {};
+            try {
+                data = rawText ? JSON.parse(rawText) : {};
+            } catch {
+                // keep as {}
+            }
 
-            if (data.taskId) {
-                setGenModal(prev => ({ ...prev, taskId: data.taskId }));
+            if (!response.ok) {
+                const errMsg =
+                    typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                        ? (data as { error: string }).error
+                        : (rawText || 'Generation failed');
+                throw new Error(errMsg);
+            }
+
+            const parsed = data as { taskId?: unknown; provider?: unknown };
+            const taskId = typeof parsed.taskId === 'string' ? parsed.taskId : null;
+            const provider = typeof parsed.provider === 'string' ? parsed.provider : null;
+
+            if (taskId) {
+                // Avoid TS narrowing issues inside state updater closure
+                setGenModal(prev => ({ ...prev, taskId, provider }));
                 // Start polling
-                startPolling(data.taskId);
+                startPolling(taskId, provider, publicUrl);
+            } else {
+                throw new Error('No taskId returned from server');
             }
         } catch (error) {
             console.error('Error generating:', error);
-            setGenModal(prev => ({ ...prev, status: 'failed' }));
+            setGenModal(prev => ({
+                ...prev,
+                status: 'failed',
+                errorMessage: (error as Error)?.message || 'Generation failed'
+            }));
         } finally {
             setIsGenerating(false);
         }
     };
 
     // Polling logic
-    const startPolling = (taskId: string) => {
+    const startPolling = (taskId: string, provider: string | null, sourceVideoUrl: string) => {
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`/api/video/status?taskId=${taskId}&provider=wavespeed`);
+                const providerParam = provider || 'wavespeed';
+                const res = await fetch(`/api/video/status?taskId=${encodeURIComponent(taskId)}&provider=${encodeURIComponent(providerParam)}`);
                 const data = await res.json();
 
                 if (data.data?.status === 'completed' || data.data?.status === 'succeeded') {
                     clearInterval(interval);
+                    pollingIntervalRef.current = null;
                     const generatedVideoUrl = data.data.video?.url;
 
                     if (generatedVideoUrl && videoUrl) {
@@ -244,29 +309,51 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             body: JSON.stringify({
                                 videoId: taskId,
                                 videoUrl: generatedVideoUrl,
-                                audioUrl: videoUrl
+                                // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
+                                audioUrl: sourceVideoUrl
                             })
                         });
 
-                        const mergeData = await mergeRes.json();
-                        if (mergeData.url) {
+                        const mergeText = await mergeRes.text();
+                        const mergeData: unknown = mergeText ? JSON.parse(mergeText) : {};
+
+                        if (!mergeRes.ok) {
+                            const mergeErr =
+                                typeof mergeData === 'object' && mergeData !== null && 'error' in mergeData && typeof (mergeData as { error?: unknown }).error === 'string'
+                                    ? (mergeData as { error: string }).error
+                                    : (mergeText || 'Audio merge failed');
+                            throw new Error(mergeErr);
+                        }
+
+                        if (typeof mergeData === 'object' && mergeData !== null && 'url' in mergeData && typeof (mergeData as { url?: unknown }).url === 'string') {
                             // Update DB
                             await supabase
                                 .from('videos')
                                 .update({ video_url: mergeData.url, status: 'completed' })
                                 .eq('task_id', taskId);
 
-                            setGenModal(prev => ({ ...prev, status: 'completed', videoUrl: mergeData.url }));
+                            setGenModal(prev => ({ ...prev, status: 'completed', videoUrl: (mergeData as { url: string }).url }));
+                        } else {
+                            throw new Error('Audio merge did not return a URL');
                         }
                     }
                 } else if (data.data?.status === 'failed') {
                     clearInterval(interval);
+                    pollingIntervalRef.current = null;
                     setGenModal(prev => ({ ...prev, status: 'failed' }));
                 }
             } catch (e) {
                 console.error('Polling error', e);
+                clearInterval(interval);
+                pollingIntervalRef.current = null;
+                setGenModal(prev => ({
+                    ...prev,
+                    status: 'failed',
+                    errorMessage: (e as Error)?.message || 'Polling failed'
+                }));
             }
         }, 4000);
+        pollingIntervalRef.current = interval;
     };
 
     const canProceedStep1 = videoUrl && extractedFrameUrl;
@@ -560,6 +647,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={genModal.isOpen}
                 status={genModal.status}
                 videoUrl={genModal.videoUrl}
+                errorMessage={genModal.errorMessage}
                 onClose={() => {
                     setGenModal(prev => ({ ...prev, isOpen: false }));
                     onClose(); // Close Create Yours modal too
