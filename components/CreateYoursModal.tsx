@@ -492,7 +492,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             </div>
 
                             {/* Content */}
-                            <div className="p-6 overflow-y-auto flex-1">
+                            <div className="p-6 overflow-y-auto flex-1 relative z-0">
                                 {/* STEP 1: Video Upload */}
                                 {currentStep === 1 && (
                                     <div className="space-y-6">
@@ -662,7 +662,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             </div>
 
                             {/* Footer */}
-                            <div className="p-6 border-t border-white/10 flex items-center justify-between">
+                            <div className="p-6 border-t border-white/10 flex items-center justify-between relative z-20 pointer-events-auto">
                                 <Button
                                     variant="secondary"
                                     onClick={() => currentStep > 1 ? setCurrentStep(currentStep - 1) : onClose()}
@@ -674,7 +674,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
                                 {currentStep < 3 ? (
                                     <Button
-                                        onClick={() => setCurrentStep(currentStep + 1)}
+                                        type="button"
+                                        onClick={() => setCurrentStep((s) => Math.min(s + 1, 3))}
                                         // Step 2 masking is optional; don't block navigation here.
                                         // Final validation happens on "Generate".
                                         disabled={currentStep === 1 ? !canProceedStep1 : false}
