@@ -6,6 +6,11 @@ import { createReplicatePrediction, ReplicateModel } from '@/lib/replicate';
 import { FreepikClient } from '@/lib/freepik';
 import { AtlasClient } from '@/lib/atlas';
 import { WavespeedClient } from '@/lib/wavespeed';
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import crypto from 'crypto';
 
 // Initialize client with environment variables
 const klingClient = new KlingClient({
@@ -97,6 +102,64 @@ export async function POST(request: Request) {
             const path = parseSupabaseStoragePath(url);
             if (!path) return url;
             return await getSignedOrPublicUrl(path);
+        };
+
+        // FFMPEG setup (same strategy as merge-audio route)
+        let ffmpegPath = '';
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const ffmpegStatic = require('ffmpeg-static');
+            ffmpegPath = ffmpegStatic;
+        } catch (e) {
+            console.error('ffmpeg-static not found, trying system ffmpeg', e);
+            ffmpegPath = 'ffmpeg';
+        }
+        if (ffmpegPath) {
+            ffmpeg.setFfmpegPath(ffmpegPath);
+        }
+
+        const normalizeVideoToMp4 = async (storagePath: string): Promise<string> => {
+            // Download from Supabase, transcode to MP4 (H.264 + AAC), upload back, return signed/public URL.
+            const tempDir = os.tmpdir();
+            const id = crypto.randomUUID();
+            const inputPath = path.join(tempDir, `${id}_input`);
+            const outputPath = path.join(tempDir, `${id}_output.mp4`);
+
+            try {
+                const { data, error } = await supabase.storage.from('videos').download(storagePath);
+                if (error || !data) throw new Error(`Failed to download source video: ${storagePath}`);
+                const buf = Buffer.from(await data.arrayBuffer());
+                fs.writeFileSync(inputPath, buf);
+
+                await new Promise<void>((resolve, reject) => {
+                    ffmpeg(inputPath)
+                        // Ensure broad compatibility for providers
+                        .outputOptions([
+                            '-c:v libx264',
+                            '-preset veryfast',
+                            '-crf 23',
+                            '-pix_fmt yuv420p',
+                            '-c:a aac',
+                            '-b:a 128k',
+                            '-movflags +faststart'
+                        ])
+                        .save(outputPath)
+                        .on('end', () => resolve())
+                        .on('error', (err) => reject(err));
+                });
+
+                const outBuf = fs.readFileSync(outputPath);
+                const uploadPath = `temp-gen/video-edit-source/${id}.mp4`;
+                const { error: upErr } = await supabase.storage.from('videos').upload(uploadPath, outBuf, {
+                    contentType: 'video/mp4',
+                    upsert: true
+                });
+                if (upErr) throw upErr;
+                return await getSignedOrPublicUrl(uploadPath);
+            } finally {
+                try { fs.unlinkSync(inputPath); } catch { }
+                try { fs.unlinkSync(outputPath); } catch { }
+            }
         };
 
         // Helper to save video to DB
@@ -222,7 +285,8 @@ export async function POST(request: Request) {
                         ? audio_storage_path
                         : parseSupabaseStoragePath(audio_url);
                 if (storagePath) {
-                    finalVideoUrl = await getSignedOrPublicUrl(storagePath);
+                    // Normalize to MP4 for provider compatibility (MOV/HEVC often fails otherwise)
+                    finalVideoUrl = await normalizeVideoToMp4(storagePath);
                 } else {
                     finalVideoUrl = audio_url;
                 }
