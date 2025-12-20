@@ -130,11 +130,10 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
         <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 ${className}`}>
             <div
                 ref={containerRef}
-                className="relative w-full mx-auto"
+                className="relative w-full max-w-[420px] mx-auto"
                 style={{
                     aspectRatio: '9/16',
                     maxHeight: '70vh',
-                    width: 'auto'
                 }}
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
