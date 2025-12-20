@@ -115,6 +115,22 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     const videoRef = useRef<HTMLVideoElement>(null);
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    const failGeneration = (message: unknown) => {
+        const msg =
+            typeof message === 'string' && message.trim().length > 0
+                ? message
+                : (message && typeof message === 'object' && 'message' in (message as Record<string, unknown>) && typeof (message as { message?: unknown }).message === 'string'
+                    ? (message as { message: string }).message
+                    : 'Error desconegut. Revisa la consola del navegador o els logs del servidor.');
+
+        setGenModal(prev => ({
+            ...prev,
+            isOpen: true,
+            status: 'failed',
+            errorMessage: msg
+        }));
+    };
+
     // Cleanup polling when modal closes/unmounts
     useEffect(() => {
         if (!genModal.isOpen && pollingIntervalRef.current) {
@@ -326,11 +342,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             }
         } catch (error) {
             console.error('Error generating:', error);
-            setGenModal(prev => ({
-                ...prev,
-                status: 'failed',
-                errorMessage: (error as Error)?.message || 'Generation failed'
-            }));
+            failGeneration(error);
         } finally {
             setIsGenerating(false);
         }
@@ -422,17 +434,18 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         payload.data?.statusMessage ||
                         payload.error ||
                         'La generació ha fallat. Si us plau, torna-ho a intentar.';
-                    setGenModal(prev => ({ ...prev, status: 'failed', errorMessage: failMsg }));
+                    failGeneration(failMsg);
+                } else if ((payload.data?.status === 'completed' || payload.data?.status === 'succeeded') && !payload.data?.video?.url) {
+                    // Completed but no URL is an actionable failure for the UI
+                    clearInterval(interval);
+                    pollingIntervalRef.current = null;
+                    failGeneration('El proveïdor ha marcat el vídeo com a completat però no ha retornat cap URL.');
                 }
             } catch (e) {
                 console.error('Polling error', e);
                 clearInterval(interval);
                 pollingIntervalRef.current = null;
-                setGenModal(prev => ({
-                    ...prev,
-                    status: 'failed',
-                    errorMessage: (e as Error)?.message || 'Polling failed'
-                }));
+                failGeneration(e);
             }
         }, 4000);
         pollingIntervalRef.current = interval;
