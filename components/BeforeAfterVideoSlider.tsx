@@ -15,9 +15,33 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
     const [isPlaying, setIsPlaying] = useState(false);
     const [showLabels, setShowLabels] = useState(true); // Control label visibility
     const [isHovering, setIsHovering] = useState(false); // Control hover state
+    const [isMuted, setIsMuted] = useState(true); // Autoplay-safe default
+    const [isInView, setIsInView] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const beforeVideoRef = useRef<HTMLVideoElement>(null);
     const afterVideoRef = useRef<HTMLVideoElement>(null);
+
+    // Load/auto-play only when the component is near viewport
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                        setIsInView(true);
+                        observer.disconnect();
+                        break;
+                    }
+                }
+            },
+            { rootMargin: '400px', threshold: 0.1 }
+        );
+
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
 
     // Handle drag events
     const handleMouseDown = () => {
@@ -63,19 +87,59 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
         };
     }, [isDragging]);
 
+    const syncMuteState = () => {
+        if (!beforeVideoRef.current || !afterVideoRef.current) return;
+        // To avoid echo, only the BEFORE video can have audio.
+        beforeVideoRef.current.muted = isMuted;
+        beforeVideoRef.current.volume = isMuted ? 0 : 1;
+        afterVideoRef.current.muted = true;
+        afterVideoRef.current.volume = 0;
+    };
+
+    useEffect(() => {
+        syncMuteState();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isMuted]);
+
     // Sync video playback
-    const togglePlayPause = () => {
+    const togglePlayPause = async () => {
         if (!beforeVideoRef.current || !afterVideoRef.current) return;
 
         if (isPlaying) {
             beforeVideoRef.current.pause();
             afterVideoRef.current.pause();
         } else {
-            beforeVideoRef.current.play();
-            afterVideoRef.current.play();
+            try {
+                await beforeVideoRef.current.play();
+                await afterVideoRef.current.play();
+            } catch {
+                // If playback is blocked, stay paused.
+                return;
+            }
         }
         setIsPlaying(!isPlaying);
     };
+
+    // Autoplay (best-effort). With sound it will likely be blocked, so we start muted.
+    useEffect(() => {
+        if (!isInView) return;
+        if (!beforeVideoRef.current || !afterVideoRef.current) return;
+
+        const attemptAutoplay = async () => {
+            try {
+                setIsMuted(true);
+                syncMuteState();
+                await beforeVideoRef.current!.play();
+                await afterVideoRef.current!.play();
+                setIsPlaying(true);
+            } catch {
+                // Autoplay might be blocked; user can click play.
+            }
+        };
+
+        void attemptAutoplay();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isInView]);
 
     // Sync video times
     const handleTimeUpdate = () => {
@@ -109,14 +173,20 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                 }}
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
+                onClick={() => {
+                    // user gesture: allow unmute
+                    if (isMuted) setIsMuted(false);
+                }}
             >
                 {/* After Video (Background Layer) */}
                 <video
                     ref={afterVideoRef}
-                    src={afterVideoUrl}
+                    src={isInView ? afterVideoUrl : undefined}
                     className="absolute inset-0 w-full h-full object-cover"
                     loop
                     playsInline
+                    preload={isInView ? 'auto' : 'none'}
+                    muted
                     onEnded={handleVideoEnd}
                 />
 
@@ -129,10 +199,12 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                 >
                     <video
                         ref={beforeVideoRef}
-                        src={beforeVideoUrl}
+                        src={isInView ? beforeVideoUrl : undefined}
                         className="absolute inset-0 w-full h-full object-cover"
                         loop
                         playsInline
+                        preload={isInView ? 'auto' : 'none'}
+                        muted={isMuted}
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnd}
                     />
@@ -171,6 +243,13 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                         <Play className="w-4 h-4 text-white ml-0.5" />
                     )}
                 </button>
+
+                {/* Hint to enable sound */}
+                {isMuted && isHovering && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] z-10">
+                        Click to enable sound
+                    </div>
+                )}
             </div>
         </div>
     );

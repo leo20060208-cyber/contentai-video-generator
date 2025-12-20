@@ -38,11 +38,13 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                 transition={{ delay: index * 0.1 }}
                 viewport={{ once: true }}
                 className={`group relative rounded-2xl overflow-hidden bg-zinc-900 ${isLarge ? 'aspect-video md:aspect-[21/9]' : 'aspect-[16/10]'}`}
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
             >
                 {/* Before/After Split View */}
-                <div className="absolute inset-0 flex">
+                <div
+                    className="absolute inset-0 flex"
+                    onMouseEnter={() => setIsHovering(true)}
+                    onMouseLeave={() => setIsHovering(false)}
+                >
                     {/* Before Side */}
                     <div className="relative w-1/2 overflow-hidden">
                         {video.beforeImage ? (
@@ -61,6 +63,7 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                                 className="w-full h-full object-cover"
                                 shouldLoad={isHovering}
                                 autoPlay={isHovering}
+                                muted
                             />
                         ) : null}
                         <span className="absolute top-3 left-3 px-2 py-1 rounded bg-zinc-800/80 backdrop-blur-sm text-[10px] font-bold text-white z-10">BEFORE</span>
@@ -84,6 +87,7 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                                 className="w-full h-full object-cover"
                                 shouldLoad={isHovering}
                                 autoPlay={isHovering}
+                                muted
                             />
                         ) : null}
                         <span className="absolute top-3 right-3 px-2 py-1 rounded bg-orange-500 text-[10px] font-bold text-white z-10">AFTER</span>

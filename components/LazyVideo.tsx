@@ -84,6 +84,26 @@ export function LazyVideo({
 
     const canLoad = shouldLoad ?? isInView;
 
+    useEffect(() => {
+        const videoElement = videoRef.current;
+        if (!videoElement) return;
+        if (!canLoad || !autoPlay) return;
+
+        // Best-effort autoplay once we have a src.
+        // Autoplay with sound is generally blocked; this component defaults to muted previews.
+        videoElement.muted = muted;
+        const attemptPlay = async () => {
+            try {
+                await videoElement.play();
+            } catch {
+                // Ignore autoplay rejections (common on mobile / non-muted).
+            }
+        };
+
+        // Queue after the DOM updates `src`.
+        queueMicrotask(attemptPlay);
+    }, [autoPlay, canLoad, muted]);
+
     return (
         <div className="relative w-full h-full">
             {/* Skeleton loader */}
