@@ -625,34 +625,51 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                         {/* CENTER COLUMN: Video Preview (Span 6) */}
                         <div className="lg:col-span-6 flex flex-col">
                             <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl min-h-[70vh] flex items-center justify-center">
-                                {template.before_video_url && template.after_video_url ? (
-                                    <BeforeAfterVideoSlider
-                                        beforeVideoUrl={template.before_video_url}
-                                        afterVideoUrl={template.after_video_url}
-                                        beforePosterUrl={template.before_image_url}
-                                        afterPosterUrl={template.after_image_url}
-                                    />
-                                ) : template.before_video_url ? (
-                                    <div className="w-full max-w-[560px] aspect-[9/16]">
-                                        <VideoPlayer
-                                            src={template.before_video_url}
-                                            thumbnail={template.before_image_url}
-                                            autoplay={false}
-                                            muted={false}
-                                            loop={true}
-                                            controls={true}
-                                            className="h-full w-full"
-                                        />
-                                    </div>
-                                ) : template.before_image_url ? (
-                                    <div className="w-full max-w-[560px] aspect-[9/16] flex items-center justify-center text-zinc-400">
-                                        <div className="text-sm">Preview image available, video missing.</div>
-                                    </div>
-                                ) : (
-                                    <div className="w-full max-w-[560px] aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-300">
-                                        <div className="text-sm">No preview available for this template.</div>
-                                    </div>
-                                )}
+                                {(() => {
+                                    const previewBefore =
+                                        template.before_video_url || template.template_video_url || null;
+                                    const previewAfter = template.after_video_url || null;
+                                    const previewSingle =
+                                        template.template_video_url ||
+                                        template.before_video_url ||
+                                        template.after_video_url ||
+                                        null;
+                                    const poster =
+                                        template.before_image_url || template.after_image_url || undefined;
+
+                                    if (previewBefore && previewAfter) {
+                                        return (
+                                            <BeforeAfterVideoSlider
+                                                beforeVideoUrl={previewBefore}
+                                                afterVideoUrl={previewAfter}
+                                                beforePosterUrl={template.before_image_url}
+                                                afterPosterUrl={template.after_image_url}
+                                            />
+                                        );
+                                    }
+
+                                    if (previewSingle) {
+                                        return (
+                                            <div className="w-full max-w-[560px] aspect-[9/16]">
+                                                <VideoPlayer
+                                                    src={previewSingle}
+                                                    thumbnail={poster}
+                                                    autoplay={false}
+                                                    muted={false}
+                                                    loop={true}
+                                                    controls={true}
+                                                    className="h-full w-full"
+                                                />
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="w-full max-w-[560px] aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-300">
+                                            <div className="text-sm">No preview available for this template.</div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
