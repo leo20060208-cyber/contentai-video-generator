@@ -1,10 +1,7 @@
 import Replicate from 'replicate';
 
-// Check if token is set
+// Token is validated lazily inside exported functions to avoid noisy logs during build.
 const token = process.env.REPLICATE_API_TOKEN;
-if (!token) {
-    console.error('⚠️ REPLICATE_API_TOKEN is not set in environment variables');
-}
 
 const replicate = new Replicate({
     auth: token,

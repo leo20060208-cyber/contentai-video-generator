@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Upload, X, Loader2, Plus, DollarSign, Zap, MousePointer2, Check, Sparkles } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -464,11 +465,13 @@ export function TemplateUploader({
                                     <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
                                         <div className="flex items-start gap-4">
                                             {/* Mask Preview Image */}
-                                            <div className="w-24 h-24 rounded-lg overflow-hidden bg-black border border-green-500/50 shrink-0">
-                                                <img
+                                            <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-black border border-green-500/50 shrink-0">
+                                                <Image
                                                     src={replacedObjectMask}
-                                                    alt="Detected Object"
-                                                    className="w-full h-full object-contain"
+                                                    alt="Detected object mask"
+                                                    fill
+                                                    sizes="96px"
+                                                    className="object-contain"
                                                 />
                                             </div>
                                             {/* Success Text */}
@@ -618,7 +621,13 @@ export function TemplateUploader({
 
                                             {existingCleanBackgroundUrl && !cleanBackground && (
                                                 <div className="mb-2 relative w-32 aspect-[9/16] rounded overflow-hidden border border-zinc-700">
-                                                    <img src={existingCleanBackgroundUrl} className="w-full h-full object-cover" />
+                                                    <Image
+                                                        src={existingCleanBackgroundUrl}
+                                                        alt="Clean background reference"
+                                                        fill
+                                                        sizes="128px"
+                                                        className="object-cover"
+                                                    />
                                                     <button type="button" onClick={() => setExistingCleanBackgroundUrl(null)} className="absolute top-0 right-0 bg-black/50 text-white p-1"><X className="w-3 h-3" /></button>
                                                 </div>
                                             )}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Upload, X, Loader2, Zap, Check, Edit, Save } from 'lucide-react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { VideoUploader } from './VideoUploader';
 import { SegmentationModal } from '@/components/SegmentationModal';
@@ -282,8 +283,14 @@ export function TemplateForm({ categories, onSuccess, initialData }: TemplateFor
           ) : (
             <div className="bg-zinc-900/80 rounded-lg p-3 border border-green-500/30 flex items-center gap-3">
               {maskPreviewUrl && (
-                <div className="h-12 w-12 bg-black rounded border border-zinc-700 overflow-hidden shrink-0">
-                  <img src={maskPreviewUrl} alt="Mask Preview" className="h-full w-full object-contain" />
+                <div className="relative h-12 w-12 bg-black rounded border border-zinc-700 overflow-hidden shrink-0">
+                  <Image
+                    src={maskPreviewUrl}
+                    alt="Mask preview"
+                    fill
+                    sizes="48px"
+                    className="object-contain"
+                  />
                 </div>
               )}
               {!maskPreviewUrl && (

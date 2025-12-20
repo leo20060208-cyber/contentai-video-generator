@@ -9,6 +9,7 @@ import { GeneratingModal } from '@/components/GeneratingModal';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Image from 'next/image';
 
 interface CreateYoursModalProps {
     isOpen: boolean;
@@ -430,7 +431,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                             ) : (
                                                 <div className="space-y-4">
                                                     <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black">
-                                                        <img src={productImage} alt="Product" className="w-full h-full object-contain" />
+                                                        <Image
+                                                            src={productImage}
+                                                            alt="Product"
+                                                            fill
+                                                            sizes="384px"
+                                                            className="object-contain"
+                                                            unoptimized
+                                                        />
                                                     </div>
 
                                                     <div>

@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Upload, Sparkles, Download, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { mockTemplates } from '@/lib/data/mock-templates';
 import { useVideoStore } from '@/store/video-store';
 import { VideoTemplate } from '@/types/template.types';
@@ -153,11 +154,15 @@ export default function TemplateDetailPage() {
 
             {/* Template video/image */}
             <div className="aspect-video rounded-xl border border-border bg-surface overflow-hidden">
-              <img
-                src={template.thumbnailUrl}
-                alt={template.title}
-                className="h-full w-full object-cover"
-              />
+              <div className="relative h-full w-full">
+                <Image
+                  src={template.thumbnailUrl}
+                  alt={template.title}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover"
+                />
+              </div>
             </div>
 
             {/* Info */}
@@ -219,11 +224,16 @@ export default function TemplateDetailPage() {
                 </div>
               ) : (
                 <div className="relative overflow-hidden rounded-xl border border-border">
-                  <img
-                    src={selectedImage}
-                    alt="Preview"
-                    className="h-64 w-full object-contain bg-black"
-                  />
+                  <div className="relative h-64 w-full bg-black">
+                    <Image
+                      src={selectedImage}
+                      alt="Preview"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </div>
                   <button
                     onClick={() => setSelectedImage(null)}
                     className="absolute right-2 top-2 rounded-full bg-black/50 p-2 backdrop-blur-sm transition-all hover:bg-black/70"
