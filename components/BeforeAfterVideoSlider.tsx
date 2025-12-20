@@ -120,31 +120,21 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
         setIsPlaying(!isPlaying);
     };
 
-    // Autoplay (best-effort). With sound it will likely be blocked, so we start muted.
+    // Autoplay (best-effort). To ensure it actually plays on page load across browsers,
+    // we autoplay muted and let the first user gesture unmute.
     useEffect(() => {
         if (!isInView) return;
         if (!beforeVideoRef.current || !afterVideoRef.current) return;
 
         const attemptAutoplay = async () => {
             try {
-                // Try autoplay WITH sound first (may be blocked by browser).
-                setIsMuted(false);
+                setIsMuted(true);
                 syncMuteState();
                 await beforeVideoRef.current!.play();
                 await afterVideoRef.current!.play();
                 setIsPlaying(true);
-                return;
             } catch {
-                // Fallback to muted autoplay.
-                try {
-                    setIsMuted(true);
-                    syncMuteState();
-                    await beforeVideoRef.current!.play();
-                    await afterVideoRef.current!.play();
-                    setIsPlaying(true);
-                } catch {
-                    // Autoplay might still be blocked; user gesture will unlock.
-                }
+                // Autoplay might still be blocked; user gesture will unlock.
             }
         };
 
@@ -152,7 +142,7 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isInView]);
 
-    // If autoplay with sound is blocked, unlock sound on first user gesture anywhere.
+    // Unlock (unmute + play) on first user gesture anywhere.
     useEffect(() => {
         if (!isInView) return;
 
@@ -214,7 +204,7 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
                 onClick={() => {
-                    // user gesture: allow unmute + try to play
+                    // user gesture: allow unmute
                     if (isMuted) setIsMuted(false);
                 }}
             >
