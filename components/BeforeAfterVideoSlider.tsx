@@ -6,10 +6,18 @@ import { Play, Pause } from 'lucide-react';
 interface BeforeAfterVideoSliderProps {
     beforeVideoUrl: string;
     afterVideoUrl: string;
+    beforePosterUrl?: string;
+    afterPosterUrl?: string;
     className?: string;
 }
 
-export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, className = '' }: BeforeAfterVideoSliderProps) {
+export function BeforeAfterVideoSlider({
+    beforeVideoUrl,
+    afterVideoUrl,
+    beforePosterUrl,
+    afterPosterUrl,
+    className = ''
+}: BeforeAfterVideoSliderProps) {
     const [sliderPosition, setSliderPosition] = useState(50); // 0-100%
     const [isDragging, setIsDragging] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -17,6 +25,7 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
     const [isHovering, setIsHovering] = useState(false); // Control hover state
     const [isMuted, setIsMuted] = useState(false); // If it plays, it should play with sound
     const [isLoaded, setIsLoaded] = useState(false);
+    const [hasError, setHasError] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const beforeVideoRef = useRef<HTMLVideoElement>(null);
     const afterVideoRef = useRef<HTMLVideoElement>(null);
@@ -146,13 +155,15 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                 <video
                     ref={afterVideoRef}
                     src={afterVideoUrl}
+                    poster={afterPosterUrl}
                     className="absolute inset-0 w-full h-full object-cover"
                     loop
                     playsInline
                     preload="metadata"
                     muted
                     onEnded={handleVideoEnd}
-                    onLoadedData={() => setIsLoaded(true)}
+                    onLoadedMetadata={() => setIsLoaded(true)}
+                    onError={() => { setHasError(true); setIsLoaded(true); }}
                 />
 
                 {/* Before Video (Clipped Layer) */}
@@ -165,6 +176,7 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                     <video
                         ref={beforeVideoRef}
                         src={beforeVideoUrl}
+                        poster={beforePosterUrl}
                         className="absolute inset-0 w-full h-full object-cover"
                         loop
                         playsInline
@@ -172,7 +184,8 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                         muted={isMuted}
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnd}
-                        onLoadedData={() => setIsLoaded(true)}
+                        onLoadedMetadata={() => setIsLoaded(true)}
+                        onError={() => { setHasError(true); setIsLoaded(true); }}
                     />
                 </div>
 
@@ -197,9 +210,18 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                     </>
                 )}
 
-                {/* Skeleton while first frame loads */}
-                {!isLoaded && (
-                    <div className="absolute inset-0 bg-zinc-800 animate-pulse z-[5]" />
+                {/* Lightweight loader (does not cover the whole preview) */}
+                {!isLoaded && !hasError && (
+                    <div className="absolute inset-0 z-[5] pointer-events-none flex items-center justify-center">
+                        <div className="h-8 w-8 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+                    </div>
+                )}
+
+                {/* Error fallback */}
+                {hasError && (
+                    <div className="absolute inset-0 z-[6] flex items-center justify-center bg-black/40 backdrop-blur-sm text-zinc-200 text-sm">
+                        Preview unavailable
+                    </div>
                 )}
 
                 {/* Play/Pause Button - SMALLER and AT BOTTOM CENTER */}

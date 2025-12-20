@@ -628,6 +628,8 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                                     <BeforeAfterVideoSlider
                                         beforeVideoUrl={template.before_video_url}
                                         afterVideoUrl={template.after_video_url}
+                                        beforePosterUrl={template.before_image_url}
+                                        afterPosterUrl={template.after_image_url}
                                     />
                                 ) : (
                                     <div className="aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-500">
