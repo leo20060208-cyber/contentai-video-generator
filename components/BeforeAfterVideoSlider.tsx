@@ -127,17 +127,57 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
 
         const attemptAutoplay = async () => {
             try {
-                setIsMuted(true);
+                // Try autoplay WITH sound first (may be blocked by browser).
+                setIsMuted(false);
                 syncMuteState();
                 await beforeVideoRef.current!.play();
                 await afterVideoRef.current!.play();
                 setIsPlaying(true);
+                return;
             } catch {
-                // Autoplay might be blocked; user can click play.
+                // Fallback to muted autoplay.
+                try {
+                    setIsMuted(true);
+                    syncMuteState();
+                    await beforeVideoRef.current!.play();
+                    await afterVideoRef.current!.play();
+                    setIsPlaying(true);
+                } catch {
+                    // Autoplay might still be blocked; user gesture will unlock.
+                }
             }
         };
 
         void attemptAutoplay();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isInView]);
+
+    // If autoplay with sound is blocked, unlock sound on first user gesture anywhere.
+    useEffect(() => {
+        if (!isInView) return;
+
+        const onUserGesture = async () => {
+            if (!beforeVideoRef.current || !afterVideoRef.current) return;
+            try {
+                setIsMuted(false);
+                syncMuteState();
+                await beforeVideoRef.current.play();
+                await afterVideoRef.current.play();
+                setIsPlaying(true);
+            } catch {
+                // Ignore - some browsers may still block depending on settings.
+            }
+        };
+
+        window.addEventListener('pointerdown', onUserGesture, { once: true });
+        window.addEventListener('keydown', onUserGesture, { once: true });
+        window.addEventListener('touchstart', onUserGesture, { once: true });
+
+        return () => {
+            window.removeEventListener('pointerdown', onUserGesture);
+            window.removeEventListener('keydown', onUserGesture);
+            window.removeEventListener('touchstart', onUserGesture);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isInView]);
 
@@ -174,7 +214,7 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
                 onClick={() => {
-                    // user gesture: allow unmute
+                    // user gesture: allow unmute + try to play
                     if (isMuted) setIsMuted(false);
                 }}
             >
@@ -247,7 +287,7 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                 {/* Hint to enable sound */}
                 {isMuted && isHovering && (
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] z-10">
-                        Click to enable sound
+                        Tap/click to enable sound
                     </div>
                 )}
             </div>
