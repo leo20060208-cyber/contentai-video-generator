@@ -1,32 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 // Set ffmpeg path
-let ffmpegPath = '';
-try {
-    const ffmpegStatic = require('ffmpeg-static');
-    ffmpegPath = ffmpegStatic;
-} catch (e) {
-    console.error('ffmpeg-static not found, trying system ffmpeg', e);
-    ffmpegPath = 'ffmpeg'; // Hope it's in PATH
-}
+const ffmpegPath = ffmpegStatic || 'ffmpeg';
 
 if (ffmpegPath) {
     ffmpeg.setFfmpegPath(ffmpegPath);
 }
 
-// Initialize Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export async function POST(req: Request) {
     try {
+        const supabase = createServerSupabaseClient('service-or-anon');
         const { videoUrl, audioUrl, videoId } = await req.json();
 
         if (!videoUrl || !audioUrl) {
@@ -39,9 +29,9 @@ export async function POST(req: Request) {
 
         // 1. Download Files to Temp
         const tempDir = os.tmpdir();
-        const videoPath = path.join(tempDir, `${uuidv4()}_video.mp4`);
-        const audioPath = path.join(tempDir, `${uuidv4()}_audio.mp3`);
-        const outputPath = path.join(tempDir, `${uuidv4()}_output.mp4`);
+        const videoPath = path.join(tempDir, `${randomUUID()}_video.mp4`);
+        const audioPath = path.join(tempDir, `${randomUUID()}_audio.mp3`);
+        const outputPath = path.join(tempDir, `${randomUUID()}_output.mp4`);
 
         // Helper to download
         const downloadFile = async (url: string, dest: string) => {
@@ -87,10 +77,10 @@ export async function POST(req: Request) {
 
         // 3. Upload Result to Supabase
         const fileContent = fs.readFileSync(outputPath);
-        const fileName = `merged_${Date.now()}_${uuidv4()}.mp4`;
+        const fileName = `merged_${Date.now()}_${randomUUID()}.mp4`;
         const uploadPath = `valid_generations/${fileName}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
             .from('videos')
             .upload(uploadPath, fileContent, {
                 contentType: 'video/mp4'
@@ -113,8 +103,9 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ url: finalUrl });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error merging audio:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

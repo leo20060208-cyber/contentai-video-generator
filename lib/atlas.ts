@@ -5,8 +5,11 @@ export class AtlasClient {
 
     constructor() {
         this.apiKey = process.env.ATLASCLOUD_API_KEY || '';
+    }
+
+    private assertConfigured(): void {
         if (!this.apiKey) {
-            console.warn('⚠️ [Atlas] ATLASCLOUD_API_KEY not found in environment');
+            throw new Error('ATLASCLOUD_API_KEY is not configured.');
         }
     }
 
@@ -21,6 +24,7 @@ export class AtlasClient {
         aspect_ratio?: string;
         negative_prompt?: string;
     }) {
+        this.assertConfigured();
         const endpoint = `${this.baseUrl}/model/generateVideo`;
 
         // Default model from user snippet
@@ -83,6 +87,7 @@ export class AtlasClient {
      * Polls for the result of a generation task.
      */
     async getTaskStatus(taskId: string) {
+        this.assertConfigured();
         const endpoint = `${this.baseUrl}/model/prediction/${taskId}`;
 
         try {

@@ -4,8 +4,11 @@ export class WavespeedClient {
 
     constructor() {
         this.apiKey = process.env.WAVESPEED_API_KEY || '';
+    }
+
+    private assertConfigured(): void {
         if (!this.apiKey) {
-            console.warn('⚠️ [Wavespeed] WAVESPEED_API_KEY not found in environment');
+            throw new Error('WAVESPEED_API_KEY is not configured.');
         }
     }
 
@@ -17,6 +20,7 @@ export class WavespeedClient {
         prompt: string;
         model?: string;
     }) {
+        this.assertConfigured();
         const modelPath = params.model || 'google/nano-banana/edit';
         const endpoint = `${this.baseUrl}/${modelPath}`;
 
@@ -93,6 +97,7 @@ export class WavespeedClient {
         aspect_ratio?: string;
         negative_prompt?: string;
     }) {
+        this.assertConfigured();
         // Determine the correct model endpoint
         let modelPath = 'kwaivgi/kling-v1.6-i2v-standard';
 
@@ -210,6 +215,7 @@ export class WavespeedClient {
      * V3 API uses: /predictions/{requestId}/result
      */
     async getTaskStatus(taskId: string) {
+        this.assertConfigured();
         // V3 API endpoint format
         const endpoint = `${this.baseUrl}/predictions/${taskId}/result`;
 

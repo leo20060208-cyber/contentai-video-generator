@@ -10,6 +10,7 @@ import { LazyVideo } from '@/components/LazyVideo';
 export function VideoCard({ video, index, size = 'normal' }: { video: any; index: number; size?: 'normal' | 'large' }) {
     const isLarge = size === 'large';
     const [isLiked, setIsLiked] = useState(false);
+    const [isHovering, setIsHovering] = useState(false);
 
     // Toggle like/save
     const toggleLike = (e: React.MouseEvent) => {
@@ -39,15 +40,14 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                 className={`group relative rounded-2xl overflow-hidden bg-zinc-900 ${isLarge ? 'aspect-video md:aspect-[21/9]' : 'aspect-[16/10]'}`}
             >
                 {/* Before/After Split View */}
-                <div className="absolute inset-0 flex">
+                <div
+                    className="absolute inset-0 flex"
+                    onMouseEnter={() => setIsHovering(true)}
+                    onMouseLeave={() => setIsHovering(false)}
+                >
                     {/* Before Side */}
                     <div className="relative w-1/2 overflow-hidden">
-                        {video.beforeVideo ? (
-                            <LazyVideo
-                                src={video.beforeVideo}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : video.beforeImage ? (
+                        {video.beforeImage ? (
                             <Image
                                 src={video.beforeImage}
                                 alt="Before"
@@ -57,17 +57,21 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                                 sizes="(max-width: 768px) 50vw, 25vw"
                             />
                         ) : null}
+                        {video.beforeVideo ? (
+                            <LazyVideo
+                                src={video.beforeVideo}
+                                className="w-full h-full object-cover"
+                                shouldLoad={isHovering}
+                                autoPlay={isHovering}
+                                muted
+                            />
+                        ) : null}
                         <span className="absolute top-3 left-3 px-2 py-1 rounded bg-zinc-800/80 backdrop-blur-sm text-[10px] font-bold text-white z-10">BEFORE</span>
                     </div>
 
                     {/* After Side */}
                     <div className="relative w-1/2 overflow-hidden">
-                        {video.afterVideo ? (
-                            <LazyVideo
-                                src={video.afterVideo}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : video.afterImage ? (
+                        {video.afterImage ? (
                             <Image
                                 src={video.afterImage}
                                 alt="After"
@@ -75,6 +79,15 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                                 className="object-cover"
                                 loading="lazy"
                                 sizes="(max-width: 768px) 50vw, 25vw"
+                            />
+                        ) : null}
+                        {video.afterVideo ? (
+                            <LazyVideo
+                                src={video.afterVideo}
+                                className="w-full h-full object-cover"
+                                shouldLoad={isHovering}
+                                autoPlay={isHovering}
+                                muted
                             />
                         ) : null}
                         <span className="absolute top-3 right-3 px-2 py-1 rounded bg-orange-500 text-[10px] font-bold text-white z-10">AFTER</span>

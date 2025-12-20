@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
     Mail,
@@ -15,8 +15,9 @@ import {
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
 
-export default function LoginPage() {
+function LoginPageInner() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { login, loginWithGoogle } = useAuth();
 
     const [email, setEmail] = useState('');
@@ -37,13 +38,21 @@ export default function LoginPage() {
             setError(result.error);
             setIsLoading(false);
         } else {
-            router.push('/profile');
+            const next = searchParams.get('next') ?? '/profile';
+            router.push(next);
         }
     };
 
     const handleGoogleLogin = async () => {
         setIsGoogleLoading(true);
-        await loginWithGoogle();
+        try {
+            const next = searchParams.get('next') ?? '/profile';
+            await loginWithGoogle(next);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Google sign-in failed';
+            setError(msg);
+            setIsGoogleLoading(false);
+        }
     };
 
     return (
@@ -191,5 +200,13 @@ export default function LoginPage() {
                 </motion.div>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+            <LoginPageInner />
+        </Suspense>
     );
 }

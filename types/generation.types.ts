@@ -1,3 +1,50 @@
+export type GenerationType = 'text-to-video' | 'image-to-video';
+
+export type GenerationStatus =
+  | 'idle'
+  | 'uploading'
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+/**
+ * Runtime config used by the generation store/hook.
+ * This matches the project pattern:
+ * `generate({ type: 'text-to-video' | 'image-to-video', prompt?, imageUrl?, styleId? })`
+ */
+export interface GenerationConfig {
+  type: GenerationType;
+  prompt?: string;
+  imageUrl?: string;
+  templateId?: number | string;
+  aspectRatio?: '16:9' | '9:16' | '1:1' | '4:5' | '4:3' | '2:4' | '1:2';
+  styleId?: string;
+}
+
+export interface GenerationJob {
+  id: string;
+  type: GenerationType;
+  status: GenerationStatus;
+  prompt?: string;
+  imageUrl?: string;
+  templateId?: number | string;
+  progress?: number;
+  resultUrl?: string;
+  thumbnailUrl?: string;
+  error?: string;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export interface VideoStyle {
+  id: string;
+  name: string;
+  description: string;
+  thumbnailUrl: string;
+  prompt: string;
+}
+
 export type GenerationMethod = 'prompt_images' | 'video_to_video' | 'template_video';
 
 export type AIModel =
@@ -12,9 +59,14 @@ export type AIModel =
   | 'nano-banana'
   | 'kling-standard'
   | 'kling-pro'
-  | 'wavespeed-kling-o1';
+  | 'wavespeed-kling-o1'
+  | 'kling-v1'
+  | 'kling-v1-pro'
+  | 'kling-elements-pro'
+  | 'kwaivgi/kling-video-o1/video-edit'
+  | 'kwaivgi/kling-video-o1/reference-to-video';
 
-export interface GenerationConfig {
+export interface BaseModelConfig {
   method: GenerationMethod;
   model: AIModel;
   estimatedCost: number;
@@ -32,20 +84,20 @@ export interface KeyframePrompts {
   end: string;
 }
 
-export interface PromptImagesConfig extends GenerationConfig {
+export interface PromptImagesConfig extends BaseModelConfig {
   method: 'prompt_images';
   referenceImages: ReferenceImages;
   keyframePrompts: KeyframePrompts;
   productSwapPrompt: string;
 }
 
-export interface VideoToVideoConfig extends GenerationConfig {
+export interface VideoToVideoConfig extends BaseModelConfig {
   method: 'video_to_video';
   referenceVideoUrl: string;
   transformationPrompt: string;
 }
 
-export interface TemplateVideoConfig extends GenerationConfig {
+export interface TemplateVideoConfig extends BaseModelConfig {
   method: 'template_video';
   templateVideoUrl: string;
   productInsertionPrompt: string;

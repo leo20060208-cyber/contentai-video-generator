@@ -1,14 +1,15 @@
 import ffmpeg from 'fluent-ffmpeg';
 import { Readable } from 'stream';
 import ffmpegStatic from 'ffmpeg-static';
-// @ts-ignore
+// @ts-expect-error - `ffprobe-static` types can be incorrect/missing depending on env
 import ffprobeStatic from 'ffprobe-static';
-import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
 import os from 'os';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 const writeFile = promisify(fs.writeFile);
 const unlink = promisify(fs.unlink);
@@ -60,22 +61,20 @@ if (ffprobeStatic) {
     ffmpeg.setFfprobePath(ffprobePath);
 }
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getSupabaseClient(authenticatedSupabase?: SupabaseClient): SupabaseClient {
+    return authenticatedSupabase ?? createServerSupabaseClient('service-or-anon');
+}
 
 /**
  * Extract audio from video file
  */
 export async function extractAudio(
     videoBuffer: Buffer,
-    videoFileName: string,
-    authenticatedSupabase?: any
+    _videoFileName: string,
+    authenticatedSupabase?: SupabaseClient
 ): Promise<{ audioUrl: string; duration: number }> {
-    const sb = authenticatedSupabase || supabase;
+    const sb = getSupabaseClient(authenticatedSupabase);
     const tempDir = os.tmpdir();
-    const tempVideoPath = path.join(tempDir, `video_${Date.now()}.mp4`);
     const tempAudioPath = path.join(tempDir, `audio_${Date.now()}.mp3`);
 
     try {
@@ -104,7 +103,7 @@ export async function extractAudio(
 
         // Upload to Supabase Storage
         const audioFileName = `audio_${Date.now()}.mp3`;
-        const { data, error } = await sb.storage
+        const { error } = await sb.storage
             .from('audio-files')
             .upload(audioFileName, audioBuffer, {
                 contentType: 'audio/mpeg',
@@ -137,10 +136,10 @@ export async function extractAudio(
 export async function mixAudioTracks(
     videoUrl: string,
     audioTracks: { url: string; startTime: number; duration: number; sourceStartTime: number }[],
-    authenticatedSupabase?: any,
+    authenticatedSupabase?: SupabaseClient,
     aspectRatio?: string
 ): Promise<string> {
-    const sb = authenticatedSupabase || supabase;
+    const sb = getSupabaseClient(authenticatedSupabase);
     const tempDir = os.tmpdir();
     const tempVideoPath = path.join(tempDir, `video_in_${Date.now()}.mp4`);
     const tempOutputPath = path.join(tempDir, `video_out_${Date.now()}.mp4`);
@@ -174,7 +173,6 @@ export async function mixAudioTracks(
         await new Promise<void>((resolve, reject) => {
             const command = ffmpeg(tempVideoPath);
 
-            let inputIndex = 1; // 0 is video
             const filterInputs: string[] = [];
 
             // Add inputs
@@ -303,7 +301,7 @@ export async function mixAudioTracks(
 export async function mergeAudioVideo(
     videoUrl: string,
     audioUrl: string,
-    authenticatedSupabase?: any
+    authenticatedSupabase?: SupabaseClient
 ): Promise<string> {
     // Just wrap the new function
     // Assuming audio starts at 0 and plays full duration (we don't know duration easily without probing, 

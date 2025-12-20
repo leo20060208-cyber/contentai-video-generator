@@ -1,20 +1,13 @@
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase Admin Client (Service Role)
-// WARNING: This endpoint allows executing arbitrary SQL. It should only be enabled in development/debug.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-// Try to get service role key for admin privileges (needed for schema changes), fallback to anon (likely fails schema changes)
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 export async function POST(request: Request) {
     // Basic safety check: only allow on localhost or if a secret is provided
     // For this context, we assume local usage.
 
     try {
+        const supabase = createServerSupabaseClient('service-or-anon');
         const sql = await request.text();
 
         if (!sql) {

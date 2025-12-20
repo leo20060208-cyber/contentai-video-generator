@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Image as ImageIcon, Trash2 } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
 import { useEffect, useState } from 'react';
 import { UserMask, getUserMasks, deleteUserMask } from '@/lib/db/masks';
@@ -95,10 +96,12 @@ export function SavedMasksModal({ isOpen, onClose, onSelect }: SavedMasksModalPr
                                                 }`}
                                         >
                                             <div className="absolute inset-0 p-2">
-                                                <img
+                                                <Image
                                                     src={mask.url}
                                                     alt={mask.name || 'Mask'}
-                                                    className="w-full h-full object-contain"
+                                                    fill
+                                                    sizes="(max-width: 768px) 50vw, (max-width: 1024px) 25vw, 20vw"
+                                                    className="object-contain"
                                                 />
                                             </div>
 

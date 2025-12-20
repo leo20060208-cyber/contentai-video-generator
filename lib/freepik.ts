@@ -6,12 +6,11 @@ export class FreepikClient {
     constructor(apiKey?: string) {
         // Strictly use env var, fallback to empty string (which will fail validation cleanly)
         this.apiKey = process.env.FREEPIK_API_KEY || '';
+    }
 
+    private assertConfigured(): void {
         if (!this.apiKey) {
-            console.error('❌ [Freepik] CRITICAL: No API Key found in process.env.FREEPIK_API_KEY');
-        } else {
-            console.log(`✅ [Freepik] Client initialized. Key length: ${this.apiKey.length}`);
-            console.log(`🔑 [Freepik] Key prefix: ${this.apiKey.substring(0, 8)}...`);
+            throw new Error('FREEPIK_API_KEY is not configured.');
         }
     }
 
@@ -43,6 +42,7 @@ export class FreepikClient {
         duration?: number;
         aspect_ratio?: string;
     }) {
+        this.assertConfigured();
         const slug = this.getModelSlug(params.model);
         const isImageToVideo = !!params.image_url;
 
@@ -128,6 +128,7 @@ export class FreepikClient {
      * Checks the status of a generation task.
      */
     async getTaskStatus(taskId: string, model: string = 'kling-v2-1-std') {
+        this.assertConfigured();
         const slug = this.getModelSlug(model);
 
         // We must check both endpoints (I2V and T2V) because the API doesn't tell us which one created the task ID often.

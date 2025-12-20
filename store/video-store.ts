@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { GenerationJob, GenerationConfig } from '@/types/generation.types';
+import { supabase } from '@/lib/supabase';
 
 interface VideoState {
   // Estado de generaciones
@@ -47,10 +48,16 @@ export const useVideoStore = create<VideoState>()(
           set({ isGenerating: true });
           
           try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+
             // Llamada a la API unificada
             const response = await fetch('/api/generate', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
               body: JSON.stringify({
                 templateId: config.templateId,
                 imageUrl: config.imageUrl,

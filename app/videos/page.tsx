@@ -14,7 +14,6 @@ import { LazyVideo } from '@/components/LazyVideo';
 function VideoCard({ video, size = 'normal', isManageMode = false, onDelete }: { video: any; size?: 'normal' | 'large'; isManageMode?: boolean; onDelete?: (id: number) => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
     const isLarge = size === 'large';
     const [isLiked, setIsLiked] = useState(false);
-    const [isHovering, setIsHovering] = useState(false);
     const { user } = useAuth();
 
     // Check if liked on mount
@@ -63,8 +62,6 @@ function VideoCard({ video, size = 'normal', isManageMode = false, onDelete }: {
                 whileHover={{ scale: 1.02 }}
                 transition={{ duration: 0.2 }}
                 className={`relative rounded-2xl overflow-hidden bg-zinc-900 ${isLarge ? 'aspect-[16/9]' : 'aspect-[4/3]'}`}
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
             >
                 {/* Before/After Split */}
                 <div className="absolute inset-0 flex">
@@ -74,7 +71,11 @@ function VideoCard({ video, size = 'normal', isManageMode = false, onDelete }: {
                             <LazyVideo
                                 src={video.beforeVideo}
                                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                muted={!isHovering}
+                                autoPlay
+                                loop
+                                playsInline
+                                preload="auto"
+                                muted
                             />
                         ) : (
                             <Image
@@ -98,7 +99,11 @@ function VideoCard({ video, size = 'normal', isManageMode = false, onDelete }: {
                             <LazyVideo
                                 src={video.afterVideo}
                                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                muted={!isHovering}
+                                autoPlay
+                                loop
+                                playsInline
+                                preload="auto"
+                                muted
                             />
                         ) : (
                             <Image

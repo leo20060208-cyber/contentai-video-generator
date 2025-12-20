@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { Sparkles } from 'lucide-react';
 
@@ -12,12 +12,13 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
     const { user, isLoading } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
         if (!isLoading && !user) {
-            router.push('/login');
+            router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         }
-    }, [user, isLoading, router]);
+    }, [user, isLoading, router, pathname]);
 
     if (isLoading) {
         return (

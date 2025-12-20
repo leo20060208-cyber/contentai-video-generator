@@ -1,11 +1,12 @@
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { KlingClient } from '@/lib/kling';
 import { createReplicatePrediction, ReplicateModel } from '@/lib/replicate';
 import { FreepikClient } from '@/lib/freepik';
 import { AtlasClient } from '@/lib/atlas';
 import { WavespeedClient } from '@/lib/wavespeed';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
+import { requireVideoGenerationEntitlement } from '@/lib/billing/entitlementsServer';
 
 // Initialize client with environment variables
 const klingClient = new KlingClient({
@@ -25,20 +26,27 @@ export async function POST(request: Request) {
     try {
         console.log('[API] Video generation request received');
 
-        // Initialize Supabase
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
-
-        // Get User
-        let userId: string | null = null;
-        let token: string | undefined;
-        const authHeader = request.headers.get('authorization');
-        if (authHeader) {
-            token = authHeader.replace('Bearer ', '');
-            const { data: { user } } = await supabase.auth.getUser(token);
-            if (user) userId = user.id;
+        // Billing gate (also authenticates the user)
+        const entitlement = await requireVideoGenerationEntitlement({
+            authorizationHeader: request.headers.get('authorization'),
+        });
+        if (!entitlement.ok || !entitlement.userId) {
+            const status = entitlement.error === 'Unauthorized' ? 401 : 402;
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: entitlement.error || 'Payment required',
+                    code: status === 401 ? 'UNAUTHORIZED' : 'PAYMENT_REQUIRED',
+                    next: '/pricing',
+                },
+                { status }
+            );
         }
+
+        const userId = entitlement.userId;
+
+        // Service client for storage + DB writes
+        const supabase = createServerSupabaseClient('service');
 
         const body = await request.json();
         const { prompt, image, images, model, duration, aspect_ratio, target_mask, audio_url } = body;
@@ -56,33 +64,8 @@ export async function POST(request: Request) {
 
         // Helper to save video to DB
         const saveVideoToDb = async (taskId: string, provider: string) => {
-            if (!userId) {
-                console.warn('[API] Cannot save video: No User ID');
-                return;
-            }
-
             try {
-                // Use Service Role Key if available to bypass RLS, otherwise try as the user
-                // Note: If using Anon key without user token, RLS will likely block the insert.
-                const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
-                const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-                let dbClient = supabase;
-
-                // Priority 1: Service Role (Admin)
-                if (serviceRoleKey) {
-                    dbClient = createClient(supabaseUrl, serviceRoleKey);
-                }
-                // Priority 2: User Context (if token exists)
-                else if (token && anonKey) {
-                    dbClient = createClient(supabaseUrl, anonKey, {
-                        global: { headers: { Authorization: `Bearer ${token}` } }
-                    });
-                }
-
-                console.log(`[API] Saving video with client mode: ${serviceRoleKey ? 'ServiceRole' : (token ? 'UserAuth' : 'Anon')}`);
-
-                const { data, error } = await dbClient.from('videos').insert({
+                const { data, error } = await supabase.from('videos').insert({
                     user_id: userId,
                     prompt: prompt || 'No prompt',
                     title: prompt ? prompt.slice(0, 50) : 'Generated Video',

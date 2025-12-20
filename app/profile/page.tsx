@@ -180,7 +180,7 @@ const VideoCard = ({ video, onDelete, onPlay }: VideoCardProps) => {
 };
 
 export default function ProfilePage() {
-    const { user, profile } = useAuth();
+    const { user, profile, logout } = useAuth();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'videos' | 'saved' | 'masks' | 'settings' | 'billing'>('videos');
     const [myVideos, setMyVideos] = useState<Video[]>([]);
@@ -292,8 +292,26 @@ export default function ProfilePage() {
                                     </div>
 
                                     {/* Quick Actions */}
-                                    <div className="flex gap-2">
-                                        {/* Create Button Removed */}
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            variant="outline"
+                                            className="border-white/10 text-white hover:bg-white/5"
+                                            onClick={() => router.push('/pricing')}
+                                        >
+                                            <CreditCard className="w-4 h-4 mr-2" />
+                                            Billing
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="border-white/10 text-white hover:bg-white/5"
+                                            onClick={async () => {
+                                                await logout();
+                                                router.replace('/');
+                                            }}
+                                        >
+                                            <LogOut className="w-4 h-4 mr-2" />
+                                            Logout
+                                        </Button>
                                     </div>
                                 </div>
                             </div>
@@ -525,9 +543,11 @@ export default function ProfilePage() {
                                                     className="group relative bg-zinc-900/50 rounded-xl border border-white/5 overflow-hidden aspect-square hover:border-orange-500/50 transition-colors"
                                                 >
                                                     <div className="absolute inset-0 p-4 flex items-center justify-center bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMiLz48cGF0aCBkPSJNMCAwSDRWNEg4VjhINFY0SDB6IiBmaWxsPSIjNDQ0Ii8+PC9zdmc+')] bg-repeat opacity-30"></div>
-                                                    <img
+                                                    <Image
                                                         src={mask.url}
-                                                        alt={mask.name}
+                                                        alt={mask.name || 'Mask'}
+                                                        width={256}
+                                                        height={256}
                                                         className="relative z-10 max-w-full max-h-full object-contain drop-shadow-lg"
                                                     />
 

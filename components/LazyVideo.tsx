@@ -9,6 +9,16 @@ interface LazyVideoProps {
     loop?: boolean;
     playsInline?: boolean;
     autoPlay?: boolean;
+    /**
+     * If provided, overrides viewport detection.
+     * Useful for "load on hover" so we don't download many videos at once.
+     */
+    shouldLoad?: boolean;
+    /**
+     * preload behavior once the video is allowed to load.
+     * Defaults to 'metadata' for faster first-frame display.
+     */
+    preload?: 'none' | 'metadata' | 'auto';
     onLoad?: () => void;
 }
 
@@ -19,6 +29,8 @@ export function LazyVideo({
     loop = true,
     playsInline = true,
     autoPlay = false,
+    shouldLoad,
+    preload = 'metadata',
     onLoad,
 }: LazyVideoProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -26,6 +38,7 @@ export function LazyVideo({
     const [isInView, setIsInView] = useState(false);
 
     useEffect(() => {
+        if (shouldLoad !== undefined) return;
         const videoElement = videoRef.current;
         if (!videoElement) return;
 
@@ -54,7 +67,8 @@ export function LazyVideo({
 
     useEffect(() => {
         const videoElement = videoRef.current;
-        if (!videoElement || !isInView) return;
+        const canLoad = shouldLoad ?? isInView;
+        if (!videoElement || !canLoad) return;
 
         const handleLoadedData = () => {
             setIsLoaded(true);
@@ -66,7 +80,29 @@ export function LazyVideo({
         return () => {
             videoElement.removeEventListener('loadeddata', handleLoadedData);
         };
-    }, [isInView, onLoad]);
+    }, [isInView, onLoad, shouldLoad]);
+
+    const canLoad = shouldLoad ?? isInView;
+
+    useEffect(() => {
+        const videoElement = videoRef.current;
+        if (!videoElement) return;
+        if (!canLoad || !autoPlay) return;
+
+        // Best-effort autoplay once we have a src.
+        // Autoplay with sound is generally blocked; this component defaults to muted previews.
+        videoElement.muted = muted;
+        const attemptPlay = async () => {
+            try {
+                await videoElement.play();
+            } catch {
+                // Ignore autoplay rejections (common on mobile / non-muted).
+            }
+        };
+
+        // Queue after the DOM updates `src`.
+        queueMicrotask(attemptPlay);
+    }, [autoPlay, canLoad, muted]);
 
     return (
         <div className="relative w-full h-full">
@@ -80,14 +116,14 @@ export function LazyVideo({
             {/* Video element */}
             <video
                 ref={videoRef}
-                src={isInView ? src : undefined}
+                src={canLoad ? src : undefined}
                 className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'
                     }`}
                 muted={muted}
                 loop={loop}
                 playsInline={playsInline}
-                autoPlay={autoPlay && isInView}
-                preload="none"
+                autoPlay={autoPlay && canLoad}
+                preload={canLoad ? preload : 'none'}
             />
         </div>
     );

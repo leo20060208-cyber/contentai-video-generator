@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
     Mail,
@@ -24,8 +24,9 @@ const features = [
     'No editing skills required',
 ];
 
-export default function SignupPage() {
+function SignupPageInner() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { signup, loginWithGoogle } = useAuth();
 
     const [name, setName] = useState('');
@@ -50,14 +51,22 @@ export default function SignupPage() {
         } else {
             setSuccess(true);
             setTimeout(() => {
-                router.push('/profile');
+                const next = searchParams.get('next') ?? '/profile';
+                router.push(next);
             }, 1500);
         }
     };
 
     const handleGoogleSignup = async () => {
         setIsGoogleLoading(true);
-        await loginWithGoogle();
+        try {
+            const next = searchParams.get('next') ?? '/profile';
+            await loginWithGoogle(next);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Google sign-in failed';
+            setError(msg);
+            setIsGoogleLoading(false);
+        }
     };
 
     if (success) {
@@ -263,5 +272,13 @@ export default function SignupPage() {
                 </motion.div>
             </div>
         </div>
+    );
+}
+
+export default function SignupPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+            <SignupPageInner />
+        </Suspense>
     );
 }

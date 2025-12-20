@@ -6,15 +6,28 @@ import { Play, Pause } from 'lucide-react';
 interface BeforeAfterVideoSliderProps {
     beforeVideoUrl: string;
     afterVideoUrl: string;
+    beforePosterUrl?: string;
+    afterPosterUrl?: string;
     className?: string;
 }
 
-export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, className = '' }: BeforeAfterVideoSliderProps) {
+export function BeforeAfterVideoSlider({
+    beforeVideoUrl,
+    afterVideoUrl,
+    beforePosterUrl,
+    afterPosterUrl,
+    className = ''
+}: BeforeAfterVideoSliderProps) {
     const [sliderPosition, setSliderPosition] = useState(50); // 0-100%
     const [isDragging, setIsDragging] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [showLabels, setShowLabels] = useState(true); // Control label visibility
     const [isHovering, setIsHovering] = useState(false); // Control hover state
+    // Autoplay without user gesture requires muted in most browsers.
+    // Users can unmute with a click (gesture) if they want sound.
+    const [isMuted, setIsMuted] = useState(true);
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [hasError, setHasError] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const beforeVideoRef = useRef<HTMLVideoElement>(null);
     const afterVideoRef = useRef<HTMLVideoElement>(null);
@@ -63,18 +76,42 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
         };
     }, [isDragging]);
 
-    // Sync video playback
-    const togglePlayPause = () => {
+    const syncMuteState = () => {
+        if (!beforeVideoRef.current || !afterVideoRef.current) return;
+        // To avoid echo, only the BEFORE video can have audio.
+        beforeVideoRef.current.muted = isMuted;
+        beforeVideoRef.current.volume = isMuted ? 0 : 1;
+        afterVideoRef.current.muted = true;
+        afterVideoRef.current.volume = 0;
+    };
+
+    useEffect(() => {
+        syncMuteState();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isMuted]);
+
+    const playBoth = async () => {
+        if (!beforeVideoRef.current || !afterVideoRef.current) return;
+        try {
+            syncMuteState();
+            await Promise.allSettled([beforeVideoRef.current.play(), afterVideoRef.current.play()]);
+            setIsPlaying(true);
+        } catch {
+            // Ignore autoplay rejections.
+        }
+    };
+
+    const togglePlayPause = async () => {
         if (!beforeVideoRef.current || !afterVideoRef.current) return;
 
         if (isPlaying) {
             beforeVideoRef.current.pause();
             afterVideoRef.current.pause();
-        } else {
-            beforeVideoRef.current.play();
-            afterVideoRef.current.play();
+            setIsPlaying(false);
+            return;
         }
-        setIsPlaying(!isPlaying);
+
+        await playBoth();
     };
 
     // Sync video times
@@ -97,27 +134,51 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
         }
     };
 
+    const primeFirstFrame = (video: HTMLVideoElement) => {
+        // Some browsers show a black frame until we seek a tiny bit.
+        try {
+            video.currentTime = 0.05;
+        } catch {
+            // ignore
+        }
+    };
+
+    // Autoplay on mount (muted) once metadata is available.
+    useEffect(() => {
+        if (!isLoaded || hasError) return;
+        void playBoth();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded, hasError]);
+
     return (
-        <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 ${className}`}>
+        <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 border border-white/10 ${className}`}>
             <div
                 ref={containerRef}
-                className="relative w-full mx-auto"
-                style={{
-                    aspectRatio: '9/16',
-                    maxHeight: '70vh',
-                    width: 'auto'
-                }}
+                className="relative w-full h-full"
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
+                onClick={() => {
+                    // user gesture: allow unmute
+                    if (isMuted) setIsMuted(false);
+                }}
             >
                 {/* After Video (Background Layer) */}
                 <video
                     ref={afterVideoRef}
                     src={afterVideoUrl}
+                    poster={afterPosterUrl}
                     className="absolute inset-0 w-full h-full object-cover"
                     loop
                     playsInline
+                    preload="auto"
+                    autoPlay
+                    muted
                     onEnded={handleVideoEnd}
+                    onLoadedMetadata={() => {
+                        setIsLoaded(true);
+                        if (afterVideoRef.current) primeFirstFrame(afterVideoRef.current);
+                    }}
+                    onError={() => { setHasError(true); setIsLoaded(true); }}
                 />
 
                 {/* Before Video (Clipped Layer) */}
@@ -130,11 +191,20 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                     <video
                         ref={beforeVideoRef}
                         src={beforeVideoUrl}
+                        poster={beforePosterUrl}
                         className="absolute inset-0 w-full h-full object-cover"
                         loop
                         playsInline
+                        preload="auto"
+                        autoPlay
+                        muted={isMuted}
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnd}
+                        onLoadedMetadata={() => {
+                            setIsLoaded(true);
+                            if (beforeVideoRef.current) primeFirstFrame(beforeVideoRef.current);
+                        }}
+                        onError={() => { setHasError(true); setIsLoaded(true); }}
                     />
                 </div>
 
@@ -159,11 +229,24 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                     </>
                 )}
 
+                {/* Lightweight loader (does not cover the whole preview) */}
+                {!isLoaded && !hasError && (
+                    <div className="absolute inset-0 z-[5] pointer-events-none flex items-center justify-center">
+                        <div className="h-8 w-8 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+                    </div>
+                )}
+
+                {/* Error fallback */}
+                {hasError && (
+                    <div className="absolute inset-0 z-[6] flex items-center justify-center bg-black/40 backdrop-blur-sm text-zinc-200 text-sm">
+                        Preview unavailable
+                    </div>
+                )}
+
                 {/* Play/Pause Button - SMALLER and AT BOTTOM CENTER */}
                 <button
                     onClick={togglePlayPause}
-                    className={`absolute bottom-16 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/60 transition-all shadow-lg z-10 group ${isHovering ? 'opacity-100' : 'opacity-0'
-                        }`}
+                    className="absolute bottom-6 left-1/2 -translate-x-1/2 w-11 h-11 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-all shadow-lg z-10"
                 >
                     {isPlaying ? (
                         <Pause className="w-4 h-4 text-white" />
@@ -171,6 +254,13 @@ export function BeforeAfterVideoSlider({ beforeVideoUrl, afterVideoUrl, classNam
                         <Play className="w-4 h-4 text-white ml-0.5" />
                     )}
                 </button>
+
+                {/* Hint to enable sound */}
+                {isMuted && (
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] z-10">
+                        Click to enable sound
+                    </div>
+                )}
             </div>
         </div>
     );

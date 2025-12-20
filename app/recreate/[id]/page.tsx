@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
+import NextImage from 'next/image';
 import {
     Image as ImageIcon,
     Sparkles,
@@ -22,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { type ReplicateModel } from '@/lib/replicate';
 import { Template } from '@/lib/db/videos';
 import { BeforeAfterVideoSlider } from '@/components/BeforeAfterVideoSlider';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { SegmentationModal } from '@/components/SegmentationModal';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
 import { saveUserMask } from '@/lib/db/masks';
@@ -262,13 +264,13 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
             try {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                const img = new Image();
+                const img = new window.Image();
                 img.crossOrigin = "anonymous";
                 await new Promise((resolve) => { img.onload = resolve; img.src = segmentSource; });
                 canvas.width = img.naturalWidth;
                 canvas.height = img.naturalHeight;
 
-                const maskImg = new Image();
+                const maskImg = new window.Image();
                 maskImg.crossOrigin = "anonymous";
                 await new Promise((resolve, reject) => {
                     maskImg.onload = resolve;
@@ -556,7 +558,14 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                                             return (
                                                 <div key={idx} className="relative group">
                                                     <div className="h-40 w-full rounded-lg bg-zinc-800 overflow-hidden border border-zinc-700 relative">
-                                                        <img src={productImages[idx]} alt="Product" className="w-full h-full object-contain" />
+                                                        <NextImage
+                                                            src={productImages[idx]}
+                                                            alt="Product"
+                                                            fill
+                                                            sizes="(max-width: 1024px) 100vw, 240px"
+                                                            className="object-contain"
+                                                            unoptimized
+                                                        />
                                                         <button
                                                             onClick={() => handleRemoveImage(idx)}
                                                             className="absolute top-1 right-1 bg-black/70 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -615,17 +624,55 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
                         {/* CENTER COLUMN: Video Preview (Span 6) */}
                         <div className="lg:col-span-6 flex flex-col">
-                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl h-full flex items-center justify-center">
-                                {template.before_video_url && template.after_video_url ? (
-                                    <BeforeAfterVideoSlider
-                                        beforeVideoUrl={template.before_video_url}
-                                        afterVideoUrl={template.after_video_url}
-                                    />
-                                ) : (
-                                    <div className="aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-500">
-                                        No Preview Available
-                                    </div>
-                                )}
+                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl min-h-[70vh] flex items-center justify-center p-4">
+                                {(() => {
+                                    const previewBefore =
+                                        template.before_video_url || template.template_video_url || null;
+                                    const previewAfter = template.after_video_url || null;
+                                    const previewSingle =
+                                        template.template_video_url ||
+                                        template.before_video_url ||
+                                        template.after_video_url ||
+                                        null;
+                                    const poster =
+                                        template.before_image_url || template.after_image_url || undefined;
+
+                                    if (previewBefore && previewAfter) {
+                                        return (
+                                            <div className="w-full max-w-[560px] aspect-[9/16]">
+                                                <BeforeAfterVideoSlider
+                                                    beforeVideoUrl={previewBefore}
+                                                    afterVideoUrl={previewAfter}
+                                                    beforePosterUrl={template.before_image_url}
+                                                    afterPosterUrl={template.after_image_url}
+                                                    className="h-full w-full"
+                                                />
+                                            </div>
+                                        );
+                                    }
+
+                                    if (previewSingle) {
+                                        return (
+                                            <div className="w-full max-w-[560px] aspect-[9/16]">
+                                                <VideoPlayer
+                                                    src={previewSingle}
+                                                    thumbnail={poster}
+                                                    autoplay={false}
+                                                    muted={false}
+                                                    loop={true}
+                                                    controls={true}
+                                                    className="h-full w-full"
+                                                />
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <div className="w-full max-w-[560px] aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-300">
+                                            <div className="text-sm">No preview available for this template.</div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 
@@ -732,7 +779,13 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                                         {/* Refined Preview (if any) */}
                                         {refinedImageUrl && (
                                             <div className="relative rounded-lg overflow-hidden border border-yellow-500/50 aspect-[9/16]">
-                                                <img src={refinedImageUrl} alt="Refined" className="w-full h-full object-cover" />
+                                                <NextImage
+                                                    src={refinedImageUrl}
+                                                    alt="Refined preview"
+                                                    fill
+                                                    sizes="(max-width: 1024px) 100vw, 240px"
+                                                    className="object-cover"
+                                                />
                                                 <div className="absolute top-2 left-2 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded">
                                                     REFINED PREVIEW
                                                 </div>

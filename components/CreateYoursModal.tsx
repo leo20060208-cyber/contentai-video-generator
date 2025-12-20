@@ -1,18 +1,15 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Film, ImageIcon, Wand2, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SegmentationModal } from '@/components/SegmentationModal';
 import { GeneratingModal } from '@/components/GeneratingModal';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
-import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '@/lib/supabase';
+import Image from 'next/image';
 
 interface CreateYoursModalProps {
     isOpen: boolean;
@@ -434,7 +431,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                             ) : (
                                                 <div className="space-y-4">
                                                     <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black">
-                                                        <img src={productImage} alt="Product" className="w-full h-full object-contain" />
+                                                        <Image
+                                                            src={productImage}
+                                                            alt="Product"
+                                                            fill
+                                                            sizes="384px"
+                                                            className="object-contain"
+                                                            unoptimized
+                                                        />
                                                     </div>
 
                                                     <div>

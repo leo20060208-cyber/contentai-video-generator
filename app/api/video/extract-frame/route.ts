@@ -1,32 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 // Set ffmpeg path
-let ffmpegPath = '';
-try {
-    const ffmpegStatic = require('ffmpeg-static');
-    ffmpegPath = ffmpegStatic;
-} catch (e) {
-    console.error('ffmpeg-static not found, using system ffmpeg', e);
-    ffmpegPath = 'ffmpeg';
-}
+const ffmpegPath = ffmpegStatic || 'ffmpeg';
 
 if (ffmpegPath) {
     ffmpeg.setFfmpegPath(ffmpegPath);
 }
 
-// Initialize Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export async function POST(req: Request) {
     try {
+        const supabase = createServerSupabaseClient('service-or-anon');
         const { videoUrl, timestamp } = await req.json();
 
         if (!videoUrl) {
@@ -37,8 +27,8 @@ export async function POST(req: Request) {
 
         // 1. Download video to temp
         const tempDir = os.tmpdir();
-        const videoPath = path.join(tempDir, `${uuidv4()}_video.mp4`);
-        const framePath = path.join(tempDir, `${uuidv4()}_frame.jpg`);
+        const videoPath = path.join(tempDir, `${randomUUID()}_video.mp4`);
+        const framePath = path.join(tempDir, `${randomUUID()}_frame.jpg`);
 
         // Download video
         const res = await fetch(videoUrl);
@@ -47,14 +37,14 @@ export async function POST(req: Request) {
         fs.writeFileSync(videoPath, Buffer.from(buffer));
 
         // 2. Extract frame with FFmpeg
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             ffmpeg(videoPath)
                 .seekInput(timestamp || 0) // Seek to specific timestamp
                 .frames(1) // Extract 1 frame
                 .output(framePath)
                 .on('end', () => {
                     console.log('✅ Frame extracted');
-                    resolve(null);
+                    resolve();
                 })
                 .on('error', (err) => {
                     console.error('❌ FFmpeg error:', err);
@@ -65,7 +55,7 @@ export async function POST(req: Request) {
 
         // 3. Upload frame to Supabase
         const frameContent = fs.readFileSync(framePath);
-        const fileName = `frames/${Date.now()}_${uuidv4()}.jpg`;
+        const fileName = `frames/${Date.now()}_${randomUUID()}.jpg`;
 
         const { error: uploadError } = await supabase.storage
             .from('videos')
@@ -85,12 +75,15 @@ export async function POST(req: Request) {
         try {
             fs.unlinkSync(videoPath);
             fs.unlinkSync(framePath);
-        } catch (e) { console.error('Cleanup error', e); }
+        } catch (cleanupError) {
+            console.error('Cleanup error', cleanupError);
+        }
 
         return NextResponse.json({ frameUrl });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error extracting frame:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }

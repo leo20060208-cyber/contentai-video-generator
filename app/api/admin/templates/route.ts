@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase Client (Service Role for Admin)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +9,7 @@ export const runtime = 'nodejs';
  */
 export async function GET() {
   try {
+    const supabase = createServerSupabaseClient('service-or-anon');
     const { data: templates, error } = await supabase
       .from('templates')
       .select('*')
@@ -30,10 +26,11 @@ export async function GET() {
       templates: templates || [],
       categories,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error reading templates:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -45,6 +42,7 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const supabase = createServerSupabaseClient('service-or-anon');
     const body = await request.json();
 
     // Insert into Supabase
@@ -101,10 +99,11 @@ export async function POST(request: Request) {
       success: true,
       template: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error saving template:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -116,13 +115,14 @@ export async function POST(request: Request) {
  */
 export async function PUT(request: Request) {
   try {
+    const supabase = createServerSupabaseClient('service-or-anon');
     const body = await request.json();
     const { id, ...updates } = body;
 
     if (!id) throw new Error("ID required for update");
 
     // Mapping for updates
-    const payload: any = {};
+    const payload: Record<string, unknown> = {};
     if (updates.title !== undefined) payload.title = updates.title;
     if (updates.description !== undefined) payload.description = updates.description;
     if (updates.videoUrl !== undefined) payload.before_video_url = updates.videoUrl;
@@ -152,10 +152,11 @@ export async function PUT(request: Request) {
       success: true,
       template: data,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating template:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }
@@ -166,6 +167,7 @@ export async function PUT(request: Request) {
  */
 export async function DELETE(request: Request) {
   try {
+    const supabase = createServerSupabaseClient('service-or-anon');
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -182,10 +184,11 @@ export async function DELETE(request: Request) {
       success: true,
       message: 'Template deleted',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting template:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }

@@ -176,7 +176,12 @@ NOW ANALYZE THIS VIDEO WITH MAXIMUM DETAIL:`;
 
             const result = await model.generateContent(request);
             const response = await result.response;
-            const text = response.candidates?.[0]?.content?.parts?.[0]?.text || response.text();
+            const parts = response.candidates?.[0]?.content?.parts as Array<{ text?: string }> | undefined;
+            const text =
+                parts
+                    ?.map((p) => p.text)
+                    .filter((t): t is string => typeof t === 'string')
+                    .join('') || '';
 
             console.log('Analysis complete. Response length:', text?.length || 0);
 
