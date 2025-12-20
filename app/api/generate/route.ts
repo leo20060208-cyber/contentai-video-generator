@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { enhancePromptSimple } from '@/lib/api/prompt-enhancer';
 import { generateVideo } from '@/lib/api/vertex-client';
 import { getTemplateWithPrompt } from '@/lib/data/template-library';
+import { requireVideoGenerationEntitlement } from '@/lib/billing/entitlementsServer';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,18 @@ interface GenerateRequest {
  */
 export async function POST(request: Request) {
   try {
+    // Billing gate (auth + entitlement)
+    const entitlement = await requireVideoGenerationEntitlement({
+      authorizationHeader: request.headers.get('authorization'),
+    });
+    if (!entitlement.ok) {
+      const status = entitlement.error === 'Unauthorized' ? 401 : 402;
+      return NextResponse.json(
+        { success: false, error: entitlement.error || 'Payment required', next: '/pricing' },
+        { status }
+      );
+    }
+
     const body: GenerateRequest = await request.json();
     const { templateId, imageUrl, userPrompt, aspectRatio = '16:9' } = body;
 

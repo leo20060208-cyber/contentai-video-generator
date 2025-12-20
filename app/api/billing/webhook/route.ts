@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 function getStripe(): Stripe {
     const key = process.env.STRIPE_SECRET_KEY;
     if (!key) throw new Error('STRIPE_SECRET_KEY is required');
-    return new Stripe(key, { apiVersion: '2025-02-24.acacia' });
+    return new Stripe(key);
 }
 
 function getWebhookSecret(): string {
@@ -107,16 +107,24 @@ export async function POST(request: Request) {
 
                 // Subscription: mark active-ish and store ids (final status will be updated by subscription events)
                 if (session.mode === 'subscription') {
-                    const plan = session.subscription_details?.metadata?.plan || session.metadata?.plan || null;
-                    const billingInterval = session.subscription_details?.metadata?.billing_interval || session.metadata?.billing_interval || null;
+                    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : null;
+                    const sub = subscriptionId
+                        ? ((await stripe.subscriptions.retrieve(subscriptionId)) as unknown as Stripe.Subscription)
+                        : null;
+
+                    const plan = typeof sub?.metadata?.plan === 'string' ? sub.metadata.plan : null;
+                    const billingInterval = typeof sub?.metadata?.billing_interval === 'string' ? sub.metadata.billing_interval : null;
+                    const periodEndSec = sub ? (sub as unknown as { current_period_end?: number }).current_period_end : undefined;
+
                     await upsertProfileByUserId({
                         userId,
-                        plan: typeof plan === 'string' ? plan : undefined,
-                        billing_interval: typeof billingInterval === 'string' ? billingInterval : undefined,
-                        subscription_status: 'active',
+                        plan: plan ?? undefined,
+                        billing_interval: billingInterval,
+                        subscription_status: sub?.status ?? 'active',
+                        current_period_end: typeof periodEndSec === 'number' ? new Date(periodEndSec * 1000).toISOString() : null,
                         stripe_customer_id: typeof session.customer === 'string' ? session.customer : null,
                         stripe_subscription_id: typeof session.subscription === 'string' ? session.subscription : null,
-                        set_video_credits: typeof plan === 'string' && plan === 'starter' ? starterCreditsForInterval(typeof billingInterval === 'string' ? billingInterval : null) : undefined,
+                        set_video_credits: plan === 'starter' ? starterCreditsForInterval(billingInterval) : undefined,
                     });
                 }
 
@@ -136,9 +144,14 @@ export async function POST(request: Request) {
                     plan,
                     billing_interval: interval ?? null,
                     subscription_status: sub.status,
-                    current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+                    current_period_end: typeof (sub as unknown as { current_period_end?: number }).current_period_end === 'number'
+                        ? new Date(((sub as unknown as { current_period_end?: number }).current_period_end as number) * 1000).toISOString()
+                        : null,
                     stripe_customer_id: typeof sub.customer === 'string' ? sub.customer : null,
                     stripe_subscription_id: sub.id,
+                    // For Starter we keep credits aligned with the subscription entitlement.
+                    // (This is a simplified approach; Stripe may emit multiple updates per cycle.)
+                    set_video_credits: plan === 'starter' ? starterCreditsForInterval(interval ?? null) : undefined,
                 });
                 break;
             }
@@ -156,42 +169,6 @@ export async function POST(request: Request) {
                     stripe_customer_id: typeof sub.customer === 'string' ? sub.customer : null,
                     stripe_subscription_id: sub.id,
                 });
-                break;
-            }
-            case 'invoice.payment_succeeded': {
-                const invoice = event.data.object as Stripe.Invoice;
-                const subscriptionId = typeof invoice.subscription === 'string' ? invoice.subscription : null;
-                if (!subscriptionId) break;
-
-                const sub = await stripe.subscriptions.retrieve(subscriptionId);
-                const userId = typeof sub.metadata?.supabaseUserId === 'string' ? sub.metadata.supabaseUserId : null;
-                const plan = typeof sub.metadata?.plan === 'string' ? sub.metadata.plan : null;
-                const interval = typeof sub.metadata?.billing_interval === 'string' ? sub.metadata.billing_interval : null;
-                if (!userId) break;
-
-                // Reset starter credits on successful renewal
-                if (plan === 'starter') {
-                    await upsertProfileByUserId({
-                        userId,
-                        plan,
-                        billing_interval: interval,
-                        subscription_status: sub.status,
-                        current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
-                        stripe_customer_id: typeof sub.customer === 'string' ? sub.customer : null,
-                        stripe_subscription_id: sub.id,
-                        set_video_credits: starterCreditsForInterval(interval),
-                    });
-                } else if (plan === 'pro') {
-                    await upsertProfileByUserId({
-                        userId,
-                        plan,
-                        billing_interval: interval,
-                        subscription_status: sub.status,
-                        current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
-                        stripe_customer_id: typeof sub.customer === 'string' ? sub.customer : null,
-                        stripe_subscription_id: sub.id,
-                    });
-                }
                 break;
             }
             default:

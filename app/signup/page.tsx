@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -24,7 +24,7 @@ const features = [
     'No editing skills required',
 ];
 
-export default function SignupPage() {
+function SignupPageInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { signup, loginWithGoogle } = useAuth();
@@ -266,5 +266,13 @@ export default function SignupPage() {
                 </motion.div>
             </div>
         </div>
+    );
+}
+
+export default function SignupPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+            <SignupPageInner />
+        </Suspense>
     );
 }

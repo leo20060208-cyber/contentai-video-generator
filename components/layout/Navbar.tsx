@@ -2,18 +2,35 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
-import { Menu, X, User } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Menu, X, User, LogOut, CreditCard } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { user, profile, logout, isLoading } = useAuth();
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
     await logout();
   };
+
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [isUserMenuOpen]);
 
 
   return (
@@ -57,11 +74,64 @@ export function Navbar() {
                 >
                   Pricing
                 </Link>
-                <Link href="/profile">
-                  <div className="w-9 h-9 rounded-full border-2 border-orange-500 flex items-center justify-center hover:bg-orange-500/10 transition-colors">
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    type="button"
+                    aria-label="Account menu"
+                    onClick={() => setIsUserMenuOpen((v) => !v)}
+                    className="w-9 h-9 rounded-full border-2 border-orange-500 flex items-center justify-center hover:bg-orange-500/10 transition-colors"
+                  >
                     <User className="w-4 h-4 text-orange-500" />
-                  </div>
-                </Link>
+                  </button>
+
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-white/10 bg-zinc-950 shadow-xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <div className="text-sm font-semibold text-white truncate">
+                          {profile?.name || user.email || 'Account'}
+                        </div>
+                        <div className="mt-1 text-xs text-zinc-400">
+                          Plan: <span className="text-zinc-200">{profile?.plan || 'Free'}</span>
+                          {typeof profile?.video_credits === 'number' && (
+                            <>
+                              {' '}• Credits: <span className="text-zinc-200">{profile.video_credits}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <Link
+                        href="/profile"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-white hover:bg-white/5 transition-colors"
+                      >
+                        <User className="w-4 h-4 text-orange-500" />
+                        Profile
+                      </Link>
+
+                      <Link
+                        href="/pricing"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-3 text-sm text-white hover:bg-white/5 transition-colors"
+                      >
+                        <CreditCard className="w-4 h-4 text-orange-500" />
+                        Billing
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setIsUserMenuOpen(false);
+                          await handleLogout();
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4 text-orange-500" />
+                        Logout
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               // Not logged in: Pricing + Acceso + Inscribirse

@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Sparkles } from 'lucide-react';
 
-export default function AuthCallbackPage() {
+function AuthCallbackInner() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [message, setMessage] = useState<string>('Signing you in…');
@@ -42,6 +42,25 @@ export default function AuthCallbackPage() {
                 <p className="text-zinc-400">{message}</p>
             </div>
         </div>
+    );
+}
+
+export default function AuthCallbackPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen bg-black flex items-center justify-center px-4">
+                    <div className="text-center">
+                        <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-4">
+                            <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+                        </div>
+                        <p className="text-zinc-400">Signing you in…</p>
+                    </div>
+                </div>
+            }
+        >
+            <AuthCallbackInner />
+        </Suspense>
     );
 }
 
