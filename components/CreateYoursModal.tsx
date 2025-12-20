@@ -708,6 +708,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 onConfirm={(maskUrl) => {
                     setVideoMaskUrl(maskUrl);
                     setShowVideoSegmentModal(false);
+                    // If user skips masking, still allow continuing the flow.
+                    // Auto-advance to keep UX smooth (user can always go back).
+                    setCurrentStep((s) => (s === 1 ? 2 : s));
                 }}
             />
 
@@ -718,6 +721,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 onConfirm={(maskUrl) => {
                     setProductMaskUrl(maskUrl);
                     setShowProductSegmentModal(false);
+                    // Masking is optional for Create Yours; proceed even when skipped.
+                    setCurrentStep((s) => (s === 2 ? 3 : s));
                 }}
             />
 
