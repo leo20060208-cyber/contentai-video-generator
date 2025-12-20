@@ -425,7 +425,18 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                 )}
                             </div>
 
-                            <Button type="button" onClick={() => onConfirm(null)} variant="outline" className="border-zinc-700 hover:bg-zinc-800 mr-2">
+                            <Button
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    // Skip must NEVER leave the overlay open (it would block clicks behind it)
+                                    onConfirm(null, points, 0, trackEnd);
+                                    onClose();
+                                }}
+                                variant="outline"
+                                className="border-zinc-700 hover:bg-zinc-800 mr-2"
+                            >
                                 Skip Masking
                             </Button>
 
