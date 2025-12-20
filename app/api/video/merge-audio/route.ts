@@ -10,6 +10,9 @@ export const runtime = 'nodejs';
 // Give ffmpeg/downloads enough time in serverless environments
 export const maxDuration = 300;
 
+const DOWNLOAD_TIMEOUT_MS = 120_000; // 2 minutes per file
+const FFMPEG_TIMEOUT_MS = 240_000; // 4 minutes total
+
 // Set ffmpeg path
 let ffmpegPath = '';
 try {
@@ -51,17 +54,30 @@ export async function POST(req: Request) {
         // Helper to download (prefer Supabase path if provided; works even if bucket is private)
         const downloadFile = async (url: string, dest: string, storagePath?: string) => {
             if (storagePath) {
-                const { data, error } = await supabase.storage.from('videos').download(storagePath);
-                if (error || !data) throw new Error(`Failed to download from Supabase storage path: ${storagePath}`);
-                const buffer = await data.arrayBuffer();
-                fs.writeFileSync(dest, Buffer.from(buffer));
+                const downloadPromise = (async () => {
+                    const { data, error } = await supabase.storage.from('videos').download(storagePath);
+                    if (error || !data) throw new Error(`Failed to download from Supabase storage path: ${storagePath}`);
+                    const buffer = await data.arrayBuffer();
+                    fs.writeFileSync(dest, Buffer.from(buffer));
+                })();
+
+                await Promise.race([
+                    downloadPromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error(`Download timeout for ${storagePath}`)), DOWNLOAD_TIMEOUT_MS))
+                ]);
                 return;
             }
 
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`Failed to fetch ${url}`);
-            const buffer = await res.arrayBuffer();
-            fs.writeFileSync(dest, Buffer.from(buffer));
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+            try {
+                const res = await fetch(url, { signal: controller.signal });
+                if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+                const buffer = await res.arrayBuffer();
+                fs.writeFileSync(dest, Buffer.from(buffer));
+            } finally {
+                clearTimeout(timeout);
+            }
         };
 
         if (videoUrl.includes('data:')) {
@@ -74,30 +90,33 @@ export async function POST(req: Request) {
             downloadFile(audioUrl, audioPath, typeof audioStoragePath === 'string' ? audioStoragePath : undefined)
         ]);
 
-        // 2. Merge with FFMPEG
-        await new Promise((resolve, reject) => {
-            ffmpeg()
-                .input(videoPath)
-                .input(audioPath)
-                // Map video from input 0, audio from input 1
-                .outputOptions([
-                    '-c:v copy', // Copy video stream (fast)
-                    '-c:a aac',  // Encode audio to aac
-                    '-map 0:v:0',
-                    // Optional audio map: if source has no audio, don't hard-fail the whole request
-                    '-map 1:a:0?',
-                    '-shortest' // Finish when the shortest stream ends (usually video)
-                ])
-                .save(outputPath)
-                .on('end', () => {
-                    console.log('✅ Merge completed');
-                    resolve(null);
-                })
-                .on('error', (err) => {
-                    console.error('❌ FFMpeg error:', err);
-                    reject(err);
-                });
-        });
+        // 2. Merge with FFMPEG (with hard timeout so it can't hang forever)
+        await Promise.race([
+            new Promise<void>((resolve, reject) => {
+                ffmpeg()
+                    .input(videoPath)
+                    .input(audioPath)
+                    // Map video from input 0, audio from input 1
+                    .outputOptions([
+                        '-c:v copy', // Copy video stream (fast)
+                        '-c:a aac',  // Encode audio to aac
+                        '-map 0:v:0',
+                        // Optional audio map: if source has no audio, don't hard-fail the whole request
+                        '-map 1:a:0?',
+                        '-shortest' // Finish when the shortest stream ends (usually video)
+                    ])
+                    .save(outputPath)
+                    .on('end', () => {
+                        console.log('✅ Merge completed');
+                        resolve();
+                    })
+                    .on('error', (err) => {
+                        console.error('❌ FFMpeg error:', err);
+                        reject(err);
+                    });
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('FFmpeg merge timed out')), FFMPEG_TIMEOUT_MS))
+        ]);
 
         // 3. Upload Result to Supabase
         const fileContent = fs.readFileSync(outputPath);

@@ -375,6 +375,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         // Merge audio
                         setGenModal(prev => ({ ...prev, status: 'mixing_audio' }));
 
+                        const mergeController = new AbortController();
+                        const mergeTimeout = setTimeout(() => mergeController.abort(), 240_000); // 4 min
                         const mergeRes = await fetch('/api/video/merge-audio', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -385,8 +387,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                 // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
                                 audioUrl: sourceVideoUrl,
                                 audioStoragePath: sourceVideoPath
-                            })
-                        });
+                            }),
+                            signal: mergeController.signal
+                        }).finally(() => clearTimeout(mergeTimeout));
 
                         const mergeText = await mergeRes.text();
                         const mergeData: unknown = mergeText ? JSON.parse(mergeText) : {};
