@@ -5,7 +5,13 @@ export interface Profile {
     id: string;
     name: string | null;
     avatar_url: string | null;
-    plan: string;
+    plan: 'Free' | 'starter' | 'pro' | string;
+    subscription_status?: string | null;
+    billing_interval?: 'month' | 'year' | string | null;
+    current_period_end?: string | null;
+    stripe_customer_id?: string | null;
+    stripe_subscription_id?: string | null;
+    video_credits?: number | null;
     created_at: string;
 }
 
