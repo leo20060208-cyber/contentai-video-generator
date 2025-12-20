@@ -6,6 +6,10 @@ import os from 'os';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
+export const runtime = 'nodejs';
+// Give ffmpeg/downloads enough time in serverless environments
+export const maxDuration = 300;
+
 // Set ffmpeg path
 let ffmpegPath = '';
 try {
