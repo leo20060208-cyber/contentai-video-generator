@@ -27,7 +27,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
     try {
-        const { videoUrl, audioUrl, videoId, audioStoragePath } = await req.json();
+        const { videoUrl, audioUrl, videoId, audioStoragePath, videoStoragePath } = await req.json();
 
         if (!videoUrl || !audioUrl) {
             return NextResponse.json({ error: 'Missing videoUrl or audioUrl' }, { status: 400 });
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
         }
 
         await Promise.all([
-            downloadFile(videoUrl, videoPath),
+            downloadFile(videoUrl, videoPath, typeof videoStoragePath === 'string' ? videoStoragePath : undefined),
             downloadFile(audioUrl, audioPath, typeof audioStoragePath === 'string' ? audioStoragePath : undefined)
         ]);
 

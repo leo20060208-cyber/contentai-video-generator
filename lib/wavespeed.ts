@@ -243,6 +243,7 @@ export class WavespeedClient {
             // V3 statuses: 'created', 'processing', 'completed', 'failed'
             let internalStatus = 'processing';
             let outputUrl = null;
+            let errorMessage: string | null = null;
 
             if (status === 'completed' || status === 'succeeded') {
                 internalStatus = 'completed';
@@ -258,7 +259,18 @@ export class WavespeedClient {
                 console.log(`✅ [Wavespeed] Video completed! URL: ${outputUrl}`);
             } else if (status === 'failed') {
                 internalStatus = 'failed';
-                console.error(`❌ [Wavespeed] Video generation failed`);
+                // Try to extract an actionable error message from provider payload
+                const candidates: unknown[] = [
+                    result.data?.error,
+                    result.data?.message,
+                    result.data?.detail,
+                    result.data?.details,
+                    result.error,
+                    result.message
+                ];
+                const found = candidates.find(v => typeof v === 'string' && v.trim().length > 0) as string | undefined;
+                errorMessage = found || 'Wavespeed reported status=failed';
+                console.error(`❌ [Wavespeed] Video generation failed: ${errorMessage}`);
             } else {
                 console.log(`⏳ [Wavespeed] Still processing... Status: ${status}`);
             }
@@ -267,6 +279,7 @@ export class WavespeedClient {
                 status: internalStatus,
                 url: outputUrl,
                 originalStatus: status,
+                errorMessage,
                 data: result.data || result
             };
 

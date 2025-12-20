@@ -351,6 +351,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     clearInterval(interval);
                     pollingIntervalRef.current = null;
                     const generatedVideoUrl = payload.data?.video?.url;
+                    const generatedVideoStoragePath = payload.data?.video && 'storagePath' in payload.data.video
+                        ? (payload.data.video as { storagePath?: string | null }).storagePath ?? null
+                        : null;
 
                     if (generatedVideoUrl && videoUrl) {
                         // Merge audio
@@ -362,6 +365,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             body: JSON.stringify({
                                 videoId: taskId,
                                 videoUrl: generatedVideoUrl,
+                                videoStoragePath: generatedVideoStoragePath,
                                 // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
                                 audioUrl: sourceVideoUrl,
                                 audioStoragePath: sourceVideoPath
