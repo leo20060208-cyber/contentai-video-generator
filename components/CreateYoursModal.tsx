@@ -35,6 +35,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Step 2: Product Upload
     const [productImage, setProductImage] = useState<string | null>(null);
+    const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
     const [productMaskUrl, setProductMaskUrl] = useState<string | null>(null);
     const [productName, setProductName] = useState<string>('');
     const [showProductSegmentModal, setShowProductSegmentModal] = useState(false);
@@ -172,11 +173,36 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (loadEvent) => {
+        reader.onload = async (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
             setProductImage(base64);
+            setProductImageUrl(null);
             setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
             setShowProductSegmentModal(true);
+
+            // Upload original product image to Supabase to avoid huge base64 payloads to /api/video/generate
+            // (Also makes it easier for providers to fetch, especially when the backend signs URLs.)
+            try {
+                const base64Data = base64.split(',')[1];
+                const byteString = atob(base64Data);
+                const bytes = new Uint8Array(byteString.length);
+                for (let i = 0; i < byteString.length; i++) bytes[i] = byteString.charCodeAt(i);
+                const blob = new Blob([bytes], { type: file.type || 'image/png' });
+
+                const uploadPath = `products/${Date.now()}_${Math.random().toString(36).slice(2)}_${file.name}`;
+                const { error: prodUploadError } = await supabase.storage
+                    .from('videos')
+                    .upload(uploadPath, blob, { contentType: file.type || 'image/png', upsert: true });
+
+                if (!prodUploadError) {
+                    const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(uploadPath);
+                    setProductImageUrl(publicUrl);
+                } else {
+                    console.warn('Product upload failed (will fallback to base64):', prodUploadError);
+                }
+            } catch (err) {
+                console.warn('Product upload exception (will fallback to base64):', err);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -184,6 +210,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     // Handle saved mask selection
     const handleSavedMaskSelect = (maskUrl: string) => {
         setProductImage(maskUrl);
+        setProductImageUrl(maskUrl);
         setProductMaskUrl(maskUrl);
         setProductName('Saved Mask');
         setShowSavedMasksModal(false);
@@ -231,7 +258,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             // IMPORTANT:
             // - Segmentation returns a *mask overlay*, not the product image.
             // - Video-edit expects a reference image of the product (texture/color), so prefer the original product image.
-            const productReferenceImage = productImage || productMaskUrl;
+            const productReferenceImage = productImageUrl || productImage || productMaskUrl;
             if (!productReferenceImage) {
                 throw new Error('Missing product reference image');
             }

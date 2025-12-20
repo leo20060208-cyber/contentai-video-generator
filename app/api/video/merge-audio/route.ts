@@ -40,7 +40,8 @@ export async function POST(req: Request) {
         // 1. Download Files to Temp
         const tempDir = os.tmpdir();
         const videoPath = path.join(tempDir, `${uuidv4()}_video.mp4`);
-        const audioPath = path.join(tempDir, `${uuidv4()}_audio.mp3`);
+        // NOTE: audioUrl might actually be a *video* file (we extract its audio track).
+        const audioPath = path.join(tempDir, `${uuidv4()}_audio_source.mp4`);
         const outputPath = path.join(tempDir, `${uuidv4()}_output.mp4`);
 
         // Helper to download (prefer Supabase path if provided; works even if bucket is private)
@@ -79,7 +80,8 @@ export async function POST(req: Request) {
                     '-c:v copy', // Copy video stream (fast)
                     '-c:a aac',  // Encode audio to aac
                     '-map 0:v:0',
-                    '-map 1:a:0',
+                    // Optional audio map: if source has no audio, don't hard-fail the whole request
+                    '-map 1:a:0?',
                     '-shortest' // Finish when the shortest stream ends (usually video)
                 ])
                 .save(outputPath)
