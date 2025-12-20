@@ -1,18 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Film, ImageIcon, Wand2, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SegmentationModal } from '@/components/SegmentationModal';
 import { GeneratingModal } from '@/components/GeneratingModal';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
-import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '@/lib/supabase';
 
 interface CreateYoursModalProps {
     isOpen: boolean;

@@ -227,7 +227,10 @@ export function TemplateForm({ categories, onSuccess, initialData }: TemplateFor
           category: categories[0] || 'VISUAL',
           videoUrl: '',
           hiddenPrompt: '',
-          maskVideoUrl: ''
+          maskVideoUrl: '',
+          requiredImageCount: 1,
+          imageDescriptions: [],
+          imageInstructions: ''
         });
         setTemplateId(null);
         setMaskPreviewUrl(null);

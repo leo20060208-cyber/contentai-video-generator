@@ -1,39 +1,64 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Search,
     LayoutGrid,
     Loader2,
     Settings,
-    Star
+    Star,
+    Sparkles,
+    type LucideIcon
 } from 'lucide-react';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { supabase } from '@/lib/supabase';
 import { Template } from '@/lib/db/videos';
 import { useCategories } from '@/hooks/useCategories';
 import { CategoryManager } from '@/components/CategoryManager';
-import { Button } from '@/components/ui/Button';
 
 export default function TemplatesPage() {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loading, setLoading] = useState(true);
-    const { categories: dbCategories, loading: categoriesLoading } = useCategories();
+    const { categories: dbCategories } = useCategories();
     const [showCategoryManager, setShowCategoryManager] = useState(false);
 
+    interface CategoryItem {
+        id: string;
+        label: string;
+        icon: LucideIcon;
+        value?: string;
+    }
+
     // Build categories array with "All" + dynamic categories
-    const categories = [
+    const categories: CategoryItem[] = [
         { id: 'all', label: 'All Templates', icon: LayoutGrid },
-        ...dbCategories.map(cat => ({
+        ...dbCategories.map((cat) => ({
             id: cat.slug,
             label: cat.name,
             icon: LayoutGrid,
-            value: cat.name
-        }))
+            value: cat.name,
+        })),
     ];
+
+    const fetchTemplates = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('templates')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setTemplates(data || []);
+        } catch (error) {
+            console.error('Error fetching templates:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     // Toggle trending status
     const toggleTrending = async (templateId: number, currentStatus: boolean) => {
@@ -50,7 +75,7 @@ export default function TemplatesPage() {
             if (!response.ok) throw new Error('Failed to update');
 
             // Refresh templates
-            fetchTemplates();
+            await fetchTemplates();
             alert(`Template ${!currentStatus ? 'marked as' : 'removed from'} trending!`);
         } catch (error) {
             console.error('Error toggling trending:', error);
@@ -60,25 +85,8 @@ export default function TemplatesPage() {
 
     // Fetch real templates from Supabase
     useEffect(() => {
-        const fetchTemplates = async () => {
-            setLoading(true);
-            try {
-                const { data, error } = await supabase
-                    .from('templates')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-
-                if (error) throw error;
-                setTemplates(data || []);
-            } catch (error) {
-                console.error('Error fetching templates:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchTemplates();
-    }, []);
+        void fetchTemplates();
+    }, [fetchTemplates]);
 
     // Filter Logic
     const filteredTemplates = templates.filter(template => {

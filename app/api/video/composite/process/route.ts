@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import Replicate from 'replicate';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
@@ -7,13 +6,10 @@ import path from 'path';
 import os from 'os';
 import { promisify } from 'util';
 import { exec } from 'child_process';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const execAsync = promisify(exec);
-
-// Initialize Clients
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const replicate = new Replicate({
     auth: process.env.REPLICATE_API_TOKEN,
@@ -21,6 +17,7 @@ const replicate = new Replicate({
 
 export async function POST(request: Request) {
     try {
+        const supabase = createServerSupabaseClient('service-or-anon');
         const { videoUrl, maskUrl, action } = await request.json();
 
         if (!videoUrl) return NextResponse.json({ error: 'Video URL required' }, { status: 400 });
@@ -56,7 +53,7 @@ export async function POST(request: Request) {
             // Upload extracted audio to Supabase
             const audioFile = fs.readFileSync(audioPath);
             const fileName = `extracted_audio_${Date.now()}.mp3`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
+            const { error: uploadError } = await supabase.storage
                 .from('audio-files')
                 .upload(fileName, audioFile, { contentType: 'audio/mpeg' });
 
@@ -104,7 +101,14 @@ export async function POST(request: Request) {
                         }
                     }
                 );
-                cleanVideoUrl = prediction as string;
+                if (typeof prediction === 'string') {
+                    cleanVideoUrl = prediction;
+                } else if (Array.isArray(prediction) && typeof prediction[0] === 'string') {
+                    cleanVideoUrl = prediction[0];
+                } else {
+                    console.warn('[Composite] Unexpected prediction output shape. Falling back to original videoUrl.');
+                    cleanVideoUrl = videoUrl;
+                }
                 console.log('[Composite] Inpainting Complete:', cleanVideoUrl);
             } catch (e) {
                 console.error('[Composite] Inpainting Failed:', e);

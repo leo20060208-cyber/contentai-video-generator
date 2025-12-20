@@ -1,12 +1,12 @@
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegPath from 'ffmpeg-static';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
+import { createServerSupabaseClient } from '@/lib/supabaseServer';
 
 // Set ffmpeg path
 if (ffmpegPath) {
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
         // 1. Setup paths
         const tmpDir = os.tmpdir();
-        const id = uuidv4();
+        const id = randomUUID();
         tempVideoPath = path.join(tmpDir, `${id}_video.mp4`);
         tempAudioPath = path.join(tmpDir, `${id}_audio.mp4`);
         tempOutputPath = path.join(tmpDir, `${id}_out.mp4`);
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         // -shortest: Finish when the shortest stream ends (usually the generated video which is 5s)
         // -c:v copy: Copy video stream (no re-encoding, fast)
         // -c:a aac: Re-encode audio to aac for compatibility
-        await new Promise((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             ffmpeg()
                 .input(tempVideoPath)
                 .input(tempAudioPath)
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
                     '-shortest'
                 ])
                 .save(tempOutputPath)
-                .on('end', resolve)
+                .on('end', () => resolve())
                 .on('error', (err) => {
                     console.error('FFmpeg error:', err);
                     reject(err);
@@ -71,14 +71,12 @@ export async function POST(request: Request) {
         console.log('[Mux] FFmpeg processing complete');
 
         // 4. Upload to Supabase Storage
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        const supabase = createServerSupabaseClient('service-or-anon');
 
         const fileBuffer = fs.readFileSync(tempOutputPath);
         const fileName = `muxed_${id}.mp4`;
 
-        const { data, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
             .from('videos') // Ensure this bucket exists
             .upload(fileName, fileBuffer, {
                 contentType: 'video/mp4',
@@ -124,10 +122,10 @@ async function downloadFile(url: string, dest: string) {
     fs.writeFileSync(dest, Buffer.from(buffer));
 }
 
-function safeUnlink(path: string) {
+function safeUnlink(filePath: string) {
     try {
-        if (fs.existsSync(path)) fs.unlinkSync(path);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch (e) {
-        console.error(`Failed to unlink ${path}`, e);
+        console.error(`Failed to unlink ${filePath}`, e);
     }
 }

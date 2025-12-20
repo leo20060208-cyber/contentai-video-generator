@@ -4,7 +4,7 @@
  * Los prompts ocultos solo se usan en el backend
  */
 
-import { VideoTemplate } from '@/types/template.types';
+import { VideoTemplate, type TemplateCategory } from '@/types/template.types';
 import templatesData from './templates.json';
 
 export interface TemplateWithPrompt extends VideoTemplate {
@@ -19,7 +19,7 @@ function processTemplates(): TemplateWithPrompt[] {
     id: t.id,
     title: t.title,
     description: t.description,
-    category: t.category,
+    category: t.category as TemplateCategory,
     tags: t.tags,
     duration: t.duration,
     aspectRatio: t.aspectRatio as '16:9' | '9:16' | '1:1',

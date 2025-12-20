@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, type LucideIcon } from 'lucide-react';
 import { GenerationStatus as Status } from '@/types/generation.types';
 import { cn } from '@/lib/utils/cn';
 
@@ -11,7 +11,15 @@ interface GenerationStatusProps {
   className?: string;
 }
 
-const statusConfig = {
+type StatusConfigItem = {
+  icon: LucideIcon;
+  label: string;
+  color: string;
+  bg: string;
+  animate?: boolean;
+};
+
+const statusConfig: Record<Status, StatusConfigItem> = {
   idle: {
     icon: Clock,
     label: 'Idle',
