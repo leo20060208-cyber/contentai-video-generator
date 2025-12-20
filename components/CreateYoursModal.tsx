@@ -225,6 +225,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
             setGenModal(prev => ({ ...prev, sourceVideoUrl: publicUrl }));
 
+            // IMPORTANT:
+            // - Segmentation returns a *mask overlay*, not the product image.
+            // - Video-edit expects a reference image of the product (texture/color), so prefer the original product image.
+            const productReferenceImage = productImage || productMaskUrl;
+            if (!productReferenceImage) {
+                throw new Error('Missing product reference image');
+            }
+
             const response = await fetch('/api/video/generate', {
                 method: 'POST',
                 headers: {
@@ -233,7 +241,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 },
                 body: JSON.stringify({
                     model: 'kwaivgi/kling-video-o1/video-edit',
-                    images: [productMaskUrl],
+                    images: [productReferenceImage],
                     audio_url: publicUrl, // Original video for Video Edit
                     prompt: prompt || 'Recreate this video with the new product',
                     duration: Math.min(videoDuration, 10),
@@ -292,12 +300,26 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             try {
                 const providerParam = provider || 'wavespeed';
                 const res = await fetch(`/api/video/status?taskId=${encodeURIComponent(taskId)}&provider=${encodeURIComponent(providerParam)}`);
-                const data = await res.json();
+                const raw = await res.text();
+                const data: unknown = raw ? JSON.parse(raw) : {};
 
-                if (data.data?.status === 'completed' || data.data?.status === 'succeeded') {
+                if (!res.ok) {
+                    const apiErr =
+                        typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                            ? (data as { error: string }).error
+                            : (raw || 'Status check failed');
+                    throw new Error(apiErr);
+                }
+
+                const payload = data as {
+                    data?: { status?: string; video?: { url?: string } | null; error?: string | null; statusMessage?: string | null };
+                    error?: string;
+                };
+
+                if (payload.data?.status === 'completed' || payload.data?.status === 'succeeded') {
                     clearInterval(interval);
                     pollingIntervalRef.current = null;
-                    const generatedVideoUrl = data.data.video?.url;
+                    const generatedVideoUrl = payload.data?.video?.url;
 
                     if (generatedVideoUrl && videoUrl) {
                         // Merge audio
@@ -337,10 +359,15 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             throw new Error('Audio merge did not return a URL');
                         }
                     }
-                } else if (data.data?.status === 'failed') {
+                } else if (payload.data?.status === 'failed') {
                     clearInterval(interval);
                     pollingIntervalRef.current = null;
-                    setGenModal(prev => ({ ...prev, status: 'failed' }));
+                    const failMsg =
+                        payload.data?.error ||
+                        payload.data?.statusMessage ||
+                        payload.error ||
+                        'La generació ha fallat. Si us plau, torna-ho a intentar.';
+                    setGenModal(prev => ({ ...prev, status: 'failed', errorMessage: failMsg }));
                 }
             } catch (e) {
                 console.error('Polling error', e);

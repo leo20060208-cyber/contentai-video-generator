@@ -107,6 +107,10 @@ export async function GET(request: Request) {
 
                 let status = result.status;
                 let videoUrl = result.url;
+                const statusMessage =
+                    typeof (result.data as any)?.error === 'string'
+                        ? (result.data as any).error
+                        : (typeof (result.data as any)?.message === 'string' ? (result.data as any).message : null);
 
                 if (status === 'completed' && videoUrl) {
                     const persistentUrl = await uploadToSupabase(videoUrl, taskId);
@@ -121,7 +125,8 @@ export async function GET(request: Request) {
                     data: {
                         status,
                         taskId,
-                        video: videoUrl ? { url: videoUrl } : null
+                        video: videoUrl ? { url: videoUrl } : null,
+                        statusMessage
                     }
                 });
             } catch (err) {

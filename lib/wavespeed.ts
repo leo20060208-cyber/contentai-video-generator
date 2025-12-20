@@ -134,6 +134,9 @@ export class WavespeedClient {
         // 2. Video Edit
         else if (modelPath === 'kwaivgi/kling-video-o1/video-edit') {
             body.keep_original_sound = true;
+            // Some providers still validate these fields even for video-edit.
+            body.duration = params.duration || 5;
+            body.aspect_ratio = params.aspect_ratio || '16:9';
             if (params.video_url) {
                 body.video = this.cleanUrl(params.video_url);
             }
