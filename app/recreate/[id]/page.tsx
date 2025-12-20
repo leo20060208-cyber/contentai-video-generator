@@ -624,7 +624,7 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
                         {/* CENTER COLUMN: Video Preview (Span 6) */}
                         <div className="lg:col-span-6 flex flex-col">
-                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl min-h-[70vh] flex items-center justify-center">
+                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl min-h-[70vh] flex items-center justify-center p-4">
                                 {(() => {
                                     const previewBefore =
                                         template.before_video_url || template.template_video_url || null;
@@ -639,12 +639,15 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
                                     if (previewBefore && previewAfter) {
                                         return (
-                                            <BeforeAfterVideoSlider
-                                                beforeVideoUrl={previewBefore}
-                                                afterVideoUrl={previewAfter}
-                                                beforePosterUrl={template.before_image_url}
-                                                afterPosterUrl={template.after_image_url}
-                                            />
+                                            <div className="w-full max-w-[560px] aspect-[9/16]">
+                                                <BeforeAfterVideoSlider
+                                                    beforeVideoUrl={previewBefore}
+                                                    afterVideoUrl={previewAfter}
+                                                    beforePosterUrl={template.before_image_url}
+                                                    afterPosterUrl={template.after_image_url}
+                                                    className="h-full w-full"
+                                                />
+                                            </div>
                                         );
                                     }
 

@@ -145,10 +145,10 @@ export function BeforeAfterVideoSlider({
     };
 
     return (
-        <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 ${className}`}>
+        <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 border border-white/10 ${className}`}>
             <div
                 ref={containerRef}
-                className="relative w-full h-full max-w-[560px] mx-auto aspect-[9/16]"
+                className="relative w-full h-full"
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
                 onClick={() => {
