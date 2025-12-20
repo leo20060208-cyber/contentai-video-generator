@@ -53,6 +53,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         provider: string | null;
         errorMessage: string | null;
         sourceVideoUrl: string | null;
+        sourceVideoPath: string | null;
     }>({
         isOpen: false,
         status: 'processing',
@@ -61,7 +62,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         ,
         provider: null,
         errorMessage: null,
-        sourceVideoUrl: null
+        sourceVideoUrl: null,
+        sourceVideoPath: null
     });
 
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -202,7 +204,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             taskId: null,
             provider: null,
             errorMessage: null,
-            sourceVideoUrl: null
+            sourceVideoUrl: null,
+            sourceVideoPath: null
         });
 
         try {
@@ -223,7 +226,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 .from('videos')
                 .getPublicUrl(fileName);
 
-            setGenModal(prev => ({ ...prev, sourceVideoUrl: publicUrl }));
+            setGenModal(prev => ({ ...prev, sourceVideoUrl: publicUrl, sourceVideoPath: fileName }));
 
             // IMPORTANT:
             // - Segmentation returns a *mask overlay*, not the product image.
@@ -243,6 +246,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     model: 'kwaivgi/kling-video-o1/video-edit',
                     images: [productReferenceImage],
                     audio_url: publicUrl, // Original video for Video Edit
+                    audio_storage_path: fileName, // Allows server to create a signed URL (works even if bucket is private)
                     prompt: prompt || 'Recreate this video with the new product',
                     duration: Math.min(videoDuration, 10),
                     aspect_ratio: '9:16'
@@ -273,7 +277,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 // Avoid TS narrowing issues inside state updater closure
                 setGenModal(prev => ({ ...prev, taskId, provider }));
                 // Start polling
-                startPolling(taskId, provider, publicUrl);
+                startPolling(taskId, provider, publicUrl, fileName);
             } else {
                 throw new Error('No taskId returned from server');
             }
@@ -290,7 +294,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     };
 
     // Polling logic
-    const startPolling = (taskId: string, provider: string | null, sourceVideoUrl: string) => {
+    const startPolling = (taskId: string, provider: string | null, sourceVideoUrl: string, sourceVideoPath: string) => {
         if (pollingIntervalRef.current) {
             clearInterval(pollingIntervalRef.current);
             pollingIntervalRef.current = null;
@@ -332,7 +336,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                 videoId: taskId,
                                 videoUrl: generatedVideoUrl,
                                 // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
-                                audioUrl: sourceVideoUrl
+                                audioUrl: sourceVideoUrl,
+                                audioStoragePath: sourceVideoPath
                             })
                         });
 

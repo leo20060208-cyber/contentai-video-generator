@@ -41,7 +41,17 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { prompt, image, images, model, duration, aspect_ratio, target_mask, audio_url } = body;
+        const { prompt, image, images, model, duration, aspect_ratio, target_mask, audio_url, audio_storage_path } = body as {
+            prompt?: string;
+            image?: string;
+            images?: string[];
+            model: string;
+            duration?: number;
+            aspect_ratio?: string;
+            target_mask?: string;
+            audio_url?: string;
+            audio_storage_path?: string;
+        };
 
         console.log('[API] Request parsed:', {
             hasPrompt: !!prompt,
@@ -51,8 +61,43 @@ export async function POST(request: Request) {
             imageLength: image?.length,
             model,
             hasAudio: !!audio_url,
+            hasAudioStoragePath: !!audio_storage_path,
             userId // Log userId to debug
         });
+
+        const parseSupabaseStoragePath = (url: string | undefined): string | null => {
+            if (!url) return null;
+            // Typical patterns:
+            // - .../storage/v1/object/public/<bucket>/<path>
+            // - .../storage/v1/object/<bucket>/<path>
+            // - .../storage/v1/object/sign/<bucket>/<path>?token=...
+            const m =
+                url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/) ||
+                url.match(/\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/) ||
+                url.match(/\/storage\/v1\/object\/([^/]+)\/(.+)$/);
+            if (!m) return null;
+            const bucket = m[1];
+            if (bucket !== 'videos') return null;
+            const pathPart = m[2].split('?')[0];
+            return pathPart || null;
+        };
+
+        const getSignedOrPublicUrl = async (objectPath: string): Promise<string> => {
+            try {
+                const signed = await supabase.storage.from('videos').createSignedUrl(objectPath, 60 * 60); // 1h
+                if (signed.data?.signedUrl) return signed.data.signedUrl;
+            } catch (e) {
+                // ignore and fallback
+            }
+            const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(objectPath);
+            return publicUrl;
+        };
+
+        const maybeSignSupabaseUrl = async (url: string): Promise<string> => {
+            const path = parseSupabaseStoragePath(url);
+            if (!path) return url;
+            return await getSignedOrPublicUrl(path);
+        };
 
         // Helper to save video to DB
         const saveVideoToDb = async (taskId: string, provider: string) => {
@@ -130,12 +175,15 @@ export async function POST(request: Request) {
                                 upsert: true
                             });
                             if (!uploadError) {
-                                const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
-                                return publicUrl;
+                                return await getSignedOrPublicUrl(fileName);
                             }
                         } catch (e) {
                             console.error('[API] Error uploading image from array:', e);
                         }
+                    }
+                    // If it's a Supabase URL, sign it to ensure external access even if bucket is private
+                    if (typeof img === 'string' && img.includes('/storage/v1/object/')) {
+                        return await maybeSignSupabaseUrl(img);
                     }
                     return img; // Return original if not base64 or upload failed (fallback)
                 }));
@@ -154,12 +202,13 @@ export async function POST(request: Request) {
                         upsert: true
                     });
                     if (!uploadError) {
-                        const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
-                        finalImageUrl = publicUrl;
+                        finalImageUrl = await getSignedOrPublicUrl(fileName);
                     }
                 } catch (e) {
                     console.error('[API] Error processing base64 image for Wavespeed:', e);
                 }
+            } else if (typeof finalImageUrl === 'string' && finalImageUrl.includes('/storage/v1/object/')) {
+                finalImageUrl = await maybeSignSupabaseUrl(finalImageUrl);
             }
 
             // 3. Handle Video Input (Video-Edit)
@@ -167,7 +216,16 @@ export async function POST(request: Request) {
             // (Assuming audio_url points to the template's video)
             let finalVideoUrl = undefined;
             if (model === 'kwaivgi/kling-video-o1/video-edit') {
-                finalVideoUrl = audio_url;
+                // Prefer signing by explicit storage path if provided
+                const storagePath =
+                    (typeof audio_storage_path === 'string' && audio_storage_path.length > 0)
+                        ? audio_storage_path
+                        : parseSupabaseStoragePath(audio_url);
+                if (storagePath) {
+                    finalVideoUrl = await getSignedOrPublicUrl(storagePath);
+                } else {
+                    finalVideoUrl = audio_url;
+                }
             }
 
             // 4. AI Image Refinement (Nano Banana) for "Original" Mode

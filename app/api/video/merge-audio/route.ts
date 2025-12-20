@@ -27,7 +27,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
     try {
-        const { videoUrl, audioUrl, videoId } = await req.json();
+        const { videoUrl, audioUrl, videoId, audioStoragePath } = await req.json();
 
         if (!videoUrl || !audioUrl) {
             return NextResponse.json({ error: 'Missing videoUrl or audioUrl' }, { status: 400 });
@@ -43,8 +43,16 @@ export async function POST(req: Request) {
         const audioPath = path.join(tempDir, `${uuidv4()}_audio.mp3`);
         const outputPath = path.join(tempDir, `${uuidv4()}_output.mp4`);
 
-        // Helper to download
-        const downloadFile = async (url: string, dest: string) => {
+        // Helper to download (prefer Supabase path if provided; works even if bucket is private)
+        const downloadFile = async (url: string, dest: string, storagePath?: string) => {
+            if (storagePath) {
+                const { data, error } = await supabase.storage.from('videos').download(storagePath);
+                if (error || !data) throw new Error(`Failed to download from Supabase storage path: ${storagePath}`);
+                const buffer = await data.arrayBuffer();
+                fs.writeFileSync(dest, Buffer.from(buffer));
+                return;
+            }
+
             const res = await fetch(url);
             if (!res.ok) throw new Error(`Failed to fetch ${url}`);
             const buffer = await res.arrayBuffer();
@@ -58,7 +66,7 @@ export async function POST(req: Request) {
 
         await Promise.all([
             downloadFile(videoUrl, videoPath),
-            downloadFile(audioUrl, audioPath)
+            downloadFile(audioUrl, audioPath, typeof audioStoragePath === 'string' ? audioStoragePath : undefined)
         ]);
 
         // 2. Merge with FFMPEG
@@ -102,7 +110,9 @@ export async function POST(req: Request) {
             .from('videos')
             .getPublicUrl(uploadPath);
 
-        const finalUrl = publicUrlData.publicUrl;
+        // Return a signed URL when possible (works for private buckets)
+        const signed = await supabase.storage.from('videos').createSignedUrl(uploadPath, 60 * 60);
+        const finalUrl = signed.data?.signedUrl || publicUrlData.publicUrl;
 
         // Cleanup
         try {
