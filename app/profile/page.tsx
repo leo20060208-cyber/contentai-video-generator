@@ -180,7 +180,7 @@ const VideoCard = ({ video, onDelete, onPlay }: VideoCardProps) => {
 };
 
 export default function ProfilePage() {
-    const { user, profile } = useAuth();
+    const { user, profile, logout } = useAuth();
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'videos' | 'saved' | 'masks' | 'settings' | 'billing'>('videos');
     const [myVideos, setMyVideos] = useState<Video[]>([]);
@@ -292,8 +292,26 @@ export default function ProfilePage() {
                                     </div>
 
                                     {/* Quick Actions */}
-                                    <div className="flex gap-2">
-                                        {/* Create Button Removed */}
+                                    <div className="flex flex-wrap gap-2">
+                                        <Button
+                                            variant="outline"
+                                            className="border-white/10 text-white hover:bg-white/5"
+                                            onClick={() => router.push('/pricing')}
+                                        >
+                                            <CreditCard className="w-4 h-4 mr-2" />
+                                            Billing
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="border-white/10 text-white hover:bg-white/5"
+                                            onClick={async () => {
+                                                await logout();
+                                                router.replace('/');
+                                            }}
+                                        >
+                                            <LogOut className="w-4 h-4 mr-2" />
+                                            Logout
+                                        </Button>
                                     </div>
                                 </div>
                             </div>

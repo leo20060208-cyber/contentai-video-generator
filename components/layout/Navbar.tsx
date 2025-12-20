@@ -11,7 +11,8 @@ export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { user, profile, logout, isLoading } = useAuth();
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuDesktopRef = useRef<HTMLDivElement>(null);
+  const userMenuMobileRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
     await logout();
@@ -23,7 +24,9 @@ export function Navbar() {
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node | null;
       if (!target) return;
-      if (userMenuRef.current && !userMenuRef.current.contains(target)) {
+      const insideDesktop = !!userMenuDesktopRef.current && userMenuDesktopRef.current.contains(target);
+      const insideMobile = !!userMenuMobileRef.current && userMenuMobileRef.current.contains(target);
+      if (!insideDesktop && !insideMobile) {
         setIsUserMenuOpen(false);
       }
     };
@@ -74,7 +77,7 @@ export function Navbar() {
                 >
                   Pricing
                 </Link>
-                <div className="relative" ref={userMenuRef}>
+                <div className="relative" ref={userMenuDesktopRef}>
                   <button
                     type="button"
                     aria-label="Account menu"
@@ -85,7 +88,7 @@ export function Navbar() {
                   </button>
 
                   {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-white/10 bg-zinc-950 shadow-xl overflow-hidden">
+                    <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-white/10 bg-zinc-950 shadow-xl overflow-hidden z-[60]">
                       <div className="px-4 py-3 border-b border-white/10">
                         <div className="text-sm font-semibold text-white truncate">
                           {profile?.name || user.email || 'Account'}
@@ -158,17 +161,81 @@ export function Navbar() {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden w-10 h-10 flex items-center justify-center"
-          >
-            {isMenuOpen ? (
-              <X className="w-5 h-5 text-white" />
-            ) : (
-              <Menu className="w-5 h-5 text-white" />
+          {/* Mobile: Account + Menu */}
+          <div className="md:hidden flex items-center gap-2">
+            {!isLoading && user && (
+              <div className="relative" ref={userMenuMobileRef}>
+                <button
+                  type="button"
+                  aria-label="Account menu"
+                  onClick={() => setIsUserMenuOpen((v) => !v)}
+                  className="w-10 h-10 rounded-full border border-white/10 bg-zinc-900 flex items-center justify-center hover:bg-white/5 transition-colors"
+                >
+                  <User className="w-5 h-5 text-white" />
+                </button>
+
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-3 w-56 rounded-2xl border border-white/10 bg-zinc-950 shadow-xl overflow-hidden z-[60]">
+                    <div className="px-4 py-3 border-b border-white/10">
+                      <div className="text-sm font-semibold text-white truncate">
+                        {profile?.name || user.email || 'Account'}
+                      </div>
+                      <div className="mt-1 text-xs text-zinc-400">
+                        Plan: <span className="text-zinc-200">{profile?.plan || 'Free'}</span>
+                        {typeof profile?.video_credits === 'number' && (
+                          <>
+                            {' '}• Credits: <span className="text-zinc-200">{profile.video_credits}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <Link
+                      href="/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-3 text-sm text-white hover:bg-white/5 transition-colors"
+                    >
+                      <User className="w-4 h-4 text-orange-500" />
+                      Profile
+                    </Link>
+
+                    <Link
+                      href="/pricing"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-3 text-sm text-white hover:bg-white/5 transition-colors"
+                    >
+                      <CreditCard className="w-4 h-4 text-orange-500" />
+                      Billing
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsUserMenuOpen(false);
+                        await handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4 text-orange-500" />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
-          </button>
+
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="w-10 h-10 flex items-center justify-center"
+              aria-label="Open menu"
+            >
+              {isMenuOpen ? (
+                <X className="w-5 h-5 text-white" />
+              ) : (
+                <Menu className="w-5 h-5 text-white" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Mobile Menu */}
