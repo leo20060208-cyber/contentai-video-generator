@@ -196,8 +196,9 @@ export function TemplateUploader({
     };
 
     const uploadFile = async (file: File | Blob, pathPrefix: string) => {
-        const ext = file instanceof File ? file.name.split('.').pop() : 'jpg';
-        const fileName = `${Math.random().toString(36).substring(2)}.${ext}`;
+        const rawExt = file instanceof File ? file.name.split('.').pop() : 'jpg';
+        const safeExt = (rawExt || 'bin').replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
+        const fileName = `${Math.random().toString(36).substring(2)}.${safeExt}`;
         const filePath = `${pathPrefix}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage

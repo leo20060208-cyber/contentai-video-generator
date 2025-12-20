@@ -28,6 +28,13 @@ const sanitizeStorageFileName = (inputName: string): string => {
     return normalized.length > 0 ? normalized : 'file';
 };
 
+const getUserIdOrThrow = async (): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) throw new Error('Not authenticated');
+    return userId;
+};
+
 interface CreateYoursModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -137,6 +144,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
         setIsExtractingFrame(true);
         try {
+            const userId = await getUserIdOrThrow();
             // Create canvas to capture frame
             const video = videoRef.current;
             const canvas = document.createElement('canvas');
@@ -158,7 +166,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             });
 
             // Upload to Supabase
-            const fileName = `frames/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+            const fileName = `frames/${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
             const { error: uploadError } = await supabase.storage
                 .from('videos')
                 .upload(fileName, blob, {
@@ -197,6 +205,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             // Upload original product image to Supabase to avoid huge base64 payloads to /api/video/generate
             // (Also makes it easier for providers to fetch, especially when the backend signs URLs.)
             try {
+                const userId = await getUserIdOrThrow();
                 const base64Data = base64.split(',')[1];
                 const byteString = atob(base64Data);
                 const bytes = new Uint8Array(byteString.length);
@@ -204,7 +213,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 const blob = new Blob([bytes], { type: file.type || 'image/png' });
 
                 const safeName = sanitizeStorageFileName(file.name);
-                const uploadPath = `products/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
+                const uploadPath = `products/${userId}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
                 const { error: prodUploadError } = await supabase.storage
                     .from('videos')
                     .upload(uploadPath, blob, { contentType: file.type || 'image/png', upsert: true });
@@ -253,10 +262,12 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
+            const userId = session?.user?.id;
+            if (!userId) throw new Error('Not authenticated');
 
             // Upload video to permanent location
             const safeVideoName = sanitizeStorageFileName(videoFile!.name);
-            const fileName = `user-videos/${Date.now()}_${safeVideoName}`;
+            const fileName = `user-videos/${userId}/${Date.now()}_${safeVideoName}`;
             const { error: uploadError } = await supabase.storage
                 .from('videos')
                 .upload(fileName, videoFile!, {
