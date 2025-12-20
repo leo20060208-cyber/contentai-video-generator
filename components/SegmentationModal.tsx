@@ -313,7 +313,8 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    // Important: on close, never block clicks behind (no lingering invisible overlay)
+                    exit={{ opacity: 0, pointerEvents: 'none', transition: { duration: 0 } }}
                     className="fixed inset-0 bg-black/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4"
                 >
                     <div className="w-full max-w-5xl h-[90vh] flex flex-col">
@@ -431,8 +432,8 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                     e.preventDefault();
                                     e.stopPropagation();
                                     // Skip must NEVER leave the overlay open (it would block clicks behind it)
-                                    onConfirm(null, points, 0, trackEnd);
                                     onClose();
+                                    onConfirm(null, points, 0, trackEnd);
                                 }}
                                 variant="outline"
                                 className="border-zinc-700 hover:bg-zinc-800 mr-2"
