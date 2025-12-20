@@ -706,7 +706,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={extractedFrameUrl || ''}
                 onClose={() => setShowVideoSegmentModal(false)}
                 onConfirm={(maskUrl) => {
-                    setVideoMaskUrl(maskUrl);
+                    // If user clicks "Skip Masking", still mark step as completed.
+                    // Some parts of the UI historically depended on a non-null mask value.
+                    setVideoMaskUrl(maskUrl ?? extractedFrameUrl ?? 'skipped');
                     setShowVideoSegmentModal(false);
                     // If user skips masking, still allow continuing the flow.
                     // Auto-advance to keep UX smooth (user can always go back).
@@ -719,7 +721,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={productImage || ''}
                 onClose={() => setShowProductSegmentModal(false)}
                 onConfirm={(maskUrl) => {
-                    setProductMaskUrl(maskUrl);
+                    // If user clicks "Skip Masking", still mark step as completed.
+                    // Use the product image (URL/base64) as a fallback marker.
+                    setProductMaskUrl(maskUrl ?? productImageUrl ?? productImage ?? 'skipped');
                     setShowProductSegmentModal(false);
                     // Masking is optional for Create Yours; proceed even when skipped.
                     setCurrentStep((s) => (s === 2 ? 3 : s));
