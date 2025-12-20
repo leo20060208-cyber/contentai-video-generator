@@ -23,7 +23,9 @@ export function BeforeAfterVideoSlider({
     const [isPlaying, setIsPlaying] = useState(false);
     const [showLabels, setShowLabels] = useState(true); // Control label visibility
     const [isHovering, setIsHovering] = useState(false); // Control hover state
-    const [isMuted, setIsMuted] = useState(false); // If it plays, it should play with sound
+    // Autoplay without user gesture requires muted in most browsers.
+    // Users can unmute with a click (gesture) if they want sound.
+    const [isMuted, setIsMuted] = useState(true);
     const [isLoaded, setIsLoaded] = useState(false);
     const [hasError, setHasError] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -88,16 +90,14 @@ export function BeforeAfterVideoSlider({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isMuted]);
 
-    const playWithSound = async () => {
+    const playBoth = async () => {
         if (!beforeVideoRef.current || !afterVideoRef.current) return;
         try {
-            setIsMuted(false);
             syncMuteState();
-            await beforeVideoRef.current.play();
-            await afterVideoRef.current.play();
+            await Promise.allSettled([beforeVideoRef.current.play(), afterVideoRef.current.play()]);
             setIsPlaying(true);
         } catch {
-            // If the browser blocks playback, user can try again (or use native controls if enabled elsewhere).
+            // Ignore autoplay rejections.
         }
     };
 
@@ -111,8 +111,7 @@ export function BeforeAfterVideoSlider({
             return;
         }
 
-        // Start playback with sound (requires user gesture; click on the player/button is a gesture).
-        await playWithSound();
+        await playBoth();
     };
 
     // Sync video times
@@ -144,6 +143,13 @@ export function BeforeAfterVideoSlider({
         }
     };
 
+    // Autoplay on mount (muted) once metadata is available.
+    useEffect(() => {
+        if (!isLoaded || hasError) return;
+        void playBoth();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoaded, hasError]);
+
     return (
         <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 border border-white/10 ${className}`}>
             <div
@@ -164,7 +170,8 @@ export function BeforeAfterVideoSlider({
                     className="absolute inset-0 w-full h-full object-cover"
                     loop
                     playsInline
-                    preload="metadata"
+                    preload="auto"
+                    autoPlay
                     muted
                     onEnded={handleVideoEnd}
                     onLoadedMetadata={() => {
@@ -188,7 +195,8 @@ export function BeforeAfterVideoSlider({
                         className="absolute inset-0 w-full h-full object-cover"
                         loop
                         playsInline
-                        preload="metadata"
+                        preload="auto"
+                        autoPlay
                         muted={isMuted}
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnd}
@@ -248,9 +256,9 @@ export function BeforeAfterVideoSlider({
                 </button>
 
                 {/* Hint to enable sound */}
-                {!isPlaying && (
+                {isMuted && (
                     <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] z-10">
-                        Click to play (with sound)
+                        Click to enable sound
                     </div>
                 )}
             </div>
