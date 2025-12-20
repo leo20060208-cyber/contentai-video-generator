@@ -23,6 +23,7 @@ import { supabase } from '@/lib/supabase';
 import { type ReplicateModel } from '@/lib/replicate';
 import { Template } from '@/lib/db/videos';
 import { BeforeAfterVideoSlider } from '@/components/BeforeAfterVideoSlider';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { SegmentationModal } from '@/components/SegmentationModal';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
 import { saveUserMask } from '@/lib/db/masks';
@@ -631,9 +632,25 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                                         beforePosterUrl={template.before_image_url}
                                         afterPosterUrl={template.after_image_url}
                                     />
+                                ) : template.before_video_url ? (
+                                    <div className="w-full max-w-[560px] aspect-[9/16]">
+                                        <VideoPlayer
+                                            src={template.before_video_url}
+                                            thumbnail={template.before_image_url}
+                                            autoplay={false}
+                                            muted={false}
+                                            loop={true}
+                                            controls={true}
+                                            className="h-full w-full"
+                                        />
+                                    </div>
+                                ) : template.before_image_url ? (
+                                    <div className="w-full max-w-[560px] aspect-[9/16] flex items-center justify-center text-zinc-400">
+                                        <div className="text-sm">Preview image available, video missing.</div>
+                                    </div>
                                 ) : (
-                                    <div className="aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-500">
-                                        No Preview Available
+                                    <div className="w-full max-w-[560px] aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-300">
+                                        <div className="text-sm">No preview available for this template.</div>
                                     </div>
                                 )}
                             </div>
