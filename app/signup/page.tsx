@@ -59,8 +59,14 @@ function SignupPageInner() {
 
     const handleGoogleSignup = async () => {
         setIsGoogleLoading(true);
-        const next = searchParams.get('next') ?? '/profile';
-        await loginWithGoogle(next);
+        try {
+            const next = searchParams.get('next') ?? '/profile';
+            await loginWithGoogle(next);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Google sign-in failed';
+            setError(msg);
+            setIsGoogleLoading(false);
+        }
     };
 
     if (success) {
