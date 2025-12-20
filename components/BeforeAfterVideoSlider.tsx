@@ -135,15 +135,20 @@ export function BeforeAfterVideoSlider({
         }
     };
 
+    const primeFirstFrame = (video: HTMLVideoElement) => {
+        // Some browsers show a black frame until we seek a tiny bit.
+        try {
+            video.currentTime = 0.05;
+        } catch {
+            // ignore
+        }
+    };
+
     return (
         <div className={`relative overflow-hidden rounded-2xl bg-zinc-900 ${className}`}>
             <div
                 ref={containerRef}
-                className="relative w-full max-w-[420px] mx-auto"
-                style={{
-                    aspectRatio: '9/16',
-                    maxHeight: '70vh',
-                }}
+                className="relative w-full h-full max-w-[560px] mx-auto aspect-[9/16]"
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
                 onClick={() => {
@@ -162,7 +167,10 @@ export function BeforeAfterVideoSlider({
                     preload="metadata"
                     muted
                     onEnded={handleVideoEnd}
-                    onLoadedMetadata={() => setIsLoaded(true)}
+                    onLoadedMetadata={() => {
+                        setIsLoaded(true);
+                        if (afterVideoRef.current) primeFirstFrame(afterVideoRef.current);
+                    }}
                     onError={() => { setHasError(true); setIsLoaded(true); }}
                 />
 
@@ -184,7 +192,10 @@ export function BeforeAfterVideoSlider({
                         muted={isMuted}
                         onTimeUpdate={handleTimeUpdate}
                         onEnded={handleVideoEnd}
-                        onLoadedMetadata={() => setIsLoaded(true)}
+                        onLoadedMetadata={() => {
+                            setIsLoaded(true);
+                            if (beforeVideoRef.current) primeFirstFrame(beforeVideoRef.current);
+                        }}
                         onError={() => { setHasError(true); setIsLoaded(true); }}
                     />
                 </div>
@@ -227,8 +238,7 @@ export function BeforeAfterVideoSlider({
                 {/* Play/Pause Button - SMALLER and AT BOTTOM CENTER */}
                 <button
                     onClick={togglePlayPause}
-                    className={`absolute bottom-16 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/60 transition-all shadow-lg z-10 group ${isHovering ? 'opacity-100' : 'opacity-0'
-                        }`}
+                    className="absolute bottom-6 left-1/2 -translate-x-1/2 w-11 h-11 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center hover:bg-black/70 transition-all shadow-lg z-10"
                 >
                     {isPlaying ? (
                         <Pause className="w-4 h-4 text-white" />
@@ -238,8 +248,8 @@ export function BeforeAfterVideoSlider({
                 </button>
 
                 {/* Hint to enable sound */}
-                {!isPlaying && isHovering && (
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] z-10">
+                {!isPlaying && (
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] z-10">
                         Click to play (with sound)
                     </div>
                 )}
