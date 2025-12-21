@@ -425,7 +425,15 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                 )}
                             </div>
 
-                            <Button type="button" onClick={() => onConfirm(null)} variant="outline" className="border-zinc-700 hover:bg-zinc-800 mr-2">
+                            <Button 
+                                type="button" 
+                                onClick={() => {
+                                    console.log('🟡 [SegModal] Skip Masking clicked - calling onConfirm(null)');
+                                    onConfirm(null);
+                                }} 
+                                variant="outline" 
+                                className="border-zinc-700 hover:bg-zinc-800 mr-2"
+                            >
                                 Skip Masking
                             </Button>
 

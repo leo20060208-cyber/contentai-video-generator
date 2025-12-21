@@ -330,6 +330,16 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     const canProceedStep2 = productMaskUrl || (productImage && productMaskSkipped);
     const canGenerate = canProceedStep1 && canProceedStep2;
 
+    // Debug logging
+    console.log('🔍 [CreateYours] State Check:', {
+        currentStep,
+        productImage: productImage ? 'HAS_IMAGE' : 'NULL',
+        productMaskUrl: productMaskUrl ? 'HAS_MASK' : 'NULL',
+        productMaskSkipped,
+        canProceedStep2,
+        calculation: `${!!productMaskUrl} || (${!!productImage} && ${productMaskSkipped})`
+    });
+
     return (
         <>
             <AnimatePresence>
@@ -628,9 +638,15 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             <SegmentationModal
                 isOpen={showProductSegmentModal}
                 imageSource={productImage || ''}
-                onClose={() => setShowProductSegmentModal(false)}
+                onClose={() => {
+                    console.log('🔴 [CreateYours] Product Modal CLOSED via X button');
+                    setShowProductSegmentModal(false);
+                }}
                 onConfirm={async (maskUrl) => {
+                    console.log('🟢 [CreateYours] onConfirm called with maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
+                    
                     if (maskUrl) {
+                        console.log('🟢 [CreateYours] Setting mask URL');
                         setProductMaskUrl(maskUrl);
                         setProductMaskSkipped(false);
                         
@@ -650,10 +666,13 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         }
                     } else {
                         // Skip masking - use original image
+                        console.log('🟡 [CreateYours] SKIP MASKING - Setting productMaskSkipped=true');
+                        console.log('🟡 [CreateYours] Current productImage:', productImage ? 'HAS_IMAGE' : 'NULL');
                         setProductMaskUrl(null);
                         setProductMaskSkipped(true);
                     }
                     setShowProductSegmentModal(false);
+                    console.log('🟢 [CreateYours] Modal closed, state updated');
                 }}
             />
 
