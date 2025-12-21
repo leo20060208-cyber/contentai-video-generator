@@ -194,14 +194,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         reader.onload = (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
             
-            // Set all states at once
+            // Set product image - this is all we need to enable the Next button
             setProductImage(base64);
-            setProductMaskUrl(base64); // Set initial mask to original image - THIS ENABLES NEXT BUTTON
+            setProductMaskUrl(base64); // Also set as mask (can be overridden if user creates mask)
             setProductMaskSkipped(true);
             setProductName(file.name.replace(/\.[^/.]+$/, ''));
-            
-            // Alert to confirm the code is running
-            alert('✅ Imatge carregada! Ara hauries de poder fer clic a NEXT.');
         };
         reader.readAsDataURL(file);
     };
@@ -216,9 +213,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Handle generation
     const handleGenerate = async () => {
-        // Check if we have what we need (either mask or original + skipped)
-        const hasVideoSource = videoUrl && (videoMaskUrl || videoMaskSkipped);
-        const hasProductSource = productMaskUrl || (productImage && productMaskSkipped);
+        // Check if we have the minimum required data
+        const hasVideoSource = videoUrl && (videoMaskUrl || videoMaskSkipped || extractedFrameUrl);
+        const hasProductSource = !!productImage; // Just need the image
         
         if (!hasVideoSource || !hasProductSource) {
             alert('Please complete all steps');
@@ -333,18 +330,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         }, 4000);
     };
 
-    // Allow proceeding if we have the required data
-    // Step 1: Need video URL and either extracted frame or skipped
+    // SIMPLIFIED: Just check if we have the minimum required data
+    // Step 1: Need video URL and extracted frame (or skipped)
     const canProceedStep1 = !!(videoUrl && (extractedFrameUrl || videoMaskSkipped));
-    // Step 2: Need a product mask URL (which can be the original image if skipped)
-    const canProceedStep2 = !!productMaskUrl;
-
-    // Debug logging
-    if (currentStep === 2) {
-        console.log('🔍 [STEP2] canProceedStep2:', canProceedStep2);
-        console.log('🔍 [STEP2] productMaskUrl:', productMaskUrl ? 'SET (' + productMaskUrl.substring(0, 50) + '...)' : 'NULL');
-        console.log('🔍 [STEP2] productImage:', productImage ? 'SET' : 'NULL');
-    }
+    // Step 2: Just need a product image - that's it!
+    const canProceedStep2 = !!productImage;
     const canGenerate = canProceedStep1 && canProceedStep2;
 
     return (
