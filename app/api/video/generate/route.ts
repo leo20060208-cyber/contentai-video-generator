@@ -24,7 +24,7 @@ const wavespeedClient = new WavespeedClient();
 
 // Increase body size limit for base64 images
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 60 seconds
+export const maxDuration = 300; // allow optional transcode for video-edit
 
 export async function POST(request: Request) {
     try {
@@ -310,8 +310,16 @@ export async function POST(request: Request) {
                         ? audio_storage_path
                         : parseSupabaseStoragePath(audio_url);
                 if (storagePath) {
-                    // Normalize to MP4 for provider compatibility (MOV/HEVC often fails otherwise)
-                    finalVideoUrl = await normalizeVideoToMp4(storagePath);
+                    // IMPORTANT:
+                    // - If the uploaded file is already MP4, avoid ffmpeg (can fail in some deployments).
+                    // - Only transcode when needed (MOV/other containers/codecs).
+                    const lower = storagePath.toLowerCase();
+                    if (lower.endsWith('.mp4')) {
+                        finalVideoUrl = await getProviderUrl(storagePath);
+                    } else {
+                        // Normalize to MP4 for provider compatibility (MOV/HEVC often fails otherwise)
+                        finalVideoUrl = await normalizeVideoToMp4(storagePath);
+                    }
                 } else {
                     finalVideoUrl = audio_url;
                 }
