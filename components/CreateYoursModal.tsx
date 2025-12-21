@@ -188,13 +188,20 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         const file = e.target.files?.[0];
         if (!file) return;
 
+        console.log('📷 [UPLOAD] Starting product upload...');
+
         const reader = new FileReader();
         reader.onload = (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
+            console.log('📷 [UPLOAD] Image loaded, setting states...');
+            console.log('📷 [UPLOAD] base64 length:', base64?.length);
+            
             setProductImage(base64);
             setProductMaskUrl(base64); // Set initial mask to original image
             setProductMaskSkipped(true); // Default to skipped (can change if user creates mask)
             setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
+            
+            console.log('📷 [UPLOAD] States set! Modal should NOT open automatically.');
             // Don't auto-open modal - let user choose to create mask
         };
         reader.readAsDataURL(file);
@@ -332,6 +339,13 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     const canProceedStep1 = !!(videoUrl && (extractedFrameUrl || videoMaskSkipped));
     // Step 2: Need a product mask URL (which can be the original image if skipped)
     const canProceedStep2 = !!productMaskUrl;
+
+    // Debug logging
+    if (currentStep === 2) {
+        console.log('🔍 [STEP2] canProceedStep2:', canProceedStep2);
+        console.log('🔍 [STEP2] productMaskUrl:', productMaskUrl ? 'SET (' + productMaskUrl.substring(0, 50) + '...)' : 'NULL');
+        console.log('🔍 [STEP2] productImage:', productImage ? 'SET' : 'NULL');
+    }
     const canGenerate = canProceedStep1 && canProceedStep2;
 
     return (
@@ -644,7 +658,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     setShowProductSegmentModal(false);
                 }}
                 onConfirm={(maskUrl) => {
+                    console.log('🟢 [CONFIRM] onConfirm called, maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
+                    console.log('🟢 [CONFIRM] productImage at confirm time:', productImage ? 'SET' : 'NULL');
+                    
                     if (maskUrl) {
+                        console.log('🟢 [CONFIRM] Setting mask URL from segmentation');
                         setProductMaskUrl(maskUrl);
                         setProductMaskSkipped(false);
                         
@@ -658,11 +676,13 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         }
                     } else {
                         // Skip masking - use original image as the "mask"
+                        console.log('🟡 [CONFIRM] SKIP - Setting productMaskUrl to productImage');
                         setProductMaskUrl(productImage);
                         setProductMaskSkipped(true);
                     }
                     
                     setShowProductSegmentModal(false);
+                    console.log('🟢 [CONFIRM] Modal closed');
                 }}
             />
 
