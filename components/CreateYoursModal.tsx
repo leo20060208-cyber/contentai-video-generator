@@ -326,19 +326,19 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     };
 
     // Allow proceeding if mask is set OR if mask was skipped (use original image)
-    const canProceedStep1 = videoUrl && (extractedFrameUrl || videoMaskSkipped);
-    const canProceedStep2 = productMaskUrl || (productImage && productMaskSkipped);
+    const canProceedStep1 = !!(videoUrl && (extractedFrameUrl || videoMaskSkipped));
+    const canProceedStep2 = !!(productMaskUrl || (productImage && productMaskSkipped));
     const canGenerate = canProceedStep1 && canProceedStep2;
 
-    // Debug logging
-    console.log('🔍 [CreateYours] State Check:', {
-        currentStep,
-        productImage: productImage ? 'HAS_IMAGE' : 'NULL',
-        productMaskUrl: productMaskUrl ? 'HAS_MASK' : 'NULL',
-        productMaskSkipped,
-        canProceedStep2,
-        calculation: `${!!productMaskUrl} || (${!!productImage} && ${productMaskSkipped})`
-    });
+    // Debug logging (only log when on step 2 to reduce noise)
+    if (currentStep === 2) {
+        console.log('🔍 [Step2] State:', {
+            productImage: !!productImage,
+            productMaskUrl: !!productMaskUrl,
+            productMaskSkipped,
+            canProceedStep2,
+        });
+    }
 
     return (
         <>
@@ -621,13 +621,19 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             <SegmentationModal
                 isOpen={showVideoSegmentModal}
                 imageSource={extractedFrameUrl || ''}
-                onClose={() => setShowVideoSegmentModal(false)}
+                onClose={() => {
+                    console.log('🔴 [CreateYours] Video Modal CLOSED via X button');
+                    setShowVideoSegmentModal(false);
+                }}
                 onConfirm={(maskUrl) => {
+                    console.log('🟢 [CreateYours] Video onConfirm called with maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
+                    
                     if (maskUrl) {
                         setVideoMaskUrl(maskUrl);
                         setVideoMaskSkipped(false);
                     } else {
                         // Skip masking - use original frame
+                        console.log('🟡 [CreateYours] Video SKIP - Setting videoMaskSkipped=true');
                         setVideoMaskUrl(null);
                         setVideoMaskSkipped(true);
                     }
@@ -642,7 +648,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     console.log('🔴 [CreateYours] Product Modal CLOSED via X button');
                     setShowProductSegmentModal(false);
                 }}
-                onConfirm={async (maskUrl) => {
+                onConfirm={(maskUrl) => {
                     console.log('🟢 [CreateYours] onConfirm called with maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
                     
                     if (maskUrl) {
@@ -650,27 +656,23 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         setProductMaskUrl(maskUrl);
                         setProductMaskSkipped(false);
                         
-                        // Save mask to database for future use
+                        // Save mask to database for future use (async, non-blocking)
                         if (user) {
-                            try {
-                                setIsSavingMask(true);
-                                const saved = await saveUserMask(user.id, maskUrl, productName || 'Product Mask');
-                                if (saved) {
-                                    console.log('✅ Mask saved to database:', saved.id);
-                                }
-                            } catch (e) {
-                                console.error('Failed to save mask:', e);
-                            } finally {
-                                setIsSavingMask(false);
-                            }
+                            setIsSavingMask(true);
+                            saveUserMask(user.id, maskUrl, productName || 'Product Mask')
+                                .then((saved) => {
+                                    if (saved) console.log('✅ Mask saved to database:', saved.id);
+                                })
+                                .catch((e) => console.error('Failed to save mask:', e))
+                                .finally(() => setIsSavingMask(false));
                         }
                     } else {
                         // Skip masking - use original image
                         console.log('🟡 [CreateYours] SKIP MASKING - Setting productMaskSkipped=true');
-                        console.log('🟡 [CreateYours] Current productImage:', productImage ? 'HAS_IMAGE' : 'NULL');
                         setProductMaskUrl(null);
                         setProductMaskSkipped(true);
                     }
+                    
                     setShowProductSegmentModal(false);
                     console.log('🟢 [CreateYours] Modal closed, state updated');
                 }}
