@@ -156,6 +156,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             return;
         }
 
+        // IMPORTANT: normalize filename early so ANY upload path is safe
+        // (Supabase Storage rejects keys with emojis/accents/spaces in many cases)
+        const safeFileName = sanitizeStorageFileName(file.name);
+        const safeFile = safeFileName === file.name ? file : new File([file], safeFileName, { type: file.type });
+
         // Create video element to check duration
         const video = document.createElement('video');
         video.preload = 'metadata';
@@ -170,8 +175,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             }
 
             setVideoDuration(duration);
-            setVideoFile(file);
-            setVideoUrl(URL.createObjectURL(file));
+            setVideoFile(safeFile);
+            setVideoUrl(URL.createObjectURL(safeFile));
             setSelectedTimestamp(duration / 2); // Default to middle
         };
 
@@ -223,6 +228,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Normalize filename early (same reason as video upload)
+        const safeFileName = sanitizeStorageFileName(file.name);
+        const safeFile = safeFileName === file.name ? file : new File([file], safeFileName, { type: file.type });
+
         // Reset any previous mask when changing product image
         setProductMaskUrl(null);
 
@@ -231,7 +240,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             const base64 = loadEvent.target?.result as string;
             setProductImage(base64);
             setProductImageUrl(null);
-            setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
+            setProductName(safeFile.name.replace(/\.[^/.]+$/, '')); // Remove extension
             setShowProductSegmentModal(true);
 
             // Upload original product image via backend to avoid Storage/RLS + huge base64 payloads
@@ -239,13 +248,13 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 const { data: { session } } = await supabase.auth.getSession();
                 const token = session?.access_token;
                 if (!token) return;
-                const uploaded = await uploadToStorageViaApi({ token, file, prefix: 'products' });
+                const uploaded = await uploadToStorageViaApi({ token, file: safeFile, prefix: 'products' });
                 setProductImageUrl(uploaded.signedUrl);
             } catch (err) {
                 console.warn('Product upload exception (will fallback to base64):', err);
             }
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(safeFile);
     };
 
     const resetProduct = () => {
