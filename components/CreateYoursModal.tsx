@@ -192,8 +192,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         reader.onload = (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
             setProductImage(base64);
+            setProductMaskUrl(base64); // Set initial mask to original image
+            setProductMaskSkipped(true); // Default to skipped (can change if user creates mask)
             setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
-            setShowProductSegmentModal(true);
+            // Don't auto-open modal - let user choose to create mask
         };
         reader.readAsDataURL(file);
     };
@@ -515,27 +517,27 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                         />
                                                     </div>
 
-                                                    {(productMaskUrl || productMaskSkipped) && (
+                                                    {productMaskUrl && (
                                                         <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                                                             <div className="w-2 h-2 rounded-full bg-green-500" />
                                                             <span className="text-sm text-green-400">
                                                                 {productMaskSkipped 
-                                                                    ? 'Mask skipped - using original image' 
+                                                                    ? '✓ Ready - using original image' 
                                                                     : isSavingMask 
                                                                         ? 'Product mask created & saving...'
-                                                                        : 'Product mask created & saved'}
+                                                                        : '✓ Product mask created'}
                                                             </span>
                                                         </div>
                                                     )}
                                                     
-                                                    {/* Re-segment button if mask was skipped */}
-                                                    {productMaskSkipped && productImage && (
+                                                    {/* Option to create/refine mask */}
+                                                    {productImage && (
                                                         <Button
                                                             onClick={() => setShowProductSegmentModal(true)}
                                                             variant="secondary"
                                                             className="w-full"
                                                         >
-                                                            Create Mask Instead
+                                                            {productMaskSkipped ? 'Create Mask (Optional)' : 'Refine Mask'}
                                                         </Button>
                                                     )}
                                                 </div>
