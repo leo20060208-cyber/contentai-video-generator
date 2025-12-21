@@ -1,17 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import { FreepikClient } from './freepik';
 
-// Initialize Supabase (Service Role for Admin actions, or public for reading)
-// For Backend Logic, we usually prefer Service Role to bypass RLS if needed, or just Anon.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Helper to get Supabase client (lazy initialization to avoid build-time errors)
+function getSupabaseClient() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase environment variables');
+    }
+    
+    return createClient(supabaseUrl, supabaseKey);
+}
 
-// Initialize AI Client
-const freepik = new FreepikClient(process.env.FREEPIK_API_KEY!);
+// Helper to get FreepikClient (lazy initialization)
+function getFreepikClient() {
+    return new FreepikClient(process.env.FREEPIK_API_KEY!);
+}
 
 export async function generate_antigravity_video(templateId: number, userImageUrl: string) {
     console.log(`[Antigravity] Starting generation for Template #${templateId}`);
+
+    const supabase = getSupabaseClient();
+    const freepik = getFreepikClient();
 
     // 1. Fetch Template Data
     const { data: template, error } = await supabase

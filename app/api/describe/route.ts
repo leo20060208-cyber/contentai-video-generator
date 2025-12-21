@@ -4,12 +4,19 @@ import Replicate from 'replicate';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN,
-});
+// Helper to get Replicate client (lazy initialization to avoid build-time errors)
+function getReplicateClient() {
+    if (!process.env.REPLICATE_API_TOKEN) {
+        throw new Error('Missing REPLICATE_API_TOKEN');
+    }
+    return new Replicate({
+        auth: process.env.REPLICATE_API_TOKEN,
+    });
+}
 
 export async function POST(request: Request) {
     try {
+        const replicate = getReplicateClient();
         const { image } = await request.json();
 
         if (!image) {

@@ -60,10 +60,17 @@ if (ffprobeStatic) {
     ffmpeg.setFfprobePath(ffprobePath);
 }
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Helper to get Supabase client (lazy initialization to avoid build-time errors)
+function getDefaultSupabaseClient() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase environment variables');
+    }
+    
+    return createClient(supabaseUrl, supabaseKey);
+}
 
 /**
  * Extract audio from video file
@@ -73,7 +80,7 @@ export async function extractAudio(
     videoFileName: string,
     authenticatedSupabase?: any
 ): Promise<{ audioUrl: string; duration: number }> {
-    const sb = authenticatedSupabase || supabase;
+    const sb = authenticatedSupabase || getDefaultSupabaseClient();
     const tempDir = os.tmpdir();
     const tempVideoPath = path.join(tempDir, `video_${Date.now()}.mp4`);
     const tempAudioPath = path.join(tempDir, `audio_${Date.now()}.mp3`);

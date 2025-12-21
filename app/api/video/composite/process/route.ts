@@ -10,14 +10,24 @@ import { exec } from 'child_process';
 
 const execAsync = promisify(exec);
 
-// Initialize Clients
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Helper to get Supabase client (lazy initialization)
+function getSupabaseClient() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error('Missing Supabase environment variables');
+    }
+    
+    return createClient(supabaseUrl, supabaseServiceKey);
+}
 
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN,
-});
+// Helper to get Replicate client (lazy initialization)
+function getReplicateClient() {
+    return new Replicate({
+        auth: process.env.REPLICATE_API_TOKEN,
+    });
+}
 
 export async function POST(request: Request) {
     try {
@@ -26,6 +36,10 @@ export async function POST(request: Request) {
         if (!videoUrl) return NextResponse.json({ error: 'Video URL required' }, { status: 400 });
 
         console.log('[Composite] Processing Template:', { action, videoUrl, maskUrl });
+
+        // Initialize clients inside the function
+        const supabase = getSupabaseClient();
+        const replicate = getReplicateClient();
 
         // 1. EXTRACT AUDIO (Local FFmpeg)
         // We need to download the video first because ffmpeg might need a local file for stability, or stream it.

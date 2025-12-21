@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Replicate from 'replicate';
 
-const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_TOKEN!,
-});
+// Helper to get Replicate client (lazy initialization to avoid build-time errors)
+function getReplicateClient() {
+    if (!process.env.REPLICATE_API_TOKEN) {
+        throw new Error('Missing REPLICATE_API_TOKEN');
+    }
+    return new Replicate({
+        auth: process.env.REPLICATE_API_TOKEN,
+    });
+}
 
 export async function POST(req: NextRequest) {
     try {
+        const replicate = getReplicateClient();
         const { imageUrl } = await req.json();
 
         if (!imageUrl) {

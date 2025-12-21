@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase Client (Service Role for Admin)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 export const runtime = 'nodejs';
+
+// Helper to get Supabase client (lazy initialization to avoid build-time errors)
+function getSupabaseClient() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Missing Supabase environment variables');
+    }
+    
+    return createClient(supabaseUrl, supabaseKey);
+}
 
 /**
  * GET /api/admin/templates
@@ -14,6 +21,7 @@ export const runtime = 'nodejs';
  */
 export async function GET() {
   try {
+    const supabase = getSupabaseClient();
     const { data: templates, error } = await supabase
       .from('templates')
       .select('*')
@@ -45,6 +53,7 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabaseClient();
     const body = await request.json();
 
     // Insert into Supabase
@@ -116,6 +125,7 @@ export async function POST(request: Request) {
  */
 export async function PUT(request: Request) {
   try {
+    const supabase = getSupabaseClient();
     const body = await request.json();
     const { id, ...updates } = body;
 
@@ -166,6 +176,7 @@ export async function PUT(request: Request) {
  */
 export async function DELETE(request: Request) {
   try {
+    const supabase = getSupabaseClient();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
