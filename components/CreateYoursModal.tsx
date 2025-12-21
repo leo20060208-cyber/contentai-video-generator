@@ -193,16 +193,15 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         const reader = new FileReader();
         reader.onload = (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
-            console.log('📷 [UPLOAD] Image loaded, setting states...');
-            console.log('📷 [UPLOAD] base64 length:', base64?.length);
             
+            // Set all states at once
             setProductImage(base64);
-            setProductMaskUrl(base64); // Set initial mask to original image
-            setProductMaskSkipped(true); // Default to skipped (can change if user creates mask)
-            setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
+            setProductMaskUrl(base64); // Set initial mask to original image - THIS ENABLES NEXT BUTTON
+            setProductMaskSkipped(true);
+            setProductName(file.name.replace(/\.[^/.]+$/, ''));
             
-            console.log('📷 [UPLOAD] States set! Modal should NOT open automatically.');
-            // Don't auto-open modal - let user choose to create mask
+            // Alert to confirm the code is running
+            alert('✅ Imatge carregada! Ara hauries de poder fer clic a NEXT.');
         };
         reader.readAsDataURL(file);
     };
