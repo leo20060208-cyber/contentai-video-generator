@@ -622,7 +622,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showVideoSegmentModal}
                 imageSource={extractedFrameUrl || ''}
                 onClose={() => {
-                    console.log('🔴 [CreateYours] Video Modal CLOSED via X button');
+                    // Closing via X button = Skip masking (use original frame)
+                    console.log('🔴 [CreateYours] Video Modal CLOSED via X - treating as Skip');
+                    setVideoMaskUrl(null);
+                    setVideoMaskSkipped(true);
                     setShowVideoSegmentModal(false);
                 }}
                 onConfirm={(maskUrl) => {
@@ -645,7 +648,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showProductSegmentModal}
                 imageSource={productImage || ''}
                 onClose={() => {
-                    console.log('🔴 [CreateYours] Product Modal CLOSED via X button');
+                    // Closing via X button = Skip masking (use original image)
+                    console.log('🔴 [CreateYours] Product Modal CLOSED via X - treating as Skip');
+                    setProductMaskUrl(null);
+                    setProductMaskSkipped(true);
                     setShowProductSegmentModal(false);
                 }}
                 onConfirm={(maskUrl) => {
