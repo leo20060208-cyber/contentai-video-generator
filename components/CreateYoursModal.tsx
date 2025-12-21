@@ -201,6 +201,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             setProductName(file.name.replace(/\.[^/.]+$/, ''));
         };
         reader.readAsDataURL(file);
+        
+        // Reset input so the same file can be selected again if needed
+        e.target.value = '';
     };
 
     // Handle saved mask selection
@@ -512,12 +515,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                                 type="file"
                                                                 accept="image/*"
                                                                 className="hidden"
-                                                                onChange={(e) => {
-                                                                    // Reset mask state when changing photo
-                                                                    setProductMaskUrl(null);
-                                                                    setProductMaskSkipped(false);
-                                                                    handleProductUpload(e);
-                                                                }}
+                                                                onChange={handleProductUpload}
                                                             />
                                                             <div className="flex items-center gap-2 text-white font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm border border-white/20">
                                                                 <Upload className="w-4 h-4" />
@@ -534,11 +532,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                                 type="file"
                                                                 accept="image/*"
                                                                 className="hidden"
-                                                                onChange={(e) => {
-                                                                    setProductMaskUrl(null);
-                                                                    setProductMaskSkipped(false);
-                                                                    handleProductUpload(e);
-                                                                }}
+                                                                onChange={handleProductUpload}
                                                             />
                                                         </label>
 
