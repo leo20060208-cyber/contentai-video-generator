@@ -1,14 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Film, ImageIcon, Wand2, Folder } from 'lucide-react';
+import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Film, ImageIcon, Wand2, Folder, Save } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { SegmentationModal } from '@/components/SegmentationModal';
 import { GeneratingModal } from '@/components/GeneratingModal';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { saveUserMask } from '@/lib/db/masks';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -21,6 +23,7 @@ interface CreateYoursModalProps {
 
 export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => {
     const router = useRouter();
+    const { user } = useAuth();
     const [currentStep, setCurrentStep] = useState(1);
 
     // Step 1: Video Upload
@@ -30,15 +33,18 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     const [selectedTimestamp, setSelectedTimestamp] = useState<number>(0);
     const [extractedFrameUrl, setExtractedFrameUrl] = useState<string | null>(null);
     const [videoMaskUrl, setVideoMaskUrl] = useState<string | null>(null);
+    const [videoMaskSkipped, setVideoMaskSkipped] = useState(false);
     const [showVideoSegmentModal, setShowVideoSegmentModal] = useState(false);
     const [isExtractingFrame, setIsExtractingFrame] = useState(false);
 
     // Step 2: Product Upload
     const [productImage, setProductImage] = useState<string | null>(null);
     const [productMaskUrl, setProductMaskUrl] = useState<string | null>(null);
+    const [productMaskSkipped, setProductMaskSkipped] = useState(false);
     const [productName, setProductName] = useState<string>('');
     const [showProductSegmentModal, setShowProductSegmentModal] = useState(false);
     const [showSavedMasksModal, setShowSavedMasksModal] = useState(false);
+    const [isSavingMask, setIsSavingMask] = useState(false);
 
     // Step 3: Prompt & Generate
     const [prompt, setPrompt] = useState('');
@@ -58,6 +64,41 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     });
 
     const videoRef = useRef<HTMLVideoElement>(null);
+
+    // Reset all state when modal opens
+    const resetState = useCallback(() => {
+        setCurrentStep(1);
+        setVideoFile(null);
+        setVideoUrl(null);
+        setVideoDuration(0);
+        setSelectedTimestamp(0);
+        setExtractedFrameUrl(null);
+        setVideoMaskUrl(null);
+        setVideoMaskSkipped(false);
+        setShowVideoSegmentModal(false);
+        setIsExtractingFrame(false);
+        setProductImage(null);
+        setProductMaskUrl(null);
+        setProductMaskSkipped(false);
+        setProductName('');
+        setShowProductSegmentModal(false);
+        setShowSavedMasksModal(false);
+        setPrompt('');
+        setIsGenerating(false);
+        setGenModal({
+            isOpen: false,
+            status: 'processing',
+            videoUrl: null,
+            taskId: null
+        });
+    }, []);
+
+    // Reset state when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            resetState();
+        }
+    }, [isOpen, resetState]);
 
     // Handle video upload
     const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,8 +208,17 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Handle generation
     const handleGenerate = async () => {
-        if (!videoUrl || !videoMaskUrl || !productMaskUrl) {
+        // Check if we have what we need (either mask or original + skipped)
+        const hasVideoSource = videoUrl && (videoMaskUrl || videoMaskSkipped);
+        const hasProductSource = productMaskUrl || (productImage && productMaskSkipped);
+        
+        if (!hasVideoSource || !hasProductSource) {
             alert('Please complete all steps');
+            return;
+        }
+
+        if (!videoFile) {
+            alert('Video file not found. Please re-upload the video.');
             return;
         }
 
@@ -180,16 +230,19 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             const token = session?.access_token;
 
             // Upload video to permanent location
-            const fileName = `user-videos/${Date.now()}_${videoFile!.name}`;
+            const fileName = `user-videos/${Date.now()}_${videoFile.name}`;
             const { error: uploadError } = await supabase.storage
                 .from('videos')
-                .upload(fileName, videoFile!);
+                .upload(fileName, videoFile);
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
                 .from('videos')
                 .getPublicUrl(fileName);
+
+            // Use mask if available, otherwise use original image
+            const imageToUse = productMaskUrl || productImage;
 
             const response = await fetch('/api/video/generate', {
                 method: 'POST',
@@ -199,7 +252,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 },
                 body: JSON.stringify({
                     model: 'kwaivgi/kling-video-o1/video-edit',
-                    images: [productMaskUrl],
+                    images: [imageToUse],
                     audio_url: publicUrl, // Original video for Video Edit
                     prompt: prompt || 'Recreate this video with the new product',
                     duration: Math.min(videoDuration, 10),
@@ -207,7 +260,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 })
             });
 
-            if (!response.ok) throw new Error('Generation failed');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Generation failed');
+            }
             const data = await response.json();
 
             if (data.taskId) {
@@ -269,8 +325,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         }, 4000);
     };
 
-    const canProceedStep1 = videoUrl && extractedFrameUrl;
-    const canProceedStep2 = productMaskUrl;
+    // Allow proceeding if mask is set OR if mask was skipped (use original image)
+    const canProceedStep1 = videoUrl && (extractedFrameUrl || videoMaskSkipped);
+    const canProceedStep2 = productMaskUrl || (productImage && productMaskSkipped);
     const canGenerate = canProceedStep1 && canProceedStep2;
 
     return (
@@ -376,7 +433,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                         />
                                                     </div>
 
-                                                    {!extractedFrameUrl ? (
+                                                    {!extractedFrameUrl && !videoMaskSkipped ? (
                                                         <Button
                                                             onClick={handleExtractFrame}
                                                             disabled={isExtractingFrame}
@@ -387,7 +444,13 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                     ) : (
                                                         <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                                                             <div className="w-2 h-2 rounded-full bg-green-500" />
-                                                            <span className="text-sm text-green-400">Frame extracted & mask created</span>
+                                                            <span className="text-sm text-green-400">
+                                                                {videoMaskSkipped 
+                                                                    ? 'Mask skipped - using original frame' 
+                                                                    : videoMaskUrl 
+                                                                        ? 'Frame extracted & mask created'
+                                                                        : 'Frame extracted - ready for masking'}
+                                                            </span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -450,11 +513,28 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                         />
                                                     </div>
 
-                                                    {productMaskUrl && (
+                                                    {(productMaskUrl || productMaskSkipped) && (
                                                         <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                                                             <div className="w-2 h-2 rounded-full bg-green-500" />
-                                                            <span className="text-sm text-green-400">Product mask created</span>
+                                                            <span className="text-sm text-green-400">
+                                                                {productMaskSkipped 
+                                                                    ? 'Mask skipped - using original image' 
+                                                                    : isSavingMask 
+                                                                        ? 'Product mask created & saving...'
+                                                                        : 'Product mask created & saved'}
+                                                            </span>
                                                         </div>
+                                                    )}
+                                                    
+                                                    {/* Re-segment button if mask was skipped */}
+                                                    {productMaskSkipped && productImage && (
+                                                        <Button
+                                                            onClick={() => setShowProductSegmentModal(true)}
+                                                            variant="secondary"
+                                                            className="w-full"
+                                                        >
+                                                            Create Mask Instead
+                                                        </Button>
                                                     )}
                                                 </div>
                                             )}
@@ -533,7 +613,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={extractedFrameUrl || ''}
                 onClose={() => setShowVideoSegmentModal(false)}
                 onConfirm={(maskUrl) => {
-                    setVideoMaskUrl(maskUrl);
+                    if (maskUrl) {
+                        setVideoMaskUrl(maskUrl);
+                        setVideoMaskSkipped(false);
+                    } else {
+                        // Skip masking - use original frame
+                        setVideoMaskUrl(null);
+                        setVideoMaskSkipped(true);
+                    }
                     setShowVideoSegmentModal(false);
                 }}
             />
@@ -542,8 +629,30 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showProductSegmentModal}
                 imageSource={productImage || ''}
                 onClose={() => setShowProductSegmentModal(false)}
-                onConfirm={(maskUrl) => {
-                    setProductMaskUrl(maskUrl);
+                onConfirm={async (maskUrl) => {
+                    if (maskUrl) {
+                        setProductMaskUrl(maskUrl);
+                        setProductMaskSkipped(false);
+                        
+                        // Save mask to database for future use
+                        if (user) {
+                            try {
+                                setIsSavingMask(true);
+                                const saved = await saveUserMask(user.id, maskUrl, productName || 'Product Mask');
+                                if (saved) {
+                                    console.log('✅ Mask saved to database:', saved.id);
+                                }
+                            } catch (e) {
+                                console.error('Failed to save mask:', e);
+                            } finally {
+                                setIsSavingMask(false);
+                            }
+                        }
+                    } else {
+                        // Skip masking - use original image
+                        setProductMaskUrl(null);
+                        setProductMaskSkipped(true);
+                    }
                     setShowProductSegmentModal(false);
                 }}
             />
