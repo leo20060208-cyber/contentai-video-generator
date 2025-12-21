@@ -330,16 +330,6 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
     const canProceedStep2 = !!(productMaskUrl || (productImage && productMaskSkipped));
     const canGenerate = canProceedStep1 && canProceedStep2;
 
-    // Debug logging (only log when on step 2 to reduce noise)
-    if (currentStep === 2) {
-        console.log('🔍 [Step2] State:', {
-            productImage: !!productImage,
-            productMaskUrl: !!productMaskUrl,
-            productMaskSkipped,
-            canProceedStep2,
-        });
-    }
-
     return (
         <>
             <AnimatePresence>
@@ -623,20 +613,16 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={extractedFrameUrl || ''}
                 onClose={() => {
                     // Closing via X button = Skip masking (use original frame)
-                    console.log('🔴 [CreateYours] Video Modal CLOSED via X - treating as Skip');
                     setVideoMaskUrl(null);
                     setVideoMaskSkipped(true);
                     setShowVideoSegmentModal(false);
                 }}
                 onConfirm={(maskUrl) => {
-                    console.log('🟢 [CreateYours] Video onConfirm called with maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
-                    
                     if (maskUrl) {
                         setVideoMaskUrl(maskUrl);
                         setVideoMaskSkipped(false);
                     } else {
                         // Skip masking - use original frame
-                        console.log('🟡 [CreateYours] Video SKIP - Setting videoMaskSkipped=true');
                         setVideoMaskUrl(null);
                         setVideoMaskSkipped(true);
                     }
@@ -649,16 +635,12 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={productImage || ''}
                 onClose={() => {
                     // Closing via X button = Skip masking (use original image)
-                    console.log('🔴 [CreateYours] Product Modal CLOSED via X - treating as Skip');
                     setProductMaskUrl(null);
                     setProductMaskSkipped(true);
                     setShowProductSegmentModal(false);
                 }}
                 onConfirm={(maskUrl) => {
-                    console.log('🟢 [CreateYours] onConfirm called with maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
-                    
                     if (maskUrl) {
-                        console.log('🟢 [CreateYours] Setting mask URL');
                         setProductMaskUrl(maskUrl);
                         setProductMaskSkipped(false);
                         
@@ -666,21 +648,17 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         if (user) {
                             setIsSavingMask(true);
                             saveUserMask(user.id, maskUrl, productName || 'Product Mask')
-                                .then((saved) => {
-                                    if (saved) console.log('✅ Mask saved to database:', saved.id);
-                                })
+                                .then(() => {})
                                 .catch((e) => console.error('Failed to save mask:', e))
                                 .finally(() => setIsSavingMask(false));
                         }
                     } else {
                         // Skip masking - use original image
-                        console.log('🟡 [CreateYours] SKIP MASKING - Setting productMaskSkipped=true');
                         setProductMaskUrl(null);
                         setProductMaskSkipped(true);
                     }
                     
                     setShowProductSegmentModal(false);
-                    console.log('🟢 [CreateYours] Modal closed, state updated');
                 }}
             />
 
