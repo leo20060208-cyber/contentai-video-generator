@@ -87,6 +87,19 @@ export async function POST(request: Request) {
             return pathPart || null;
         };
 
+        const createProxyUrl = (objectPath: string): string => {
+            const origin = new URL(request.url).origin;
+            const exp = String(Math.floor(Date.now() / 1000) + 60 * 60); // 1h
+            const secret =
+                process.env.STORAGE_PROXY_SECRET ||
+                process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                '';
+            const sig = crypto.createHmac('sha256', secret).update(`${objectPath}|${exp}`).digest('hex');
+            return `${origin}/api/storage/public?path=${encodeURIComponent(objectPath)}&exp=${encodeURIComponent(exp)}&sig=${encodeURIComponent(sig)}`;
+        };
+
         const getSignedOrPublicUrl = async (objectPath: string): Promise<string> => {
             try {
                 const signed = await supabase.storage.from('videos').createSignedUrl(objectPath, 60 * 60); // 1h
@@ -98,10 +111,21 @@ export async function POST(request: Request) {
             return publicUrl;
         };
 
+        const getProviderUrl = async (objectPath: string): Promise<string> => {
+            // Always proxy provider downloads through our server so they don't fail on Supabase signed URLs
+            return createProxyUrl(objectPath);
+        };
+
         const maybeSignSupabaseUrl = async (url: string): Promise<string> => {
             const path = parseSupabaseStoragePath(url);
             if (!path) return url;
             return await getSignedOrPublicUrl(path);
+        };
+
+        const maybeProxySupabaseUrl = async (url: string): Promise<string> => {
+            const path = parseSupabaseStoragePath(url);
+            if (!path) return url;
+            return await getProviderUrl(path);
         };
 
         // FFMPEG setup (same strategy as merge-audio route)
@@ -155,7 +179,8 @@ export async function POST(request: Request) {
                     upsert: true
                 });
                 if (upErr) throw upErr;
-                return await getSignedOrPublicUrl(uploadPath);
+                // Provider should fetch through proxy (more reliable than Supabase signed URLs)
+                return await getProviderUrl(uploadPath);
             } finally {
                 try { fs.unlinkSync(inputPath); } catch { }
                 try { fs.unlinkSync(outputPath); } catch { }
@@ -238,7 +263,7 @@ export async function POST(request: Request) {
                                 upsert: true
                             });
                             if (!uploadError) {
-                                return await getSignedOrPublicUrl(fileName);
+                                return await getProviderUrl(fileName);
                             }
                         } catch (e) {
                             console.error('[API] Error uploading image from array:', e);
@@ -246,7 +271,7 @@ export async function POST(request: Request) {
                     }
                     // If it's a Supabase URL, sign it to ensure external access even if bucket is private
                     if (typeof img === 'string' && img.includes('/storage/v1/object/')) {
-                        return await maybeSignSupabaseUrl(img);
+                        return await maybeProxySupabaseUrl(img);
                     }
                     return img; // Return original if not base64 or upload failed (fallback)
                 }));
@@ -265,13 +290,13 @@ export async function POST(request: Request) {
                         upsert: true
                     });
                     if (!uploadError) {
-                        finalImageUrl = await getSignedOrPublicUrl(fileName);
+                        finalImageUrl = await getProviderUrl(fileName);
                     }
                 } catch (e) {
                     console.error('[API] Error processing base64 image for Wavespeed:', e);
                 }
             } else if (typeof finalImageUrl === 'string' && finalImageUrl.includes('/storage/v1/object/')) {
-                finalImageUrl = await maybeSignSupabaseUrl(finalImageUrl);
+                finalImageUrl = await maybeProxySupabaseUrl(finalImageUrl);
             }
 
             // 3. Handle Video Input (Video-Edit)
