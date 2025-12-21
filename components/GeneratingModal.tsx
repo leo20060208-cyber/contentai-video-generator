@@ -8,6 +8,10 @@ interface GeneratingModalProps {
     status: 'processing' | 'mixing_audio' | 'completed' | 'failed';
     videoUrl: string | null;
     errorMessage?: string | null;
+    debugInfo?: {
+        taskId?: string | null;
+        provider?: string | null;
+    } | null;
     onClose: () => void;
     onGoToStudio: () => void;
     onGoToMyVideos: () => void;
@@ -18,6 +22,7 @@ export const GeneratingModal = ({
     status,
     videoUrl,
     errorMessage,
+    debugInfo,
     onClose,
     onGoToStudio,
     onGoToMyVideos
@@ -189,9 +194,13 @@ export const GeneratingModal = ({
                                     </div>
                                     <h3 className="text-xl font-bold text-white mb-2">Vaja, alguna cosa ha fallat</h3>
                                     <p className="text-zinc-400 text-sm mb-6">
-                                        {errorMessage
+                                        {errorMessage && errorMessage.trim().length > 0
                                             ? errorMessage
-                                            : 'No hem pogut generar el vídeo. Si us plau, torna-ho a intentar.'}
+                                            : (
+                                                debugInfo?.taskId || debugInfo?.provider
+                                                    ? `No hem pogut generar el vídeo. Task: ${debugInfo?.taskId || '—'} · Provider: ${debugInfo?.provider || '—'}`
+                                                    : 'No hem pogut generar el vídeo. Si us plau, torna-ho a intentar.'
+                                            )}
                                     </p>
                                     <Button onClick={onClose} variant="secondary" className="w-full">
                                         Tancar

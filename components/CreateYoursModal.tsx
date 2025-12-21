@@ -814,6 +814,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 status={genModal.status}
                 videoUrl={genModal.videoUrl}
                 errorMessage={genModal.errorMessage}
+                debugInfo={{ taskId: genModal.taskId, provider: genModal.provider }}
                 onClose={() => {
                     setGenModal(prev => ({ ...prev, isOpen: false }));
                     onClose(); // Close Create Yours modal too
