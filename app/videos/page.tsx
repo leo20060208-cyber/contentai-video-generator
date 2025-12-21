@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Play, Search, TrendingUp, Eye, Sparkles, Heart, Trash2, Settings2, X } from 'lucide-react';
+import { Play, Search, TrendingUp, Sparkles, Heart, Trash2, Settings2, X } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
@@ -160,12 +160,6 @@ function VideoCard({ video, size = 'normal', isManageMode = false, onDelete }: {
                             <h3 className={`font-bold text-white ${isLarge ? 'text-xl' : 'text-base'}`}>{video.title}</h3>
                         </div>
                         <div className="flex items-center gap-2">
-                            {/* Views */}
-                            <div className="flex items-center gap-1.5 text-zinc-400 mr-2">
-                                <Eye className="w-4 h-4" />
-                                <span className="text-sm font-medium">{video.views}</span>
-                            </div>
-
                             {/* Share Button */}
                             <button
                                 onClick={handleShare}
