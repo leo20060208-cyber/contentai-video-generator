@@ -478,8 +478,7 @@ export default function ProfilePage() {
                                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
                                                                     <div className="absolute bottom-3 left-3 flex items-center gap-1 text-white/90">
-                                                                        <Eye className="w-3 h-3" />
-                                                                        <span className="text-xs">{template.views_count}</span>
+                                                                        {/* Views removed */}
                                                                     </div>
                                                                 </div>
                                                                 <div className="p-4 text-left">

@@ -201,6 +201,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             setProductName(file.name.replace(/\.[^/.]+$/, ''));
         };
         reader.readAsDataURL(file);
+        
+        // Reset input so the same file can be selected again if needed
+        e.target.value = '';
     };
 
     // Handle saved mask selection
@@ -503,8 +506,43 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                 </div>
                                             ) : (
                                                 <div className="space-y-4">
-                                                    <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black">
+                                                    <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black group">
                                                         <img src={productImage} alt="Product" className="w-full h-full object-contain" />
+                                                        
+                                                        {/* Change Photo Overlay */}
+                                                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={handleProductUpload}
+                                                            />
+                                                            <div className="flex items-center gap-2 text-white font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm border border-white/20">
+                                                                <Upload className="w-4 h-4" />
+                                                                Change Photo
+                                                            </div>
+                                                        </label>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors cursor-pointer border border-white/10">
+                                                            <Upload className="w-4 h-4" />
+                                                            Change Photo
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={handleProductUpload}
+                                                            />
+                                                        </label>
+
+                                                        <Button
+                                                            onClick={() => setShowProductSegmentModal(true)}
+                                                            variant="secondary"
+                                                            className="w-full"
+                                                        >
+                                                            {productMaskSkipped ? 'Create Mask' : 'Refine Mask'}
+                                                        </Button>
                                                     </div>
 
                                                     <div>
@@ -531,17 +569,6 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                                         : '✓ Product mask created'}
                                                             </span>
                                                         </div>
-                                                    )}
-                                                    
-                                                    {/* Option to create/refine mask */}
-                                                    {productImage && (
-                                                        <Button
-                                                            onClick={() => setShowProductSegmentModal(true)}
-                                                            variant="secondary"
-                                                            className="w-full"
-                                                        >
-                                                            {productMaskSkipped ? 'Create Mask (Optional)' : 'Refine Mask'}
-                                                        </Button>
                                                     )}
                                                 </div>
                                             )}
@@ -623,6 +650,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     setVideoMaskUrl(extractedFrameUrl);
                     setVideoMaskSkipped(true);
                     setShowVideoSegmentModal(false);
+                    // Automatically proceed to next step
+                    setCurrentStep(2);
                 }}
                 onConfirm={(maskUrl) => {
                     if (maskUrl) {
@@ -634,6 +663,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         setVideoMaskSkipped(true);
                     }
                     setShowVideoSegmentModal(false);
+                    // Automatically proceed to next step
+                    if (extractedFrameUrl) setCurrentStep(2);
                 }}
             />
 
@@ -641,37 +672,48 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showProductSegmentModal}
                 imageSource={productImage || ''}
                 onClose={() => {
-                    // Closing via X button = Skip masking, use original image as the "mask"
+                    // 1. Close Modal
+                    setShowProductSegmentModal(false);
+                    
+                    // 2. Handle Skip Logic (X button acts as skip)
+                    console.log('🟡 [CLOSE] Modal closed via X. Treating as Skip.');
                     setProductMaskUrl(productImage);
                     setProductMaskSkipped(true);
-                    setShowProductSegmentModal(false);
+
+                    // 3. Force Navigation to Step 3
+                    setTimeout(() => {
+                        console.log('🚀 [NAV] Advancing to Step 3 (from Close)');
+                        setCurrentStep(3);
+                    }, 100);
                 }}
                 onConfirm={(maskUrl) => {
-                    console.log('🟢 [CONFIRM] onConfirm called, maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
-                    console.log('🟢 [CONFIRM] productImage at confirm time:', productImage ? 'SET' : 'NULL');
-                    
+                    // 1. Close Modal Immediately
+                    setShowProductSegmentModal(false);
+
+                    // 2. Handle Data
                     if (maskUrl) {
-                        console.log('🟢 [CONFIRM] Setting mask URL from segmentation');
+                        console.log('🟢 [CONFIRM] User created mask:', maskUrl);
                         setProductMaskUrl(maskUrl);
                         setProductMaskSkipped(false);
                         
-                        // Save mask to database for future use (async, non-blocking)
+                        // Save mask (async)
                         if (user) {
-                            setIsSavingMask(true);
                             saveUserMask(user.id, maskUrl, productName || 'Product Mask')
-                                .then(() => {})
-                                .catch((e) => console.error('Failed to save mask:', e))
-                                .finally(() => setIsSavingMask(false));
+                                .catch(e => console.error('Failed to save mask:', e));
                         }
                     } else {
-                        // Skip masking - use original image as the "mask"
-                        console.log('🟡 [CONFIRM] SKIP - Setting productMaskUrl to productImage');
+                        console.log('🟡 [CONFIRM] User SKIPPED masking. Using original image.');
+                        // Important: Use the current productImage state
                         setProductMaskUrl(productImage);
                         setProductMaskSkipped(true);
                     }
-                    
-                    setShowProductSegmentModal(false);
-                    console.log('🟢 [CONFIRM] Modal closed');
+
+                    // 3. Force Navigation to Step 3 (Generate)
+                    // Use setTimeout to allow state updates to settle and modal close animation to start
+                    setTimeout(() => {
+                        console.log('🚀 [NAV] Advancing to Step 3');
+                        setCurrentStep(3);
+                    }, 100);
                 }}
             />
 
@@ -692,7 +734,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     onClose(); // Close Create Yours modal too
                 }}
                 onGoToStudio={() => { }}
-                onGoToMyVideos={() => router.push('/profile')}
+                onGoToMyVideos={() => {
+                    router.refresh();
+                    router.push('/profile');
+                }}
             />
         </>
     );

@@ -615,7 +615,7 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
                         {/* CENTER COLUMN: Video Preview (Span 6) */}
                         <div className="lg:col-span-6 flex flex-col">
-                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl h-full flex items-center justify-center">
+                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl h-full max-h-[60vh] flex items-center justify-center">
                                 {template.before_video_url && template.after_video_url ? (
                                     <BeforeAfterVideoSlider
                                         beforeVideoUrl={template.before_video_url}
@@ -805,7 +805,10 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                 videoUrl={genModal.videoUrl}
                 onClose={() => setGenModal(prev => ({ ...prev, isOpen: false }))}
                 onGoToStudio={() => router.push('/studio?taskId=' + genModal.taskId)}
-                onGoToMyVideos={() => router.push('/profile')}
+                onGoToMyVideos={() => {
+                    router.refresh();
+                    router.push('/profile');
+                }}
             />
 
         </ProtectedRoute >

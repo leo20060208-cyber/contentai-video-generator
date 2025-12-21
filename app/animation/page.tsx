@@ -84,7 +84,7 @@ export default function AnimationStudioPage() {
   const getAspectRatioStyle = () => {
     switch (aspectRatio) {
       case '16:9': return { aspectRatio: '16/9', maxWidth: '100%' };
-      case '9:16': return { aspectRatio: '9/16', maxHeight: '100%' };
+      case '9:16': return { aspectRatio: '9/16', maxHeight: '60vh' };
       case '1:1': return { aspectRatio: '1/1', maxHeight: '100%' };
       default: return { aspectRatio: '16/9', maxWidth: '100%' };
     }
