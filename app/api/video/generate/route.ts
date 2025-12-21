@@ -6,6 +6,11 @@ import { createReplicatePrediction, ReplicateModel } from '@/lib/replicate';
 import { FreepikClient } from '@/lib/freepik';
 import { AtlasClient } from '@/lib/atlas';
 import { WavespeedClient } from '@/lib/wavespeed';
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import crypto from 'crypto';
 
 // Initialize client with environment variables
 const klingClient = new KlingClient({
@@ -19,7 +24,7 @@ const wavespeedClient = new WavespeedClient();
 
 // Increase body size limit for base64 images
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 60 seconds
+export const maxDuration = 300; // allow optional transcode for video-edit
 
 export async function POST(request: Request) {
     try {
@@ -41,7 +46,17 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { prompt, image, images, model, duration, aspect_ratio, target_mask, audio_url } = body;
+        const { prompt, image, images, model, duration, aspect_ratio, target_mask, audio_url, audio_storage_path } = body as {
+            prompt?: string;
+            image?: string;
+            images?: string[];
+            model: string;
+            duration?: number;
+            aspect_ratio?: string;
+            target_mask?: string;
+            audio_url?: string;
+            audio_storage_path?: string;
+        };
 
         console.log('[API] Request parsed:', {
             hasPrompt: !!prompt,
@@ -51,8 +66,126 @@ export async function POST(request: Request) {
             imageLength: image?.length,
             model,
             hasAudio: !!audio_url,
+            hasAudioStoragePath: !!audio_storage_path,
             userId // Log userId to debug
         });
+
+        const parseSupabaseStoragePath = (url: string | undefined): string | null => {
+            if (!url) return null;
+            // Typical patterns:
+            // - .../storage/v1/object/public/<bucket>/<path>
+            // - .../storage/v1/object/<bucket>/<path>
+            // - .../storage/v1/object/sign/<bucket>/<path>?token=...
+            const m =
+                url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/) ||
+                url.match(/\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/) ||
+                url.match(/\/storage\/v1\/object\/([^/]+)\/(.+)$/);
+            if (!m) return null;
+            const bucket = m[1];
+            if (bucket !== 'videos') return null;
+            const pathPart = m[2].split('?')[0];
+            return pathPart || null;
+        };
+
+        const createProxyUrl = (objectPath: string): string => {
+            const origin = new URL(request.url).origin;
+            const exp = String(Math.floor(Date.now() / 1000) + 60 * 60); // 1h
+            const secret =
+                process.env.STORAGE_PROXY_SECRET ||
+                process.env.SUPABASE_SERVICE_ROLE_KEY ||
+                process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                '';
+            const sig = crypto.createHmac('sha256', secret).update(`${objectPath}|${exp}`).digest('hex');
+            return `${origin}/api/storage/public?path=${encodeURIComponent(objectPath)}&exp=${encodeURIComponent(exp)}&sig=${encodeURIComponent(sig)}`;
+        };
+
+        const getSignedOrPublicUrl = async (objectPath: string): Promise<string> => {
+            try {
+                const signed = await supabase.storage.from('videos').createSignedUrl(objectPath, 60 * 60); // 1h
+                if (signed.data?.signedUrl) return signed.data.signedUrl;
+            } catch (e) {
+                // ignore and fallback
+            }
+            const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(objectPath);
+            return publicUrl;
+        };
+
+        const getProviderUrl = async (objectPath: string): Promise<string> => {
+            // Always proxy provider downloads through our server so they don't fail on Supabase signed URLs
+            return createProxyUrl(objectPath);
+        };
+
+        const maybeSignSupabaseUrl = async (url: string): Promise<string> => {
+            const path = parseSupabaseStoragePath(url);
+            if (!path) return url;
+            return await getSignedOrPublicUrl(path);
+        };
+
+        const maybeProxySupabaseUrl = async (url: string): Promise<string> => {
+            const path = parseSupabaseStoragePath(url);
+            if (!path) return url;
+            return await getProviderUrl(path);
+        };
+
+        // FFMPEG setup (same strategy as merge-audio route)
+        let ffmpegPath = '';
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const ffmpegStatic = require('ffmpeg-static');
+            ffmpegPath = ffmpegStatic;
+        } catch (e) {
+            console.error('ffmpeg-static not found, trying system ffmpeg', e);
+            ffmpegPath = 'ffmpeg';
+        }
+        if (ffmpegPath) {
+            ffmpeg.setFfmpegPath(ffmpegPath);
+        }
+
+        const normalizeVideoToMp4 = async (storagePath: string): Promise<string> => {
+            // Download from Supabase, transcode to MP4 (H.264 + AAC), upload back, return signed/public URL.
+            const tempDir = os.tmpdir();
+            const id = crypto.randomUUID();
+            const inputPath = path.join(tempDir, `${id}_input`);
+            const outputPath = path.join(tempDir, `${id}_output.mp4`);
+
+            try {
+                const { data, error } = await supabase.storage.from('videos').download(storagePath);
+                if (error || !data) throw new Error(`Failed to download source video: ${storagePath}`);
+                const buf = Buffer.from(await data.arrayBuffer());
+                fs.writeFileSync(inputPath, buf);
+
+                await new Promise<void>((resolve, reject) => {
+                    ffmpeg(inputPath)
+                        // Ensure broad compatibility for providers
+                        .outputOptions([
+                            '-c:v libx264',
+                            '-preset veryfast',
+                            '-crf 23',
+                            '-pix_fmt yuv420p',
+                            '-c:a aac',
+                            '-b:a 128k',
+                            '-movflags +faststart'
+                        ])
+                        .save(outputPath)
+                        .on('end', () => resolve())
+                        .on('error', (err) => reject(err));
+                });
+
+                const outBuf = fs.readFileSync(outputPath);
+                const uploadPath = `temp-gen/video-edit-source/${id}.mp4`;
+                const { error: upErr } = await supabase.storage.from('videos').upload(uploadPath, outBuf, {
+                    contentType: 'video/mp4',
+                    upsert: true
+                });
+                if (upErr) throw upErr;
+                // Provider should fetch through proxy (more reliable than Supabase signed URLs)
+                return await getProviderUrl(uploadPath);
+            } finally {
+                try { fs.unlinkSync(inputPath); } catch { }
+                try { fs.unlinkSync(outputPath); } catch { }
+            }
+        };
 
         // Helper to save video to DB
         const saveVideoToDb = async (taskId: string, provider: string) => {
@@ -130,12 +263,15 @@ export async function POST(request: Request) {
                                 upsert: true
                             });
                             if (!uploadError) {
-                                const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
-                                return publicUrl;
+                                return await getProviderUrl(fileName);
                             }
                         } catch (e) {
                             console.error('[API] Error uploading image from array:', e);
                         }
+                    }
+                    // If it's a Supabase URL, sign it to ensure external access even if bucket is private
+                    if (typeof img === 'string' && img.includes('/storage/v1/object/')) {
+                        return await maybeProxySupabaseUrl(img);
                     }
                     return img; // Return original if not base64 or upload failed (fallback)
                 }));
@@ -154,12 +290,13 @@ export async function POST(request: Request) {
                         upsert: true
                     });
                     if (!uploadError) {
-                        const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
-                        finalImageUrl = publicUrl;
+                        finalImageUrl = await getProviderUrl(fileName);
                     }
                 } catch (e) {
                     console.error('[API] Error processing base64 image for Wavespeed:', e);
                 }
+            } else if (typeof finalImageUrl === 'string' && finalImageUrl.includes('/storage/v1/object/')) {
+                finalImageUrl = await maybeProxySupabaseUrl(finalImageUrl);
             }
 
             // 3. Handle Video Input (Video-Edit)
@@ -167,7 +304,25 @@ export async function POST(request: Request) {
             // (Assuming audio_url points to the template's video)
             let finalVideoUrl = undefined;
             if (model === 'kwaivgi/kling-video-o1/video-edit') {
-                finalVideoUrl = audio_url;
+                // Prefer signing by explicit storage path if provided
+                const storagePath =
+                    (typeof audio_storage_path === 'string' && audio_storage_path.length > 0)
+                        ? audio_storage_path
+                        : parseSupabaseStoragePath(audio_url);
+                if (storagePath) {
+                    // IMPORTANT:
+                    // - If the uploaded file is already MP4, avoid ffmpeg (can fail in some deployments).
+                    // - Only transcode when needed (MOV/other containers/codecs).
+                    const lower = storagePath.toLowerCase();
+                    if (lower.endsWith('.mp4')) {
+                        finalVideoUrl = await getProviderUrl(storagePath);
+                    } else {
+                        // Normalize to MP4 for provider compatibility (MOV/HEVC often fails otherwise)
+                        finalVideoUrl = await normalizeVideoToMp4(storagePath);
+                    }
+                } else {
+                    finalVideoUrl = audio_url;
+                }
             }
 
             // 4. AI Image Refinement (Nano Banana) for "Original" Mode

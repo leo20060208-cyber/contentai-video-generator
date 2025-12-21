@@ -23,6 +23,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const taskId = searchParams.get('taskId');
         const urlProvider = searchParams.get('provider'); // 'kling', 'replicate', or 'freepik'
+        const skipPersist = searchParams.get('skip_persist') === '1';
 
         if (!taskId) {
             return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
@@ -100,6 +101,25 @@ export async function GET(request: Request) {
             }
         };
 
+        const createSignedIfSupabaseUrl = async (url: string): Promise<{ url: string; storagePath: string | null }> => {
+            const m =
+                url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/) ||
+                url.match(/\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/) ||
+                url.match(/\/storage\/v1\/object\/([^/]+)\/(.+)$/);
+            if (!m) return { url, storagePath: null };
+            const bucket = m[1];
+            if (bucket !== 'videos') return { url, storagePath: null };
+            const storagePath = m[2].split('?')[0] || null;
+            if (!storagePath) return { url, storagePath: null };
+            try {
+                const signed = await supabase.storage.from('videos').createSignedUrl(storagePath, 60 * 60);
+                if (signed.data?.signedUrl) return { url: signed.data.signedUrl, storagePath };
+            } catch (e) {
+                // ignore
+            }
+            return { url, storagePath };
+        };
+
         // 0. Handle Wavespeed (New Priority)
         if (provider === 'wavespeed') {
             try {
@@ -107,10 +127,20 @@ export async function GET(request: Request) {
 
                 let status = result.status;
                 let videoUrl = result.url;
+                const statusMessage = result.errorMessage ||
+                    (typeof (result.data as any)?.error === 'string'
+                        ? (result.data as any).error
+                        : (typeof (result.data as any)?.message === 'string' ? (result.data as any).message : null));
+                let storagePath: string | null = null;
 
                 if (status === 'completed' && videoUrl) {
-                    const persistentUrl = await uploadToSupabase(videoUrl, taskId);
-                    videoUrl = persistentUrl || videoUrl;
+                    if (!skipPersist) {
+                        const persistentUrl = await uploadToSupabase(videoUrl, taskId);
+                        videoUrl = persistentUrl || videoUrl;
+                        const signed = await createSignedIfSupabaseUrl(videoUrl);
+                        videoUrl = signed.url;
+                        storagePath = signed.storagePath;
+                    }
                 }
 
                 await updateDb(status, videoUrl || null);
@@ -121,7 +151,9 @@ export async function GET(request: Request) {
                     data: {
                         status,
                         taskId,
-                        video: videoUrl ? { url: videoUrl } : null
+                        video: videoUrl ? { url: videoUrl, storagePath } : null,
+                        statusMessage,
+                        error: status === 'failed' ? statusMessage : null
                     }
                 });
             } catch (err) {

@@ -14,6 +14,51 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+const sanitizeStorageFileName = (inputName: string): string => {
+    // Supabase Storage object keys are picky: avoid spaces, emojis, and special chars.
+    // Keep it stable and readable.
+    const normalized = (inputName || 'file')
+        .normalize('NFKD')
+        // Replace anything not safe for storage keys
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+
+    // Avoid empty names
+    return normalized.length > 0 ? normalized : 'file';
+};
+
+const uploadToStorageViaApi = async (params: {
+    token: string;
+    file: File;
+    prefix: 'user-videos' | 'frames' | 'products';
+}): Promise<{ storagePath: string; signedUrl: string }> => {
+    const form = new FormData();
+    form.append('file', params.file);
+    form.append('prefix', params.prefix);
+
+    const res = await fetch('/api/storage/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${params.token}` },
+        body: form
+    });
+
+    const raw = await res.text();
+    const data: unknown = raw ? JSON.parse(raw) : {};
+    if (!res.ok) {
+        const msg =
+            typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                ? (data as { error: string }).error
+                : (raw || 'Upload failed');
+        throw new Error(msg);
+    }
+    const parsed = data as { success?: boolean; storagePath?: unknown; signedUrl?: unknown };
+    const storagePath = typeof parsed.storagePath === 'string' ? parsed.storagePath : null;
+    const signedUrl = typeof parsed.signedUrl === 'string' ? parsed.signedUrl : null;
+    if (!storagePath || !signedUrl) throw new Error('Upload did not return signedUrl/storagePath');
+    return { storagePath, signedUrl };
+};
+
 interface CreateYoursModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -35,6 +80,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Step 2: Product Upload
     const [productImage, setProductImage] = useState<string | null>(null);
+    const [productImageUrl, setProductImageUrl] = useState<string | null>(null);
     const [productMaskUrl, setProductMaskUrl] = useState<string | null>(null);
     const [productName, setProductName] = useState<string>('');
     const [showProductSegmentModal, setShowProductSegmentModal] = useState(false);
@@ -50,14 +96,54 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         status: 'processing' | 'mixing_audio' | 'completed' | 'failed';
         videoUrl: string | null;
         taskId: string | null;
+        provider: string | null;
+        errorMessage: string | null;
+        sourceVideoUrl: string | null;
+        sourceVideoPath: string | null;
     }>({
         isOpen: false,
         status: 'processing',
         videoUrl: null,
         taskId: null
+        ,
+        provider: null,
+        errorMessage: null,
+        sourceVideoUrl: null,
+        sourceVideoPath: null
     });
 
     const videoRef = useRef<HTMLVideoElement>(null);
+    const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const failGeneration = (message: unknown) => {
+        const msg =
+            typeof message === 'string' && message.trim().length > 0
+                ? message
+                : (message && typeof message === 'object' && 'message' in (message as Record<string, unknown>) && typeof (message as { message?: unknown }).message === 'string'
+                    ? (message as { message: string }).message
+                    : 'Error desconegut. Revisa la consola del navegador o els logs del servidor.');
+
+        setGenModal(prev => ({
+            ...prev,
+            isOpen: true,
+            status: 'failed',
+            errorMessage: msg
+        }));
+    };
+
+    // Cleanup polling when modal closes/unmounts
+    useEffect(() => {
+        if (!genModal.isOpen && pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
+        };
+    }, [genModal.isOpen]);
 
     // Handle video upload
     const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,6 +155,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             alert('Please upload a video file');
             return;
         }
+
+        // IMPORTANT: normalize filename early so ANY upload path is safe
+        // (Supabase Storage rejects keys with emojis/accents/spaces in many cases)
+        const safeFileName = sanitizeStorageFileName(file.name);
+        const safeFile = safeFileName === file.name ? file : new File([file], safeFileName, { type: file.type });
 
         // Create video element to check duration
         const video = document.createElement('video');
@@ -84,8 +175,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             }
 
             setVideoDuration(duration);
-            setVideoFile(file);
-            setVideoUrl(URL.createObjectURL(file));
+            setVideoFile(safeFile);
+            setVideoUrl(URL.createObjectURL(safeFile));
             setSelectedTimestamp(duration / 2); // Default to middle
         };
 
@@ -118,21 +209,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 }, 'image/jpeg', 0.95);
             });
 
-            // Upload to Supabase
-            const fileName = `frames/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-            const { error: uploadError } = await supabase.storage
-                .from('videos')
-                .upload(fileName, blob, {
-                    contentType: 'image/jpeg'
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('videos')
-                .getPublicUrl(fileName);
-
-            setExtractedFrameUrl(publicUrl);
+            // IMPORTANT:
+            // Use a local data URL for segmentation preview to avoid CORS/tainted-canvas issues.
+            // (The segmentation API already supports data: URIs.)
+            const localPreviewUrl = canvas.toDataURL('image/jpeg', 0.95);
+            setExtractedFrameUrl(localPreviewUrl);
             setShowVideoSegmentModal(true);
         } catch (error) {
             console.error('Error extracting frame:', error);
@@ -147,19 +228,66 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Normalize filename early (same reason as video upload)
+        const safeFileName = sanitizeStorageFileName(file.name);
+        const safeFile = safeFileName === file.name ? file : new File([file], safeFileName, { type: file.type });
+
+        // Reset any previous mask when changing product image
+        setProductMaskUrl(null);
+
         const reader = new FileReader();
-        reader.onload = (loadEvent) => {
+        reader.onload = async (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
             setProductImage(base64);
-            setProductName(file.name.replace(/\.[^/.]+$/, '')); // Remove extension
+            setProductImageUrl(null);
+            setProductName(safeFile.name.replace(/\.[^/.]+$/, '')); // Remove extension
             setShowProductSegmentModal(true);
+
+            // Upload original product image via backend to avoid Storage/RLS + huge base64 payloads
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                if (!token) return;
+                const uploaded = await uploadToStorageViaApi({ token, file: safeFile, prefix: 'products' });
+                setProductImageUrl(uploaded.signedUrl);
+            } catch (err) {
+                console.warn('Product upload exception (will fallback to base64):', err);
+            }
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(safeFile);
+    };
+
+    const resetProduct = () => {
+        setProductImage(null);
+        setProductImageUrl(null);
+        setProductMaskUrl(null);
+        setProductName('');
+        setShowProductSegmentModal(false);
+    };
+
+    const saveMaskToProfile = async (maskUrl: string, name: string) => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) return;
+            await fetch('/api/masks/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ maskUrl, name })
+            });
+        } catch (e) {
+            // Don't block UX on save failures
+            console.warn('Failed to save mask to profile:', e);
+        }
     };
 
     // Handle saved mask selection
     const handleSavedMaskSelect = (maskUrl: string) => {
         setProductImage(maskUrl);
+        setProductImageUrl(maskUrl);
         setProductMaskUrl(maskUrl);
         setProductName('Saved Mask');
         setShowSavedMasksModal(false);
@@ -167,29 +295,42 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
     // Handle generation
     const handleGenerate = async () => {
-        if (!videoUrl || !videoMaskUrl || !productMaskUrl) {
+        const productReferenceImage = productImageUrl || productImage || productMaskUrl;
+        if (!videoUrl || !videoFile || !extractedFrameUrl || !productReferenceImage) {
             alert('Please complete all steps');
             return;
         }
 
         setIsGenerating(true);
-        setGenModal({ isOpen: true, status: 'processing', videoUrl: null, taskId: null });
+        setGenModal({
+            isOpen: true,
+            status: 'processing',
+            videoUrl: null,
+            taskId: null,
+            provider: null,
+            errorMessage: null,
+            sourceVideoUrl: null,
+            sourceVideoPath: null
+        });
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
+            if (!token) throw new Error('Not authenticated');
 
             // Upload video to permanent location
-            const fileName = `user-videos/${Date.now()}_${videoFile!.name}`;
-            const { error: uploadError } = await supabase.storage
-                .from('videos')
-                .upload(fileName, videoFile!);
+            const uploadedVideo = await uploadToStorageViaApi({ token, file: videoFile!, prefix: 'user-videos' });
+            const fileName = uploadedVideo.storagePath;
+            const signedUrl = uploadedVideo.signedUrl;
 
-            if (uploadError) throw uploadError;
+            setGenModal(prev => ({ ...prev, sourceVideoUrl: signedUrl, sourceVideoPath: fileName }));
 
-            const { data: { publicUrl } } = supabase.storage
-                .from('videos')
-                .getPublicUrl(fileName);
+            // IMPORTANT:
+            // - Segmentation returns a *mask overlay*, not the product image.
+            // - Video-edit expects a reference image of the product (texture/color), so prefer the original product image.
+            // Note: Product masking is optional; the model needs a product reference image.
+            // Prefer the uploaded URL when available.
+            if (!productReferenceImage) throw new Error('Missing product reference image');
 
             const response = await fetch('/api/video/generate', {
                 method: 'POST',
@@ -199,78 +340,196 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 },
                 body: JSON.stringify({
                     model: 'kwaivgi/kling-video-o1/video-edit',
-                    images: [productMaskUrl],
-                    audio_url: publicUrl, // Original video for Video Edit
+                    images: [productReferenceImage],
+                    audio_url: signedUrl, // Signed URL for provider access
+                    audio_storage_path: fileName, // Allows server to create a signed URL (works even if bucket is private)
                     prompt: prompt || 'Recreate this video with the new product',
                     duration: Math.min(videoDuration, 10),
                     aspect_ratio: '9:16'
                 })
             });
 
-            if (!response.ok) throw new Error('Generation failed');
-            const data = await response.json();
+            const rawText = await response.text();
+            let data: unknown = {};
+            try {
+                data = rawText ? JSON.parse(rawText) : {};
+            } catch {
+                // keep as {}
+            }
 
-            if (data.taskId) {
-                setGenModal(prev => ({ ...prev, taskId: data.taskId }));
+            if (!response.ok) {
+                const errMsg =
+                    typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                        ? (data as { error: string }).error
+                        : (rawText || 'Generation failed');
+                throw new Error(errMsg);
+            }
+
+            const parsed = data as { taskId?: unknown; provider?: unknown };
+            const taskId = typeof parsed.taskId === 'string' ? parsed.taskId : null;
+            const provider = typeof parsed.provider === 'string' ? parsed.provider : null;
+
+            if (taskId) {
+                // Avoid TS narrowing issues inside state updater closure
+                setGenModal(prev => ({ ...prev, taskId, provider }));
                 // Start polling
-                startPolling(data.taskId);
+                startPolling(taskId, provider, signedUrl, fileName);
+            } else {
+                throw new Error('No taskId returned from server');
             }
         } catch (error) {
             console.error('Error generating:', error);
-            setGenModal(prev => ({ ...prev, status: 'failed' }));
+            failGeneration(error);
         } finally {
             setIsGenerating(false);
         }
     };
 
     // Polling logic
-    const startPolling = (taskId: string) => {
+    const startPolling = (taskId: string, provider: string | null, sourceVideoUrl: string, sourceVideoPath: string) => {
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`/api/video/status?taskId=${taskId}&provider=wavespeed`);
-                const data = await res.json();
+                const providerParam = provider || 'wavespeed';
+                // Skip persistence here to speed up the pipeline; merge step will upload final.
+                const res = await fetch(`/api/video/status?taskId=${encodeURIComponent(taskId)}&provider=${encodeURIComponent(providerParam)}&skip_persist=1`);
+                const raw = await res.text();
+                const data: unknown = raw ? JSON.parse(raw) : {};
 
-                if (data.data?.status === 'completed' || data.data?.status === 'succeeded') {
+                if (!res.ok) {
+                    const apiErr =
+                        typeof data === 'object' && data !== null && 'error' in data && typeof (data as { error?: unknown }).error === 'string'
+                            ? (data as { error: string }).error
+                            : (raw || 'Status check failed');
+                    throw new Error(apiErr);
+                }
+
+                const payload = data as {
+                    data?: { status?: string; video?: { url?: string } | null; error?: string | null; statusMessage?: string | null };
+                    error?: string;
+                };
+
+                if (payload.data?.status === 'completed' || payload.data?.status === 'succeeded') {
                     clearInterval(interval);
-                    const generatedVideoUrl = data.data.video?.url;
+                    pollingIntervalRef.current = null;
+                    const generatedVideoUrl = payload.data?.video?.url;
+                    const generatedVideoStoragePath = payload.data?.video && 'storagePath' in payload.data.video
+                        ? (payload.data.video as { storagePath?: string | null }).storagePath ?? null
+                        : null;
 
-                    if (generatedVideoUrl && videoUrl) {
+                    if (generatedVideoUrl) {
+                        // IMPORTANT: For Kling Video Edit (Wavespeed) we already request `keep_original_sound=true`.
+                        // Merging audio again is slow and error-prone; don't block the user on it.
+                        if (providerParam === 'wavespeed') {
+                            setGenModal(prev => ({
+                                ...prev,
+                                status: 'completed',
+                                videoUrl: generatedVideoUrl
+                            }));
+                            return;
+                        }
+
+                        // Fallback path for other providers: attempt audio merge.
+                        if (videoUrl) {
                         // Merge audio
                         setGenModal(prev => ({ ...prev, status: 'mixing_audio' }));
 
-                        const mergeRes = await fetch('/api/video/merge-audio', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                videoId: taskId,
+                        const mergeController = new AbortController();
+                        const mergeTimeout = setTimeout(() => mergeController.abort(), 240_000); // 4 min
+                        let mergeRes: Response | null = null;
+                        try {
+                            mergeRes = await fetch('/api/video/merge-audio', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    videoId: taskId,
+                                    videoUrl: generatedVideoUrl,
+                                    videoStoragePath: generatedVideoStoragePath,
+                                    // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
+                                    audioUrl: sourceVideoUrl,
+                                    audioStoragePath: sourceVideoPath
+                                }),
+                                signal: mergeController.signal
+                            });
+                        } catch (mergeErr) {
+                            // If merge fails/timeouts, still return the generated video URL (no audio) instead of blocking the user.
+                            console.warn('Audio merge failed, falling back to video without merged audio:', mergeErr);
+                            setGenModal(prev => ({
+                                ...prev,
+                                status: 'completed',
                                 videoUrl: generatedVideoUrl,
-                                audioUrl: videoUrl
-                            })
-                        });
+                                errorMessage: 'No s’ha pogut unir l’àudio. Mostrant el vídeo generat sense àudio.'
+                            }));
+                            clearInterval(interval);
+                            pollingIntervalRef.current = null;
+                            return;
+                        } finally {
+                            clearTimeout(mergeTimeout);
+                        }
 
-                        const mergeData = await mergeRes.json();
-                        if (mergeData.url) {
+                        const mergeText = await mergeRes.text();
+                        const mergeData: unknown = mergeText ? JSON.parse(mergeText) : {};
+
+                        if (!mergeRes.ok) {
+                            const mergeErr =
+                                typeof mergeData === 'object' && mergeData !== null && 'error' in mergeData && typeof (mergeData as { error?: unknown }).error === 'string'
+                                    ? (mergeData as { error: string }).error
+                                    : (mergeText || 'Audio merge failed');
+                            // Fallback to video without merged audio
+                            setGenModal(prev => ({
+                                ...prev,
+                                status: 'completed',
+                                videoUrl: generatedVideoUrl,
+                                errorMessage: `No s’ha pogut unir l’àudio (${mergeErr}). Mostrant el vídeo generat sense àudio.`
+                            }));
+                            return;
+                        }
+
+                        if (typeof mergeData === 'object' && mergeData !== null && 'url' in mergeData && typeof (mergeData as { url?: unknown }).url === 'string') {
                             // Update DB
                             await supabase
                                 .from('videos')
                                 .update({ video_url: mergeData.url, status: 'completed' })
                                 .eq('task_id', taskId);
 
-                            setGenModal(prev => ({ ...prev, status: 'completed', videoUrl: mergeData.url }));
+                            setGenModal(prev => ({ ...prev, status: 'completed', videoUrl: (mergeData as { url: string }).url }));
+                        } else {
+                            throw new Error('Audio merge did not return a URL');
+                        }
                         }
                     }
-                } else if (data.data?.status === 'failed') {
+                } else if (payload.data?.status === 'failed') {
                     clearInterval(interval);
-                    setGenModal(prev => ({ ...prev, status: 'failed' }));
+                    pollingIntervalRef.current = null;
+                    const failMsg =
+                        payload.data?.error ||
+                        payload.data?.statusMessage ||
+                        payload.error ||
+                        'La generació ha fallat. Si us plau, torna-ho a intentar.';
+                    failGeneration(failMsg);
+                } else if ((payload.data?.status === 'completed' || payload.data?.status === 'succeeded') && !payload.data?.video?.url) {
+                    // Completed but no URL is an actionable failure for the UI
+                    clearInterval(interval);
+                    pollingIntervalRef.current = null;
+                    failGeneration('El proveïdor ha marcat el vídeo com a completat però no ha retornat cap URL.');
                 }
             } catch (e) {
                 console.error('Polling error', e);
+                clearInterval(interval);
+                pollingIntervalRef.current = null;
+                failGeneration(e);
             }
         }, 4000);
+        pollingIntervalRef.current = interval;
     };
 
-    const canProceedStep1 = videoUrl && extractedFrameUrl;
-    const canProceedStep2 = productMaskUrl;
+    const canProceedStep1 = !!(videoUrl && extractedFrameUrl);
+    // Masking is optional for step 2; allow proceeding with product image (or uploaded URL).
+    const canProceedStep2 = !!(productImageUrl || productImage);
     const canGenerate = canProceedStep1 && canProceedStep2;
 
     return (
@@ -322,7 +581,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             </div>
 
                             {/* Content */}
-                            <div className="p-6 overflow-y-auto flex-1">
+                            <div className="p-6 overflow-y-auto flex-1 relative z-0">
                                 {/* STEP 1: Video Upload */}
                                 {currentStep === 1 && (
                                     <div className="space-y-6">
@@ -433,6 +692,30 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                 </div>
                                             ) : (
                                                 <div className="space-y-4">
+                                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                                        <label className="cursor-pointer">
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={handleProductUpload}
+                                                            />
+                                                            <span className="inline-flex">
+                                                                <Button type="button" variant="secondary" className="flex items-center gap-2">
+                                                                    <Upload className="w-4 h-4" />
+                                                                    Change Image
+                                                                </Button>
+                                                            </span>
+                                                        </label>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            onClick={resetProduct}
+                                                            className="text-zinc-300 hover:text-white"
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </div>
                                                     <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black">
                                                         <img src={productImage} alt="Product" className="w-full h-full object-contain" />
                                                     </div>
@@ -492,7 +775,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             </div>
 
                             {/* Footer */}
-                            <div className="p-6 border-t border-white/10 flex items-center justify-between">
+                            <div className="p-6 border-t border-white/10 flex items-center justify-between relative z-20 pointer-events-auto">
                                 <Button
                                     variant="secondary"
                                     onClick={() => currentStep > 1 ? setCurrentStep(currentStep - 1) : onClose()}
@@ -504,8 +787,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
                                 {currentStep < 3 ? (
                                     <Button
-                                        onClick={() => setCurrentStep(currentStep + 1)}
-                                        disabled={currentStep === 1 ? !canProceedStep1 : !canProceedStep2}
+                                        type="button"
+                                        onClick={() => setCurrentStep((s) => Math.min(s + 1, 3))}
+                                        // Step 2 masking is optional; don't block navigation here.
+                                        // Final validation happens on "Generate".
+                                        disabled={currentStep === 1 ? !canProceedStep1 : false}
                                         className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600"
                                     >
                                         Next
@@ -533,8 +819,17 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={extractedFrameUrl || ''}
                 onClose={() => setShowVideoSegmentModal(false)}
                 onConfirm={(maskUrl) => {
-                    setVideoMaskUrl(maskUrl);
+                    // If user clicks "Skip Masking", still mark step as completed.
+                    // Some parts of the UI historically depended on a non-null mask value.
+                    setVideoMaskUrl(maskUrl ?? extractedFrameUrl ?? 'skipped');
                     setShowVideoSegmentModal(false);
+                    // If user skips masking, still allow continuing the flow.
+                    // Auto-advance to keep UX smooth (user can always go back).
+                    setCurrentStep((s) => (s === 1 ? 2 : s));
+
+                    if (maskUrl) {
+                        void saveMaskToProfile(maskUrl, `Video mask · ${new Date().toLocaleString()}`);
+                    }
                 }}
             />
 
@@ -543,8 +838,17 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 imageSource={productImage || ''}
                 onClose={() => setShowProductSegmentModal(false)}
                 onConfirm={(maskUrl) => {
-                    setProductMaskUrl(maskUrl);
+                    // If user clicks "Skip Masking", still mark step as completed.
+                    // Use the product image (URL/base64) as a fallback marker.
+                    setProductMaskUrl(maskUrl ?? productImageUrl ?? productImage ?? 'skipped');
                     setShowProductSegmentModal(false);
+                    // Masking is optional for Create Yours; proceed even when skipped.
+                    setCurrentStep((s) => (s === 2 ? 3 : s));
+
+                    if (maskUrl) {
+                        const label = productName?.trim().length ? productName.trim() : 'Product';
+                        void saveMaskToProfile(maskUrl, `${label} mask`);
+                    }
                 }}
             />
 
@@ -560,6 +864,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={genModal.isOpen}
                 status={genModal.status}
                 videoUrl={genModal.videoUrl}
+                errorMessage={genModal.errorMessage}
+                debugInfo={{ taskId: genModal.taskId, provider: genModal.provider }}
                 onClose={() => {
                     setGenModal(prev => ({ ...prev, isOpen: false }));
                     onClose(); // Close Create Yours modal too
