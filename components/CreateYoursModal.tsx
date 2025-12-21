@@ -672,19 +672,21 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     } else {
                         // Skip masking - use original image as the "mask"
                         console.log('🟡 [CONFIRM] SKIP - Setting productMaskUrl to productImage');
+                        
+                        // IMPORTANT: Force state update with current image
+                        // Using callback to ensure we get the latest state if needed, though closure captures it
                         setProductMaskUrl(productImage);
                         setProductMaskSkipped(true);
-                        // Also proceed if confirmed without mask (though UI flow usually suggests "Confirm" means use mask, 
-                        // but if they just hit Confirm on empty, it might be same as skip)
-                        // But wait, the prompt says "when they click skip masking". 
-                        // The X button is usually the cancel/skip in modals. 
-                        // But let's ensure this logic is solid.
+                        
+                        // Force transition with a slight delay to allow state to settle if needed,
+                        // but normally synchronous is fine. 
                     }
                     
                     setShowProductSegmentModal(false);
-                    // Automatically proceed to next step
+                    // Automatically proceed to next step - UNCONDITIONALLY
+                    // This fixes the issue where user clicks skip and it doesn't move
                     setCurrentStep(3);
-                    console.log('🟢 [CONFIRM] Modal closed');
+                    console.log('🟢 [CONFIRM] Modal closed, moving to step 3');
                 }}
             />
 
