@@ -265,6 +265,25 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         setShowProductSegmentModal(false);
     };
 
+    const saveMaskToProfile = async (maskUrl: string, name: string) => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            if (!token) return;
+            await fetch('/api/masks/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ maskUrl, name })
+            });
+        } catch (e) {
+            // Don't block UX on save failures
+            console.warn('Failed to save mask to profile:', e);
+        }
+    };
+
     // Handle saved mask selection
     const handleSavedMaskSelect = (maskUrl: string) => {
         setProductImage(maskUrl);
@@ -807,6 +826,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     // If user skips masking, still allow continuing the flow.
                     // Auto-advance to keep UX smooth (user can always go back).
                     setCurrentStep((s) => (s === 1 ? 2 : s));
+
+                    if (maskUrl) {
+                        void saveMaskToProfile(maskUrl, `Video mask · ${new Date().toLocaleString()}`);
+                    }
                 }}
             />
 
@@ -821,6 +844,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     setShowProductSegmentModal(false);
                     // Masking is optional for Create Yours; proceed even when skipped.
                     setCurrentStep((s) => (s === 2 ? 3 : s));
+
+                    if (maskUrl) {
+                        const label = productName?.trim().length ? productName.trim() : 'Product';
+                        void saveMaskToProfile(maskUrl, `${label} mask`);
+                    }
                 }}
             />
 
