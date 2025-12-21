@@ -393,7 +393,20 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         ? (payload.data.video as { storagePath?: string | null }).storagePath ?? null
                         : null;
 
-                    if (generatedVideoUrl && videoUrl) {
+                    if (generatedVideoUrl) {
+                        // IMPORTANT: For Kling Video Edit (Wavespeed) we already request `keep_original_sound=true`.
+                        // Merging audio again is slow and error-prone; don't block the user on it.
+                        if (providerParam === 'wavespeed') {
+                            setGenModal(prev => ({
+                                ...prev,
+                                status: 'completed',
+                                videoUrl: generatedVideoUrl
+                            }));
+                            return;
+                        }
+
+                        // Fallback path for other providers: attempt audio merge.
+                        if (videoUrl) {
                         // Merge audio
                         setGenModal(prev => ({ ...prev, status: 'mixing_audio' }));
 
@@ -458,6 +471,7 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                             setGenModal(prev => ({ ...prev, status: 'completed', videoUrl: (mergeData as { url: string }).url }));
                         } else {
                             throw new Error('Audio merge did not return a URL');
+                        }
                         }
                     }
                 } else if (payload.data?.status === 'failed') {
