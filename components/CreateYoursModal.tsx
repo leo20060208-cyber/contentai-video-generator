@@ -591,11 +591,17 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
                                 {currentStep < 3 ? (
                                     <Button
-                                        onClick={() => setCurrentStep(currentStep + 1)}
+                                        onClick={() => {
+                                            console.log('NEXT clicked! Step:', currentStep);
+                                            console.log('canProceedStep1:', canProceedStep1);
+                                            console.log('canProceedStep2:', canProceedStep2);
+                                            console.log('productImage:', productImage ? 'SET' : 'NULL');
+                                            setCurrentStep(currentStep + 1);
+                                        }}
                                         disabled={currentStep === 1 ? !canProceedStep1 : !canProceedStep2}
                                         className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600"
                                     >
-                                        Next
+                                        Next ({currentStep === 1 ? (canProceedStep1 ? '✓' : '✗') : (canProceedStep2 ? '✓' : '✗')})
                                         <ChevronRight className="w-4 h-4" />
                                     </Button>
                                 ) : (

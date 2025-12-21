@@ -28,6 +28,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                     variant === 'secondary' && "bg-zinc-800 text-white hover:bg-zinc-700",
                     variant === 'ghost' && "bg-transparent text-white hover:bg-white/10",
                     variant === 'outline' && "bg-transparent border border-white/20 text-white hover:bg-white/5 hover:border-white/40",
+                    // Disabled state
+                    props.disabled && "opacity-50 cursor-not-allowed pointer-events-none",
                     className
                 )}
                 {...props}
