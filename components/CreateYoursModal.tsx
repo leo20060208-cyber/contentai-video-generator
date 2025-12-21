@@ -645,48 +645,48 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showProductSegmentModal}
                 imageSource={productImage || ''}
                 onClose={() => {
-                    // Closing via X button = Skip masking, use original image as the "mask"
+                    // 1. Close Modal
+                    setShowProductSegmentModal(false);
+                    
+                    // 2. Handle Skip Logic (X button acts as skip)
+                    console.log('🟡 [CLOSE] Modal closed via X. Treating as Skip.');
                     setProductMaskUrl(productImage);
                     setProductMaskSkipped(true);
-                    setShowProductSegmentModal(false);
-                    // Automatically proceed to next step
-                    setCurrentStep(3);
+
+                    // 3. Force Navigation to Step 3
+                    setTimeout(() => {
+                        console.log('🚀 [NAV] Advancing to Step 3 (from Close)');
+                        setCurrentStep(3);
+                    }, 100);
                 }}
                 onConfirm={(maskUrl) => {
-                    console.log('🟢 [CONFIRM] onConfirm called, maskUrl:', maskUrl ? 'HAS_MASK' : 'NULL (Skip)');
-                    console.log('🟢 [CONFIRM] productImage at confirm time:', productImage ? 'SET' : 'NULL');
-                    
+                    // 1. Close Modal Immediately
+                    setShowProductSegmentModal(false);
+
+                    // 2. Handle Data
                     if (maskUrl) {
-                        console.log('🟢 [CONFIRM] Setting mask URL from segmentation');
+                        console.log('🟢 [CONFIRM] User created mask:', maskUrl);
                         setProductMaskUrl(maskUrl);
                         setProductMaskSkipped(false);
                         
-                        // Save mask to database for future use (async, non-blocking)
+                        // Save mask (async)
                         if (user) {
-                            setIsSavingMask(true);
                             saveUserMask(user.id, maskUrl, productName || 'Product Mask')
-                                .then(() => {})
-                                .catch((e) => console.error('Failed to save mask:', e))
-                                .finally(() => setIsSavingMask(false));
+                                .catch(e => console.error('Failed to save mask:', e));
                         }
                     } else {
-                        // Skip masking - use original image as the "mask"
-                        console.log('🟡 [CONFIRM] SKIP - Setting productMaskUrl to productImage');
-                        
-                        // IMPORTANT: Force state update with current image
-                        // Using callback to ensure we get the latest state if needed, though closure captures it
+                        console.log('🟡 [CONFIRM] User SKIPPED masking. Using original image.');
+                        // Important: Use the current productImage state
                         setProductMaskUrl(productImage);
                         setProductMaskSkipped(true);
-                        
-                        // Force transition with a slight delay to allow state to settle if needed,
-                        // but normally synchronous is fine. 
                     }
-                    
-                    setShowProductSegmentModal(false);
-                    // Automatically proceed to next step - UNCONDITIONALLY
-                    // This fixes the issue where user clicks skip and it doesn't move
-                    setCurrentStep(3);
-                    console.log('🟢 [CONFIRM] Modal closed, moving to step 3');
+
+                    // 3. Force Navigation to Step 3 (Generate)
+                    // Use setTimeout to allow state updates to settle and modal close animation to start
+                    setTimeout(() => {
+                        console.log('🚀 [NAV] Advancing to Step 3');
+                        setCurrentStep(3);
+                    }, 100);
                 }}
             />
 
