@@ -184,9 +184,6 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
         setIsExtractingFrame(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
-            if (!token) throw new Error('Not authenticated');
             // Create canvas to capture frame
             const video = videoRef.current;
             const canvas = document.createElement('canvas');
@@ -207,10 +204,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 }, 'image/jpeg', 0.95);
             });
 
-            // Upload via backend (service role) to avoid Storage/RLS issues
-            const frameFile = new File([blob], `frame_${Date.now()}.jpg`, { type: 'image/jpeg' });
-            const uploaded = await uploadToStorageViaApi({ token, file: frameFile, prefix: 'frames' });
-            setExtractedFrameUrl(uploaded.signedUrl);
+            // IMPORTANT:
+            // Use a local data URL for segmentation preview to avoid CORS/tainted-canvas issues.
+            // (The segmentation API already supports data: URIs.)
+            const localPreviewUrl = canvas.toDataURL('image/jpeg', 0.95);
+            setExtractedFrameUrl(localPreviewUrl);
             setShowVideoSegmentModal(true);
         } catch (error) {
             console.error('Error extracting frame:', error);
