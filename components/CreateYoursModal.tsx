@@ -356,7 +356,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         const interval = setInterval(async () => {
             try {
                 const providerParam = provider || 'wavespeed';
-                const res = await fetch(`/api/video/status?taskId=${encodeURIComponent(taskId)}&provider=${encodeURIComponent(providerParam)}`);
+                // Skip persistence here to speed up the pipeline; merge step will upload final.
+                const res = await fetch(`/api/video/status?taskId=${encodeURIComponent(taskId)}&provider=${encodeURIComponent(providerParam)}&skip_persist=1`);
                 const raw = await res.text();
                 const data: unknown = raw ? JSON.parse(raw) : {};
 
@@ -387,19 +388,36 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
 
                         const mergeController = new AbortController();
                         const mergeTimeout = setTimeout(() => mergeController.abort(), 240_000); // 4 min
-                        const mergeRes = await fetch('/api/video/merge-audio', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                videoId: taskId,
+                        let mergeRes: Response | null = null;
+                        try {
+                            mergeRes = await fetch('/api/video/merge-audio', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    videoId: taskId,
+                                    videoUrl: generatedVideoUrl,
+                                    videoStoragePath: generatedVideoStoragePath,
+                                    // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
+                                    audioUrl: sourceVideoUrl,
+                                    audioStoragePath: sourceVideoPath
+                                }),
+                                signal: mergeController.signal
+                            });
+                        } catch (mergeErr) {
+                            // If merge fails/timeouts, still return the generated video URL (no audio) instead of blocking the user.
+                            console.warn('Audio merge failed, falling back to video without merged audio:', mergeErr);
+                            setGenModal(prev => ({
+                                ...prev,
+                                status: 'completed',
                                 videoUrl: generatedVideoUrl,
-                                videoStoragePath: generatedVideoStoragePath,
-                                // IMPORTANT: server cannot fetch `blob:` URLs; use the uploaded public URL
-                                audioUrl: sourceVideoUrl,
-                                audioStoragePath: sourceVideoPath
-                            }),
-                            signal: mergeController.signal
-                        }).finally(() => clearTimeout(mergeTimeout));
+                                errorMessage: 'No s’ha pogut unir l’àudio. Mostrant el vídeo generat sense àudio.'
+                            }));
+                            clearInterval(interval);
+                            pollingIntervalRef.current = null;
+                            return;
+                        } finally {
+                            clearTimeout(mergeTimeout);
+                        }
 
                         const mergeText = await mergeRes.text();
                         const mergeData: unknown = mergeText ? JSON.parse(mergeText) : {};
@@ -409,7 +427,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                 typeof mergeData === 'object' && mergeData !== null && 'error' in mergeData && typeof (mergeData as { error?: unknown }).error === 'string'
                                     ? (mergeData as { error: string }).error
                                     : (mergeText || 'Audio merge failed');
-                            throw new Error(mergeErr);
+                            // Fallback to video without merged audio
+                            setGenModal(prev => ({
+                                ...prev,
+                                status: 'completed',
+                                videoUrl: generatedVideoUrl,
+                                errorMessage: `No s’ha pogut unir l’àudio (${mergeErr}). Mostrant el vídeo generat sense àudio.`
+                            }));
+                            return;
                         }
 
                         if (typeof mergeData === 'object' && mergeData !== null && 'url' in mergeData && typeof (mergeData as { url?: unknown }).url === 'string') {

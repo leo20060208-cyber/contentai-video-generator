@@ -137,6 +137,11 @@ export const GeneratingModal = ({
                             {/* --- COMPLETED STATE --- */}
                             {status === 'completed' && videoUrl && (
                                 <>
+                                    {errorMessage && (
+                                        <div className="w-full mb-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-200 text-sm">
+                                            {errorMessage}
+                                        </div>
+                                    )}
                                     <div className="w-full aspect-[9/16] bg-zinc-800 rounded-2xl overflow-hidden mb-6 relative group shadow-lg border border-white/5">
                                         <video
                                             ref={videoRef}

@@ -23,6 +23,7 @@ export async function GET(request: Request) {
         const { searchParams } = new URL(request.url);
         const taskId = searchParams.get('taskId');
         const urlProvider = searchParams.get('provider'); // 'kling', 'replicate', or 'freepik'
+        const skipPersist = searchParams.get('skip_persist') === '1';
 
         if (!taskId) {
             return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
@@ -133,11 +134,13 @@ export async function GET(request: Request) {
                 let storagePath: string | null = null;
 
                 if (status === 'completed' && videoUrl) {
-                    const persistentUrl = await uploadToSupabase(videoUrl, taskId);
-                    videoUrl = persistentUrl || videoUrl;
-                    const signed = await createSignedIfSupabaseUrl(videoUrl);
-                    videoUrl = signed.url;
-                    storagePath = signed.storagePath;
+                    if (!skipPersist) {
+                        const persistentUrl = await uploadToSupabase(videoUrl, taskId);
+                        videoUrl = persistentUrl || videoUrl;
+                        const signed = await createSignedIfSupabaseUrl(videoUrl);
+                        videoUrl = signed.url;
+                        storagePath = signed.storagePath;
+                    }
                 }
 
                 await updateDb(status, videoUrl || null);

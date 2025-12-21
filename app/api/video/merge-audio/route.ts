@@ -98,6 +98,8 @@ export async function POST(req: Request) {
                     .input(audioPath)
                     // Map video from input 0, audio from input 1
                     .outputOptions([
+                        '-y',        // overwrite output
+                        '-nostdin',  // never wait for stdin (prevents hangs)
                         '-c:v copy', // Copy video stream (fast)
                         '-c:a aac',  // Encode audio to aac
                         '-map 0:v:0',
@@ -106,6 +108,7 @@ export async function POST(req: Request) {
                         '-shortest' // Finish when the shortest stream ends (usually video)
                     ])
                     .save(outputPath)
+                    .on('start', (cmd) => console.log('🎬 ffmpeg cmd:', cmd))
                     .on('end', () => {
                         console.log('✅ Merge completed');
                         resolve();
