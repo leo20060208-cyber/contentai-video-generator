@@ -7,7 +7,8 @@ import {
     LayoutGrid,
     Loader2,
     Settings,
-    Star
+    Star,
+    Sparkles
 } from 'lucide-react';
 import { TemplateCard } from '@/components/templates/TemplateCard';
 import { supabase } from '@/lib/supabase';

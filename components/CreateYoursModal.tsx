@@ -692,7 +692,10 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     onClose(); // Close Create Yours modal too
                 }}
                 onGoToStudio={() => { }}
-                onGoToMyVideos={() => router.push('/profile')}
+                onGoToMyVideos={() => {
+                    router.refresh();
+                    router.push('/profile');
+                }}
             />
         </>
     );
