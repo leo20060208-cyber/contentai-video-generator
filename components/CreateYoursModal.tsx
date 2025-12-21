@@ -682,8 +682,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                     }
                     
                     setShowProductSegmentModal(false);
-                    // Automatically proceed to next step if we have a valid source now
-                    if (productImage) setCurrentStep(3);
+                    // Automatically proceed to next step
+                    setCurrentStep(3);
                     console.log('🟢 [CONFIRM] Modal closed');
                 }}
             />
