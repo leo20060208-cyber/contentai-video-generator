@@ -526,6 +526,31 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                         </label>
                                                     </div>
 
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <label className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors cursor-pointer border border-white/10">
+                                                            <Upload className="w-4 h-4" />
+                                                            Change Photo
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    setProductMaskUrl(null);
+                                                                    setProductMaskSkipped(false);
+                                                                    handleProductUpload(e);
+                                                                }}
+                                                            />
+                                                        </label>
+
+                                                        <Button
+                                                            onClick={() => setShowProductSegmentModal(true)}
+                                                            variant="secondary"
+                                                            className="w-full"
+                                                        >
+                                                            {productMaskSkipped ? 'Create Mask' : 'Refine Mask'}
+                                                        </Button>
+                                                    </div>
+
                                                     <div>
                                                         <label className="block text-sm font-medium text-white mb-2">
                                                             Product Name
@@ -550,17 +575,6 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                                         : '✓ Product mask created'}
                                                             </span>
                                                         </div>
-                                                    )}
-                                                    
-                                                    {/* Option to create/refine mask */}
-                                                    {productImage && (
-                                                        <Button
-                                                            onClick={() => setShowProductSegmentModal(true)}
-                                                            variant="secondary"
-                                                            className="w-full"
-                                                        >
-                                                            {productMaskSkipped ? 'Create Mask (Optional)' : 'Refine Mask'}
-                                                        </Button>
                                                     )}
                                                 </div>
                                             )}
