@@ -503,8 +503,27 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                 </div>
                                             ) : (
                                                 <div className="space-y-4">
-                                                    <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black">
+                                                    <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black group">
                                                         <img src={productImage} alt="Product" className="w-full h-full object-contain" />
+                                                        
+                                                        {/* Change Photo Overlay */}
+                                                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    // Reset mask state when changing photo
+                                                                    setProductMaskUrl(null);
+                                                                    setProductMaskSkipped(false);
+                                                                    handleProductUpload(e);
+                                                                }}
+                                                            />
+                                                            <div className="flex items-center gap-2 text-white font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-sm border border-white/20">
+                                                                <Upload className="w-4 h-4" />
+                                                                Change Photo
+                                                            </div>
+                                                        </label>
                                                     </div>
 
                                                     <div>
