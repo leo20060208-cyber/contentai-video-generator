@@ -325,9 +325,11 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         }, 4000);
     };
 
-    // Allow proceeding if mask is set OR if mask was skipped (use original image)
+    // Allow proceeding if we have the required data
+    // Step 1: Need video URL and either extracted frame or skipped
     const canProceedStep1 = !!(videoUrl && (extractedFrameUrl || videoMaskSkipped));
-    const canProceedStep2 = !!(productMaskUrl || (productImage && productMaskSkipped));
+    // Step 2: Need a product mask URL (which can be the original image if skipped)
+    const canProceedStep2 = !!productMaskUrl;
     const canGenerate = canProceedStep1 && canProceedStep2;
 
     return (
@@ -612,8 +614,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showVideoSegmentModal}
                 imageSource={extractedFrameUrl || ''}
                 onClose={() => {
-                    // Closing via X button = Skip masking (use original frame)
-                    setVideoMaskUrl(null);
+                    // Closing via X button = Skip masking, use original frame as the "mask"
+                    setVideoMaskUrl(extractedFrameUrl);
                     setVideoMaskSkipped(true);
                     setShowVideoSegmentModal(false);
                 }}
@@ -622,8 +624,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                         setVideoMaskUrl(maskUrl);
                         setVideoMaskSkipped(false);
                     } else {
-                        // Skip masking - use original frame
-                        setVideoMaskUrl(null);
+                        // Skip masking - use original frame as the "mask"
+                        setVideoMaskUrl(extractedFrameUrl);
                         setVideoMaskSkipped(true);
                     }
                     setShowVideoSegmentModal(false);
@@ -634,8 +636,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                 isOpen={showProductSegmentModal}
                 imageSource={productImage || ''}
                 onClose={() => {
-                    // Closing via X button = Skip masking (use original image)
-                    setProductMaskUrl(null);
+                    // Closing via X button = Skip masking, use original image as the "mask"
+                    setProductMaskUrl(productImage);
                     setProductMaskSkipped(true);
                     setShowProductSegmentModal(false);
                 }}
@@ -653,8 +655,8 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                 .finally(() => setIsSavingMask(false));
                         }
                     } else {
-                        // Skip masking - use original image
-                        setProductMaskUrl(null);
+                        // Skip masking - use original image as the "mask"
+                        setProductMaskUrl(productImage);
                         setProductMaskSkipped(true);
                     }
                     
