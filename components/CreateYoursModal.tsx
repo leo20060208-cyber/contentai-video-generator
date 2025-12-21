@@ -223,6 +223,9 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Reset any previous mask when changing product image
+        setProductMaskUrl(null);
+
         const reader = new FileReader();
         reader.onload = async (loadEvent) => {
             const base64 = loadEvent.target?.result as string;
@@ -243,6 +246,14 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
             }
         };
         reader.readAsDataURL(file);
+    };
+
+    const resetProduct = () => {
+        setProductImage(null);
+        setProductImageUrl(null);
+        setProductMaskUrl(null);
+        setProductName('');
+        setShowProductSegmentModal(false);
     };
 
     // Handle saved mask selection
@@ -639,6 +650,30 @@ export const CreateYoursModal = ({ isOpen, onClose }: CreateYoursModalProps) => 
                                                 </div>
                                             ) : (
                                                 <div className="space-y-4">
+                                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                                        <label className="cursor-pointer">
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={handleProductUpload}
+                                                            />
+                                                            <span className="inline-flex">
+                                                                <Button type="button" variant="secondary" className="flex items-center gap-2">
+                                                                    <Upload className="w-4 h-4" />
+                                                                    Change Image
+                                                                </Button>
+                                                            </span>
+                                                        </label>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            onClick={resetProduct}
+                                                            className="text-zinc-300 hover:text-white"
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </div>
                                                     <div className="relative aspect-square max-w-sm mx-auto rounded-xl overflow-hidden bg-black">
                                                         <img src={productImage} alt="Product" className="w-full h-full object-contain" />
                                                     </div>
