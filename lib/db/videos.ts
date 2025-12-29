@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export interface Video {
     id: string;
@@ -21,6 +21,10 @@ export interface Video {
 }
 
 export async function getUserVideos(userId: string): Promise<Video[]> {
+    if (!isSupabaseConfigured) {
+        console.warn('⚠️ getUserVideos: Offline Mode - returning empty list');
+        return [];
+    }
     const { data, error } = await supabase
         .from('videos')
         .select('*')
@@ -30,7 +34,18 @@ export async function getUserVideos(userId: string): Promise<Video[]> {
         .order('created_at', { ascending: false });
 
     if (error) {
-        console.error('Error fetching videos:', error);
+        // Suppress generic "Failed to fetch" errors which just mean Supabase is unreachable/offline
+        const isNetworkError =
+            error.message?.includes('fetch') ||
+            error.message?.includes('network') ||
+            // Supabase 500s can sometimes look like this if the URL is invalid
+            (typeof error.details === 'string' && error.details.includes('fetch'));
+
+        if (isNetworkError) {
+            console.warn('⚠️ Supabase unreachable (Offline Mode). Returning empty user videos list.');
+        } else {
+            console.error('Error fetching videos:', error);
+        }
         return [];
     }
 
@@ -130,6 +145,18 @@ export async function unsaveTemplate(userId: string, templateId: number): Promis
     return true;
 }
 
+export interface ProductSlot {
+    id: string;
+    name: string;
+    description?: string;
+    isRequired: boolean;
+    timeRange?: {
+        startSecond: number;
+        endSecond: number;
+    };
+    defaultPromptPart?: string;
+}
+
 export interface Template {
     id: number;
     title: string;
@@ -169,7 +196,13 @@ export interface Template {
     image_descriptions?: string[]; // e.g. ["Front view", "Back view"]
     image_instructions?: string; // Specific instructions for image validity
     duration?: number; // Duration of the generated video in seconds
+
+    // Product Slots - Time-based product configuration
+    product_slots?: ProductSlot[];
 }
+
+// Mock data removed as per user request
+export const MOCK_TEMPLATES: Template[] = [];
 
 export async function getTemplates(): Promise<Template[]> {
     const { data, error } = await supabase
@@ -178,11 +211,22 @@ export async function getTemplates(): Promise<Template[]> {
         .order('id', { ascending: true });
 
     if (error) {
-        console.error('Error fetching templates:', error);
+        // Suppress generic "Failed to fetch" errors which just mean Supabase is unreachable/offline
+        const isNetworkError =
+            error.message?.includes('fetch') ||
+            error.message?.includes('network') ||
+            // Supabase 500s can sometimes look like this if the URL is invalid
+            (typeof error.details === 'string' && error.details.includes('fetch'));
+
+        if (isNetworkError) {
+            console.warn('⚠️ Supabase unreachable (Offline Mode).');
+        } else {
+            console.warn('⚠️ Supabase getTemplates failed.');
+            console.error('Error message:', error.message);
+        }
         return [];
     }
 
-    // Filter out known fake templates by title
     // Filter out known fake templates by title
     const FAKE_TITLES = [
         'Product Showcase',
@@ -199,6 +243,11 @@ export async function getTemplates(): Promise<Template[]> {
     ];
 
     const cleanData = (data || []).filter(t => !FAKE_TITLES.includes(t.title));
+
+    if (cleanData.length === 0) {
+        console.log("No templates found in DB.");
+        return [];
+    }
 
     return cleanData;
 }
@@ -233,6 +282,9 @@ export async function getCategories(): Promise<string[]> {
 }
 
 export async function getSavedTemplatesWithData(userId: string): Promise<Template[]> {
+    if (!isSupabaseConfigured) {
+        return [];
+    }
     try {
         // First, get the saved template IDs
         const { data: savedData, error: savedError } = await supabase
@@ -273,6 +325,9 @@ export async function getSavedTemplatesWithData(userId: string): Promise<Templat
 }
 
 export async function getSavedTemplates(userId: string): Promise<number[]> {
+    if (!isSupabaseConfigured) {
+        return [];
+    }
     const { data, error } = await supabase
         .from('saved_templates')
         .select('template_id')

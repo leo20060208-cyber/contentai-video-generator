@@ -18,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning translate="no">
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning translate="no" style={{ backgroundColor: '#000', color: '#fff' }}>
+      <body className={`${inter.className} bg-black text-white min-h-screen`} style={{ backgroundColor: '#000', color: '#fff' }} suppressHydrationWarning>
         <div className="fixed inset-0 pointer-events-none z-[100] shadow-[inset_0_0_180px_rgba(255,107,0,0.15)]" />
         <ChunkErrorHandler />
         <ChunkErrorBoundary>

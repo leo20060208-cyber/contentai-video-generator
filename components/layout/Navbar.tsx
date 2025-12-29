@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { Menu, X, User } from 'lucide-react';
+import { Menu, X, User, Coins } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
 
@@ -51,6 +51,17 @@ export function Navbar() {
             ) : user ? (
               // Logged in: Pricing + Profile Icon
               <div className="flex items-center gap-6">
+                <Link href="/pricing" className="group">
+                  <div className="flex items-center gap-2 bg-zinc-800/50 group-hover:bg-zinc-800 px-3 py-1.5 rounded-full transition-colors border border-white/5">
+                    <Coins className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="text-xs font-bold text-white">
+                      {profile?.credits?.toLocaleString() ?? 0}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium group-hover:text-zinc-400">
+                      Credits
+                    </span>
+                  </div>
+                </Link>
                 <Link
                   href="/pricing"
                   className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"

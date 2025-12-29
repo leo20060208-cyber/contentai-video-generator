@@ -425,10 +425,10 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                 )}
                             </div>
 
-                            <Button 
-                                type="button" 
-                                onClick={() => onConfirm(null)} 
-                                variant="outline" 
+                            <Button
+                                type="button"
+                                onClick={() => onConfirm(null)}
+                                variant="outline"
                                 className="border-zinc-700 hover:bg-zinc-800 mr-2"
                             >
                                 Skip Masking
@@ -439,17 +439,25 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                 onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
+
+                                    // If no mask/points, treat as "Skip Masking" (Use Original)
+                                    if (!segmentMask && points.length === 0) {
+                                        console.log('✅ [Modal] Done clicked (Empty) -> Treat as Skip');
+                                        onConfirm(null);
+                                        return;
+                                    }
+
                                     console.log('✅ [Modal] Done Clicked');
                                     const idx = availableMasks.indexOf(segmentMask || '');
                                     const finalIdx = idx !== -1 ? idx : 0;
                                     console.log('✅ [Modal] Calling onConfirm with:', { segmentMask, pointsCount: points.length, finalIdx, trackEnd });
                                     onConfirm(segmentMask, points, finalIdx, trackEnd);
                                 }}
-                                disabled={!segmentMask && points.length === 0}
+                                // Always enabled (acts as Skip if empty)
                                 className="bg-orange-600 hover:bg-orange-700 min-w-[140px]"
                             >
                                 <Check className="w-4 h-4 mr-2" />
-                                Done
+                                {(!segmentMask && points.length === 0) ? 'Use Original' : 'Done'}
                             </Button>
                         </div>
                     </div>

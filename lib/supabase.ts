@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || '';
 
-// Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing Supabase environment variables:');
-    console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? '✓' : '✗ MISSING');
-    console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✓' : '✗ MISSING');
+// Simple check: just verify strings are not empty
+export const isSupabaseConfigured = supabaseUrl.length > 0 && supabaseAnonKey.length > 0;
+
+if (!isSupabaseConfigured) {
+    console.warn('⚠️ Supabase environment variables missing. App running in Offline Mode.');
 }
 
 // Create a single supabase client for the browser
@@ -22,6 +22,3 @@ export const supabase = createClient(
         },
     }
 );
-
-// Check if properly configured
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);

@@ -5,6 +5,7 @@ import { Hero } from '@/components/landing/Hero';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
+
 // Lazy load the video library preview to speed up initial page load
 const VideoLibraryPreview = dynamic(
   () => import('@/components/landing/VideoLibraryPreview').then(mod => mod.VideoLibraryPreview),
@@ -24,6 +25,8 @@ export default function HomePage() {
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
       />
+
+      {/* Video Library Preview - Filtered by selected category */}
 
       {/* Video Library Preview - Filtered by selected category */}
       <VideoLibraryPreview selectedCategory={selectedCategory} />

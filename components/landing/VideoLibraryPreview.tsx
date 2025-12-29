@@ -68,18 +68,9 @@ export function VideoLibraryPreview({ selectedCategory = 'All' }: { selectedCate
     // Show loading skeletons while loading
     if (isLoading) {
         return (
-            <section className="py-32 bg-black border-t border-white/5 relative overflow-hidden">
+            <section className="pt-8 pb-32 bg-black border-t border-white/5 relative overflow-hidden">
                 <div className="container mx-auto px-4">
-                    <div className="flex flex-col md:flex-row items-end justify-between mb-12 gap-6">
-                        <div>
-                            <h2 className="text-4xl md:text-5xl font-black text-white mb-4">
-                                Viral <span className="text-orange-500">Templates</span>
-                            </h2>
-                            <p className="text-zinc-400 max-w-xl text-lg">
-                                Start with professional templates optimized for engagement.
-                            </p>
-                        </div>
-                    </div>
+
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="rounded-2xl bg-gradient-to-br from-orange-500/20 to-red-600/20 aspect-[9/16] animate-pulse" />
@@ -99,40 +90,9 @@ export function VideoLibraryPreview({ selectedCategory = 'All' }: { selectedCate
     }
 
     return (
-        <section className="py-32 bg-black border-t border-white/5 relative overflow-hidden">
+        <section className="pt-8 pb-32 bg-black border-t border-white/5 relative overflow-hidden">
             <div className="container mx-auto px-4">
-                <div className="flex flex-col md:flex-row items-end justify-between mb-12 gap-6">
-                    <div>
-                        <motion.h2
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            className="text-4xl md:text-5xl font-black text-white mb-4"
-                        >
-                            Viral <span className="text-orange-500">Templates</span>
-                        </motion.h2>
-                        <motion.p
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            className="text-zinc-400 max-w-xl text-lg"
-                        >
-                            Start with professional templates optimized for engagement.
-                        </motion.p>
-                    </div>
 
-                    <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 }}
-                    >
-                        <Link href="/videos">
-                            <Button variant="secondary" className="group">
-                                Browse Library
-                                <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                            </Button>
-                        </Link>
-                    </motion.div>
-                </div>
 
                 <div className="space-y-6">
                     {/* First Row: 3 small cards (CreateYours + 2 videos) */}
@@ -188,7 +148,7 @@ export function VideoLibraryPreview({ selectedCategory = 'All' }: { selectedCate
 
 function CreateYoursCard() {
     return (
-        <Link href="/create-yours">
+        <Link href="/create-yours" prefetch={false}>
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}

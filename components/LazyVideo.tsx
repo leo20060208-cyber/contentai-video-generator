@@ -10,6 +10,7 @@ interface LazyVideoProps {
     playsInline?: boolean;
     autoPlay?: boolean;
     onLoad?: () => void;
+    hoverUnmute?: boolean; // New prop: unmute on hover
 }
 
 export function LazyVideo({
@@ -18,12 +19,14 @@ export function LazyVideo({
     muted = true,
     loop = true,
     playsInline = true,
-    autoPlay = false,
+    autoPlay = true, // Default to true now
     onLoad,
+    hoverUnmute = true, // Default: unmute on hover
 }: LazyVideoProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isLoaded, setIsLoaded] = useState(false);
     const [isInView, setIsInView] = useState(false);
+    const [isMuted, setIsMuted] = useState(true); // Always start muted
 
     useEffect(() => {
         const videoElement = videoRef.current;
@@ -35,12 +38,16 @@ export function LazyVideo({
                 entries.forEach((entry) => {
                     if (entry.isIntersecting) {
                         setIsInView(true);
-                        observer.unobserve(videoElement);
+                        // Autoplay when entering view
+                        videoElement.play().catch(() => { });
+                    } else {
+                        // Pause when leaving view
+                        videoElement.pause();
                     }
                 });
             },
             {
-                rootMargin: '200px', // Start loading 200px before entering viewport
+                rootMargin: '100px',
                 threshold: 0.1,
             }
         );
@@ -59,6 +66,8 @@ export function LazyVideo({
         const handleLoadedData = () => {
             setIsLoaded(true);
             onLoad?.();
+            // Start playing once loaded
+            videoElement.play().catch(() => { });
         };
 
         videoElement.addEventListener('loadeddata', handleLoadedData);
@@ -68,8 +77,26 @@ export function LazyVideo({
         };
     }, [isInView, onLoad]);
 
+    const handleMouseEnter = () => {
+        if (hoverUnmute && videoRef.current) {
+            setIsMuted(false);
+            videoRef.current.muted = false;
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (hoverUnmute && videoRef.current) {
+            setIsMuted(true);
+            videoRef.current.muted = true;
+        }
+    };
+
     return (
-        <div className="relative w-full h-full">
+        <div
+            className="relative w-full h-full"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+        >
             {/* Skeleton loader */}
             {!isLoaded && (
                 <div className="absolute inset-0 bg-zinc-800 animate-pulse">
@@ -83,11 +110,11 @@ export function LazyVideo({
                 src={isInView ? src : undefined}
                 className={`${className} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'
                     }`}
-                muted={muted}
+                muted={isMuted}
                 loop={loop}
                 playsInline={playsInline}
                 autoPlay={autoPlay && isInView}
-                preload="none"
+                preload="metadata"
             />
         </div>
     );

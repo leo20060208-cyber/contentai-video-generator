@@ -10,9 +10,10 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#ffffff', // White background
-        surface: '#f8f8f8',    // Light gray for cards
-        'surface-elevated': '#ffffff', // White for elevated elements
+        background: '#000000', // Black background (dark theme)
+        foreground: '#ffffff', // White text
+        surface: '#0a0a0a',    // Dark gray for cards
+        'surface-elevated': '#111111', // Slightly lighter for elevated elements
 
         primary: {
           DEFAULT: '#ff6b00', // Orange
@@ -22,8 +23,8 @@ const config: Config = {
         },
 
         secondary: {
-          DEFAULT: '#000000',
-          foreground: '#ffffff'
+          DEFAULT: '#ffffff',
+          foreground: '#000000'
         },
 
         accent: {
@@ -31,8 +32,8 @@ const config: Config = {
           purple: '#bd00ff'
         },
 
-        border: '#e5e5e5',
-        'border-hover': '#d4d4d4',
+        border: '#27272a', // zinc-800
+        'border-hover': '#3f3f46', // zinc-700
       },
 
       fontFamily: {

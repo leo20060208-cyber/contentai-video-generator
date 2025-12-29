@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, X, Loader2, Zap, Check, Edit, Save } from 'lucide-react';
+import { Upload, X, Loader2, Zap, Check, Edit, Save, Plus, Clock, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VideoUploader } from './VideoUploader';
 import { SegmentationModal } from '@/components/SegmentationModal';
@@ -11,6 +11,18 @@ interface TemplateFormProps {
   categories: string[];
   onSuccess: () => void;
   initialData?: any;
+}
+
+export interface ProductSlotFormData {
+  id: string;
+  name: string;
+  description: string;
+  isRequired: boolean;
+  timeRange: {
+    startSecond: number;
+    endSecond: number;
+  } | null;
+  defaultPromptPart: string;
 }
 
 export interface FormData {
@@ -23,6 +35,7 @@ export interface FormData {
   requiredImageCount: number;
   imageDescriptions: string[];
   imageInstructions: string;
+  productSlots: ProductSlotFormData[];
 }
 
 export function TemplateForm({ categories, onSuccess, initialData }: TemplateFormProps) {
@@ -35,7 +48,8 @@ export function TemplateForm({ categories, onSuccess, initialData }: TemplateFor
     maskVideoUrl: initialData?.maskVideoUrl || initialData?.mask_video_url || '',
     requiredImageCount: initialData?.required_image_count || 1,
     imageDescriptions: initialData?.image_descriptions || [],
-    imageInstructions: initialData?.image_instructions || ''
+    imageInstructions: initialData?.image_instructions || '',
+    productSlots: initialData?.product_slots || []
   });
 
   // Track ID locally to handle Create -> Update switch
@@ -370,56 +384,167 @@ export function TemplateForm({ categories, onSuccess, initialData }: TemplateFor
         />
       </div>
 
-      {/* Required Photos Configuration */}
+      {/* Product Slots Configuration */}
       <div className="space-y-4 p-4 bg-zinc-900 rounded-xl border border-zinc-800">
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-medium text-zinc-300">
-            Minimum Photos Required
-          </label>
-          <input
-            type="number"
-            min="1"
-            max="5"
-            name="requiredImageCount"
-            value={formData.requiredImageCount}
-            onChange={(e) => {
-              const count = parseInt(e.target.value) || 1;
-              const newDescriptions = [...formData.imageDescriptions];
-              // Adjust array length
-              if (count > newDescriptions.length) {
-                for (let i = newDescriptions.length; i < count; i++) {
-                  newDescriptions.push(`Photo ${i + 1}`);
-                }
-              } else if (count < newDescriptions.length) {
-                newDescriptions.length = count;
-              }
-              setFormData(prev => ({ ...prev, requiredImageCount: count, imageDescriptions: newDescriptions }));
+          <div>
+            <label className="block text-sm font-medium text-zinc-300">
+              Product Slots
+            </label>
+            <p className="text-xs text-zinc-500">Define what product images users need to upload and their time ranges</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const newSlot: ProductSlotFormData = {
+                id: `slot-${Date.now()}`,
+                name: `Product ${formData.productSlots.length + 1}`,
+                description: '',
+                isRequired: true,
+                timeRange: null,
+                defaultPromptPart: ''
+              };
+              setFormData(prev => ({ ...prev, productSlots: [...prev.productSlots, newSlot] }));
             }}
-            className="w-20 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-center focus:outline-none focus:border-orange-500"
-          />
+            className="flex items-center gap-1 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            Add Slot
+          </button>
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs text-zinc-500 uppercase tracking-wider font-medium">
-            Photo Descriptions (Visible to user)
-          </label>
-          {Array.from({ length: formData.requiredImageCount }).map((_, idx) => (
-            <div key={idx} className="flex items-center gap-3">
-              <span className="text-zinc-500 text-sm w-6">{idx + 1}.</span>
-              <input
-                type="text"
-                value={formData.imageDescriptions[idx] || ''}
-                onChange={(e) => {
-                  const newDesc = [...formData.imageDescriptions];
-                  newDesc[idx] = e.target.value;
-                  setFormData(prev => ({ ...prev, imageDescriptions: newDesc }));
-                }}
-                placeholder={`e.g. Front View`}
-                className="flex-1 px-4 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-          ))}
-        </div>
+        {formData.productSlots.length === 0 ? (
+          <div className="text-center py-6 text-zinc-500 text-sm border border-dashed border-zinc-700 rounded-lg">
+            No product slots defined. Click "Add Slot" to create one.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {formData.productSlots.map((slot, idx) => (
+              <div key={slot.id} className="p-3 bg-zinc-800/50 rounded-lg border border-zinc-700 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="text-zinc-500 text-sm w-6 pt-2">{idx + 1}.</span>
+                  <div className="flex-1 space-y-2">
+                    {/* Slot Name */}
+                    <input
+                      type="text"
+                      value={slot.name}
+                      onChange={(e) => {
+                        const newSlots = [...formData.productSlots];
+                        newSlots[idx].name = e.target.value;
+                        setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                      }}
+                      placeholder="Product name (e.g. Main Product)"
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    />
+
+                    {/* Description */}
+                    <input
+                      type="text"
+                      value={slot.description}
+                      onChange={(e) => {
+                        const newSlots = [...formData.productSlots];
+                        newSlots[idx].description = e.target.value;
+                        setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                      }}
+                      placeholder="Description for user (optional)"
+                      className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-xs focus:border-orange-500 focus:outline-none"
+                    />
+
+                    {/* Time Range & Required Toggle */}
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {/* Required Toggle */}
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={slot.isRequired}
+                          onChange={(e) => {
+                            const newSlots = [...formData.productSlots];
+                            newSlots[idx].isRequired = e.target.checked;
+                            setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                          }}
+                          className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-orange-500 focus:ring-orange-500"
+                        />
+                        <span className="text-xs text-zinc-400">Required</span>
+                      </label>
+
+                      {/* Time Range Toggle */}
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={slot.timeRange !== null}
+                          onChange={(e) => {
+                            const newSlots = [...formData.productSlots];
+                            newSlots[idx].timeRange = e.target.checked ? { startSecond: 0, endSecond: 5 } : null;
+                            setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                          }}
+                          className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-blue-500 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-zinc-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Time range
+                        </span>
+                      </label>
+
+                      {/* Time Range Inputs */}
+                      {slot.timeRange && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={slot.timeRange.startSecond}
+                            onChange={(e) => {
+                              const newSlots = [...formData.productSlots];
+                              if (newSlots[idx].timeRange) {
+                                newSlots[idx].timeRange!.startSecond = parseFloat(e.target.value) || 0;
+                              }
+                              setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                            }}
+                            className="w-16 px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white text-xs text-center focus:border-blue-500 focus:outline-none"
+                          />
+                          <span className="text-zinc-500 text-xs">to</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={slot.timeRange.endSecond}
+                            onChange={(e) => {
+                              const newSlots = [...formData.productSlots];
+                              if (newSlots[idx].timeRange) {
+                                newSlots[idx].timeRange!.endSecond = parseFloat(e.target.value) || 0;
+                              }
+                              setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                            }}
+                            className="w-16 px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white text-xs text-center focus:border-blue-500 focus:outline-none"
+                          />
+                          <span className="text-zinc-500 text-xs">sec</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newSlots = formData.productSlots.filter((_, i) => i !== idx);
+                      setFormData(prev => ({ ...prev, productSlots: newSlots }));
+                    }}
+                    className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Legacy: Sync productSlots to imageDescriptions for backward compatibility */}
+        {formData.productSlots.length > 0 && (
+          <p className="text-[10px] text-zinc-600">
+            {formData.productSlots.filter(s => s.isRequired).length} required, {formData.productSlots.filter(s => !s.isRequired).length} optional
+          </p>
+        )}
       </div>
 
       {/* Categoría */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Template } from '@/lib/db/videos';
 import { TemplateUploader } from '@/components/admin/TemplateUploader';
 import { PromptGenius } from '@/components/lab/PromptGenius';
@@ -22,6 +22,13 @@ export default function LabPage() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Auth State
+    const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+
+    // Allowed email for Lab access
+    const ALLOWED_EMAIL = 'leo20060208@gmail.com';
+
     // Edit State
     const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -29,10 +36,33 @@ export default function LabPage() {
     // Tools State
     const [showGenius, setShowGenius] = useState(false);
 
+    // Check user auth on mount
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                setUserEmail(user?.email || null);
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                setUserEmail(null);
+            } finally {
+                setAuthLoading(false);
+            }
+        };
+        checkAuth();
+    }, []);
+
     // Fetch Templates
     const fetchTemplates = async () => {
         setLoading(true);
         try {
+            // 1. Check for Offline Mode
+            if (!isSupabaseConfigured) {
+                console.warn('⚠️ Lab Page: Offline Mode - no templates available.');
+                setTemplates([]);
+                return;
+            }
+
             const { data, error } = await supabase
                 .from('templates')
                 .select('*')
@@ -40,8 +70,19 @@ export default function LabPage() {
 
             if (error) throw error;
             setTemplates(data || []);
-        } catch (error) {
-            console.error('Error fetching templates:', error);
+        } catch (error: any) {
+            // Suppress generic "Failed to fetch" errors
+            const isNetworkError =
+                error.message?.includes('fetch') ||
+                error.message?.includes('network') ||
+                (typeof error === 'string' && error.includes('fetch'));
+
+            if (isNetworkError) {
+                console.warn('⚠️ Lab Page: Offline/Network Error - no templates available.');
+                setTemplates([]);
+            } else {
+                console.error('Error fetching templates:', error);
+            }
         } finally {
             setLoading(false);
         }
@@ -69,6 +110,67 @@ export default function LabPage() {
             alert('Failed to delete template');
         }
     };
+
+    // Access Control
+    if (authLoading) {
+        return (
+            <div className="min-h-screen bg-zinc-950 p-8 pt-24 text-white flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 animate-spin text-orange-500 mx-auto mb-4" />
+                    <p className="text-zinc-400">Checking access...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (userEmail !== ALLOWED_EMAIL) {
+        return (
+            <div className="min-h-screen bg-zinc-950 p-8 pt-24 text-white flex items-center justify-center">
+                <div className="text-center max-w-md bg-zinc-900 p-8 rounded-2xl border border-red-500/20">
+                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-4xl">🔒</span>
+                    </div>
+                    <h1 className="text-2xl font-bold mb-2 text-red-400">Access Denied</h1>
+                    <p className="text-zinc-500 mb-4">
+                        This area is restricted to authorized users only.
+                    </p>
+                    {userEmail && (
+                        <p className="text-xs text-zinc-600">
+                            Logged in as: {userEmail}
+                        </p>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // Offline Check
+    if (!isSupabaseConfigured) {
+        return (
+            <div className="min-h-screen bg-zinc-950 p-8 pt-24 text-white flex items-center justify-center">
+                <div className="text-center max-w-md bg-zinc-900 p-8 rounded-2xl border border-white/5">
+                    <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Loader2 className="w-8 h-8 text-orange-500" />
+                    </div>
+                    <h1 className="text-2xl font-bold mb-2">Supabase Not Configured</h1>
+                    <p className="text-zinc-500 mb-6">
+                        The application is running in <strong>Offline Mode</strong> because the Supabase URL or Key is missing or invalid in your environment variables.
+                    </p>
+                    <div className="bg-black/50 p-4 rounded-lg text-xs font-mono text-left space-y-2 overflow-x-auto">
+                        <p className={process.env.NEXT_PUBLIC_SUPABASE_URL ? "text-green-400" : "text-red-400"}>
+                            URL: {process.env.NEXT_PUBLIC_SUPABASE_URL ? `"${process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0, 20)}..."` : "undefined"}
+                            <span className="opacity-50 ml-2">({process.env.NEXT_PUBLIC_SUPABASE_URL ? "Loaded" : "Missing"})</span>
+                        </p>
+                        <p className={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "text-green-400" : "text-red-400"}>
+                            Key: {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? `"${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.substring(0, 10)}..."` : "undefined"}
+                            <span className="opacity-50 ml-2">({process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Loaded" : "Missing"})</span>
+                        </p>
+                    </div>
+                    <p className="text-xs text-zinc-600 mt-4">Check your .env.local file.</p>
+                </div>
+            </div>
+        );
+    }
 
     // Filter Templates
     const filteredTemplates = templates.filter(t =>
@@ -220,6 +322,45 @@ export default function LabPage() {
                     </div>
                 )}
             </div>
+
+            {/* DEBUG SECTION - Only visible when empty */}
+            {filteredTemplates.length === 0 && !loading && (
+                <div className="max-w-7xl mx-auto mt-12 p-6 bg-red-950/20 border border-red-500/20 rounded-xl">
+                    <h3 className="text-red-400 font-bold mb-2 flex items-center gap-2">
+                        <span className="text-xl">🛠️</span> Diagnostics
+                    </h3>
+                    <p className="text-zinc-400 text-sm mb-4">You are seeing this because the list is empty. Let's find out why.</p>
+
+                    <div className="grid gap-2 text-xs font-mono bg-black/50 p-4 rounded mb-4">
+                        <div>Config Status: <span className={isSupabaseConfigured ? "text-green-500" : "text-red-500"}>{isSupabaseConfigured ? "OK" : "OFFLINE"}</span></div>
+                        <div>Supabase URL: <span className="text-zinc-500">{process.env.NEXT_PUBLIC_SUPABASE_URL}</span></div>
+                        {debugError && <div className="text-red-400 font-bold mt-2">Last Fetch Error: {debugError}</div>}
+                    </div>
+
+                    <Button
+                        onClick={async () => {
+                            setDebugInfo("Running test...");
+                            try {
+                                const { count, error } = await supabase.from('templates').select('*', { count: 'exact', head: true });
+                                if (error) throw error;
+                                setDebugInfo({ success: true, count, message: "Connection OK. Table exists." });
+                            } catch (e: any) {
+                                setDebugInfo({ success: false, message: e.message, details: e });
+                            }
+                        }}
+                        variant="secondary"
+                        className="text-xs"
+                    >
+                        Run Connection Test
+                    </Button>
+
+                    {debugInfo && (
+                        <pre className="mt-4 text-[10px] text-zinc-300 overflow-auto max-h-40 bg-black p-2 rounded border border-white/10">
+                            {JSON.stringify(debugInfo, null, 2)}
+                        </pre>
+                    )}
+                </div>
+            )}
 
             {/* EDIT MODAL */}
             {isEditModalOpen && editingTemplate && (

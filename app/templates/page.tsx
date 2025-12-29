@@ -2,16 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import {
-    Search,
-    LayoutGrid,
-    Loader2,
-    Settings,
-    Star
-} from 'lucide-react';
+import { Search, LayoutGrid, Loader2, Settings, Star, Sparkles } from 'lucide-react';
 import { TemplateCard } from '@/components/templates/TemplateCard';
-import { supabase } from '@/lib/supabase';
-import { Template } from '@/lib/db/videos';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { Template, MOCK_TEMPLATES } from '@/lib/db/videos';
 import { useCategories } from '@/hooks/useCategories';
 import { CategoryManager } from '@/components/CategoryManager';
 import { Button } from '@/components/ui/Button';
@@ -63,6 +57,13 @@ export default function TemplatesPage() {
         const fetchTemplates = async () => {
             setLoading(true);
             try {
+                // 1. Check for Offline Mode
+                if (!isSupabaseConfigured) {
+                    console.warn('⚠️ Templates Page: Offline Mode - using Mock Templates.');
+                    setTemplates(MOCK_TEMPLATES);
+                    return;
+                }
+
                 const { data, error } = await supabase
                     .from('templates')
                     .select('*')
@@ -70,8 +71,19 @@ export default function TemplatesPage() {
 
                 if (error) throw error;
                 setTemplates(data || []);
-            } catch (error) {
-                console.error('Error fetching templates:', error);
+            } catch (error: any) {
+                // Suppress generic "Failed to fetch" errors
+                const isNetworkError =
+                    error.message?.includes('fetch') ||
+                    error.message?.includes('network') ||
+                    (typeof error === 'string' && error.includes('fetch'));
+
+                if (isNetworkError) {
+                    console.warn('⚠️ Templates Page: Offline/Network Error - using Mock Templates.');
+                    setTemplates(MOCK_TEMPLATES);
+                } else {
+                    console.error('Error fetching templates:', error);
+                }
             } finally {
                 setLoading(false);
             }

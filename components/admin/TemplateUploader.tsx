@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, X, Loader2, Plus, DollarSign, Zap, MousePointer2, Check, Sparkles } from 'lucide-react';
+import { Upload, X, Loader2, Plus, DollarSign, Zap, MousePointer2, Check, Sparkles, Clock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SegmentationModal } from '@/components/SegmentationModal';
 import { GenerationMethod, AIModel, AVAILABLE_MODELS, getModelsForMethod, estimateCost } from '@/types/generation.types';
@@ -102,6 +102,18 @@ export function TemplateUploader({
     const [requiredImageCount, setRequiredImageCount] = useState<number>(initialData?.required_image_count || 1);
     const [imageDescriptions, setImageDescriptions] = useState<string[]>(initialData?.image_descriptions || []);
     const [imageInstructions, setImageInstructions] = useState<string>(initialData?.image_instructions || '');
+
+    // Product Slots with Time Ranges
+    interface ProductSlotData {
+        id: string;
+        name: string;
+        description: string;
+        isRequired: boolean;
+        timeRange: { startSecond: number; endSecond: number } | null;
+    }
+    const [productSlots, setProductSlots] = useState<ProductSlotData[]>(
+        initialData?.product_slots || []
+    );
 
     const extractThumbnail = (file: File): Promise<{ blob: Blob | null, duration: number }> => {
         return new Promise((resolve) => {
@@ -235,6 +247,12 @@ export function TemplateUploader({
         const hasBefore = beforeVideo || existingBeforeUrl;
         const hasAfter = afterVideo || existingAfterUrl;
 
+        // Offline mode check
+        if (!isSupabaseConfigured) {
+            alert("⚠️ Cannot save template: Supabase is not configured (Offline Mode).");
+            return;
+        }
+
         if (!hasBefore || !hasAfter || !title) {
             alert('Please fill in all required fields');
             return;
@@ -275,9 +293,10 @@ export function TemplateUploader({
                 before_video_url: beforeVideoUrl,
                 after_video_url: afterVideoUrl,
                 replaced_object_mask_url: maskStorageUrl,
-                required_image_count: requiredImageCount,
-                image_descriptions: imageDescriptions,
+                required_image_count: productSlots.length > 0 ? productSlots.filter(s => s.isRequired).length : requiredImageCount,
+                image_descriptions: productSlots.length > 0 ? productSlots.map(s => s.name) : imageDescriptions,
                 image_instructions: imageInstructions,
+                product_slots: productSlots.length > 0 ? productSlots : null,
                 description: transformationPrompt, // Save prompt
                 ai_model: aiModel,
                 clean_background_url: await (async () => {
@@ -331,7 +350,7 @@ export function TemplateUploader({
 
         } catch (error: any) {
             console.error('❌ Error saving template:', error);
-            alert('Failed: ' + error.message);
+            alert('Failed: ' + (error.message || JSON.stringify(error)));
         } finally {
             setIsUploading(false);
         }
@@ -544,63 +563,137 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Image Requirements */}
+                                {/* Product Slots Configuration */}
                                 <div className="mt-4 bg-zinc-800/50 p-4 rounded-lg border border-white/5 space-y-4">
-                                    <h3 className="text-sm font-semibold text-white">Image Requirements on Recreate</h3>
-
-                                    <div>
-                                        <label className="block text-xs text-zinc-400 mb-1">Image Instructions (Specific rules for users)</label>
-                                        <textarea
-                                            value={imageInstructions}
-                                            onChange={e => setImageInstructions(e.target.value)}
-                                            placeholder="e.g. Please upload clear photos with a plain background. Avoid shadows..."
-                                            className="w-full bg-zinc-900 rounded-lg border border-white/10 p-2 text-white text-sm focus:outline-none focus:border-orange-500 resize-none h-20"
-                                        />
-                                    </div>
-
                                     <div className="flex items-center justify-between">
-                                        <label className="block text-xs text-zinc-400">Minimum Photos Required</label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="5"
-                                            value={requiredImageCount}
-                                            onChange={(e) => {
-                                                const count = parseInt(e.target.value) || 1;
-                                                const newDescriptions = [...imageDescriptions];
-                                                if (count > newDescriptions.length) {
-                                                    for (let i = newDescriptions.length; i < count; i++) {
-                                                        newDescriptions.push(`Photo ${i + 1}`);
-                                                    }
-                                                } else if (count < newDescriptions.length) {
-                                                    newDescriptions.length = count;
-                                                }
-                                                setRequiredImageCount(count);
-                                                setImageDescriptions(newDescriptions);
+                                        <div>
+                                            <h3 className="text-sm font-semibold text-white">Product Slots</h3>
+                                            <p className="text-[10px] text-zinc-500">Define products with optional time ranges</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const newSlot: ProductSlotData = {
+                                                    id: `slot-${Date.now()}`,
+                                                    name: `Product ${productSlots.length + 1}`,
+                                                    description: '',
+                                                    isRequired: true,
+                                                    timeRange: null
+                                                };
+                                                setProductSlots([...productSlots, newSlot]);
                                             }}
-                                            className="w-20 bg-zinc-900 border border-white/10 rounded-lg p-2 text-white text-center text-sm focus:outline-none focus:border-orange-500"
-                                        />
+                                            className="flex items-center gap-1 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-2 py-1 rounded transition-colors"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                            Add Slot
+                                        </button>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <label className="block text-xs text-zinc-500 uppercase tracking-wider font-medium">Photo Descriptions (Visible to user)</label>
-                                        {Array.from({ length: requiredImageCount }).map((_, idx) => (
-                                            <div key={idx} className="flex items-center gap-3">
-                                                <span className="text-zinc-500 text-sm w-6">{idx + 1}.</span>
-                                                <input
-                                                    type="text"
-                                                    value={imageDescriptions[idx] || ''}
-                                                    onChange={(e) => {
-                                                        const newDesc = [...imageDescriptions];
-                                                        newDesc[idx] = e.target.value;
-                                                        setImageDescriptions(newDesc);
-                                                    }}
-                                                    placeholder={`e.g. Front View`}
-                                                    className="flex-1 px-4 py-2 rounded-lg bg-zinc-900 border border-white/10 text-white text-sm focus:border-orange-500 focus:outline-none"
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
+                                    {productSlots.length === 0 ? (
+                                        <div className="text-center py-4 text-zinc-500 text-xs border border-dashed border-zinc-700 rounded-lg">
+                                            No slots defined. Add slots to define product positions with time ranges.
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {productSlots.map((slot, idx) => (
+                                                <div key={slot.id} className="p-2 bg-zinc-900 rounded border border-zinc-700 space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-zinc-500 text-xs w-4">{idx + 1}.</span>
+                                                        <input
+                                                            type="text"
+                                                            value={slot.name}
+                                                            onChange={(e) => {
+                                                                const newSlots = [...productSlots];
+                                                                newSlots[idx].name = e.target.value;
+                                                                setProductSlots(newSlots);
+                                                            }}
+                                                            placeholder="Product name"
+                                                            className="flex-1 px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-white text-xs focus:border-orange-500 focus:outline-none"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setProductSlots(productSlots.filter((_, i) => i !== idx));
+                                                            }}
+                                                            className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 flex-wrap pl-6">
+                                                        <label className="flex items-center gap-1 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={slot.isRequired}
+                                                                onChange={(e) => {
+                                                                    const newSlots = [...productSlots];
+                                                                    newSlots[idx].isRequired = e.target.checked;
+                                                                    setProductSlots(newSlots);
+                                                                }}
+                                                                className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-orange-500"
+                                                            />
+                                                            <span className="text-[10px] text-zinc-400">Required</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-1 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={slot.timeRange !== null}
+                                                                onChange={(e) => {
+                                                                    const newSlots = [...productSlots];
+                                                                    newSlots[idx].timeRange = e.target.checked ? { startSecond: 0, endSecond: 5 } : null;
+                                                                    setProductSlots(newSlots);
+                                                                }}
+                                                                className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-blue-500"
+                                                            />
+                                                            <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
+                                                                <Clock className="w-2.5 h-2.5" /> Time
+                                                            </span>
+                                                        </label>
+                                                        {slot.timeRange && (
+                                                            <div className="flex items-center gap-1">
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.5"
+                                                                    value={slot.timeRange.startSecond}
+                                                                    onChange={(e) => {
+                                                                        const newSlots = [...productSlots];
+                                                                        if (newSlots[idx].timeRange) {
+                                                                            newSlots[idx].timeRange!.startSecond = parseFloat(e.target.value) || 0;
+                                                                        }
+                                                                        setProductSlots(newSlots);
+                                                                    }}
+                                                                    className="w-12 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white text-[10px] text-center"
+                                                                />
+                                                                <span className="text-zinc-500 text-[10px]">-</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="0.5"
+                                                                    value={slot.timeRange.endSecond}
+                                                                    onChange={(e) => {
+                                                                        const newSlots = [...productSlots];
+                                                                        if (newSlots[idx].timeRange) {
+                                                                            newSlots[idx].timeRange!.endSecond = parseFloat(e.target.value) || 0;
+                                                                        }
+                                                                        setProductSlots(newSlots);
+                                                                    }}
+                                                                    className="w-12 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white text-[10px] text-center"
+                                                                />
+                                                                <span className="text-zinc-500 text-[10px]">s</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {productSlots.length > 0 && (
+                                        <p className="text-[10px] text-zinc-600">
+                                            {productSlots.filter(s => s.isRequired).length} required, {productSlots.filter(s => !s.isRequired).length} optional
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Advanced Assets (Clean Plate) - Only for Original/Refined */}

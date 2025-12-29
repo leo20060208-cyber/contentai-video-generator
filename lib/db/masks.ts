@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 export interface UserMask {
     id: string;
@@ -9,6 +9,9 @@ export interface UserMask {
 }
 
 export async function getUserMasks(userId: string): Promise<UserMask[]> {
+    if (!isSupabaseConfigured) {
+        return [];
+    }
     const { data, error } = await supabase
         .from('user_masks')
         .select('*')
@@ -24,6 +27,10 @@ export async function getUserMasks(userId: string): Promise<UserMask[]> {
 }
 
 export async function saveUserMask(userId: string, blobUrlOrBase64: string, name: string = 'Untitled Mask'): Promise<UserMask | null> {
+    if (!isSupabaseConfigured) {
+        console.warn('⚠️ Offline Mode: Cannot save user mask.');
+        return null;
+    }
     try {
         // 1. Upload to Storage
         const blob = await fetch(blobUrlOrBase64).then(r => r.blob());
@@ -63,6 +70,7 @@ export async function saveUserMask(userId: string, blobUrlOrBase64: string, name
 }
 
 export async function deleteUserMask(id: string): Promise<boolean> {
+    if (!isSupabaseConfigured) return false;
     const { error } = await supabase
         .from('user_masks')
         .delete()

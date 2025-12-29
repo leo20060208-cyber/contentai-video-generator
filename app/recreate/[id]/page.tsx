@@ -98,6 +98,9 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
     const [targetMask, setTargetMask] = useState<string | null>(null);
 
+    // Optional: Change Persona
+    const [personaImage, setPersonaImage] = useState<string | null>(null);
+
     // Refinement State
     const [refinedImageUrl, setRefinedImageUrl] = useState<string | null>(null);
     const [isRefining, setIsRefining] = useState(false);
@@ -138,8 +141,10 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                             console.log("🔒 Locking model to:", data.ai_model);
                             setSelectedModel(data.ai_model as VideoModel);
                         }
-                        // Initialize labels from descriptions if available
-                        if (data.image_descriptions) {
+                        // Initialize labels from product_slots or fallback to image_descriptions
+                        if (data.product_slots && data.product_slots.length > 0) {
+                            setImageLabels(data.product_slots.map((slot: any) => slot.name || `Product ${slot.id}`));
+                        } else if (data.image_descriptions) {
                             setImageLabels(data.image_descriptions);
                         }
                         // Set duration if valid
@@ -148,8 +153,21 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                         }
                     }
                 }
-            } catch (err) {
-                console.error('Error loading template:', err);
+            } catch (err: any) {
+                console.error('Error loading template:', JSON.stringify(err, null, 2), err.message);
+                // ALERT: Fallback to allow UI to render (Resilient UI Pattern)
+                // This ensures the user sees the interface even if the DB fetch fails
+                setTemplate({
+                    id: String(id) || 'fallback',
+                    title: 'Custom Project',
+                    description: 'Template loaded via fallback mode',
+                    required_image_count: 1,
+                    before_video_url: null,
+                    after_video_url: null,
+                    before_image_url: null,
+                    after_image_url: null,
+                    ai_model: 'kling-v1'
+                } as unknown as Template);
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -292,6 +310,12 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
             }
         }
 
+        if (activeSlot === -100) {
+            setPersonaImage(finalUrl);
+            setShowSegmentModal(false);
+            return;
+        }
+
         // Update correct slot
         setProductImages(prev => {
             const newImages = [...prev];
@@ -421,8 +445,26 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
             if (template.description) safePrompt += ` Context: ${template.description}`;
             if (template.product_swap_prompt) safePrompt += ` ${template.product_swap_prompt}`;
 
-            // Append labels to prompt with explicit indexing for the AI
-            if (imageLabels.length > 0) {
+            // Add persona context to prompt if present
+            if (personaImage) {
+                safePrompt += ` Swap the person/face in the video with the provided persona image.`;
+            }
+
+            // Append time-based product slot info if available
+            if (template.product_slots && template.product_slots.length > 0) {
+                const slotDescriptions = template.product_slots.map((slot, i) => {
+                    if (productImages[i] && slot.timeRange) {
+                        return `From ${slot.timeRange.startSecond}s to ${slot.timeRange.endSecond}s: replace with "${slot.name}"`;
+                    } else if (productImages[i]) {
+                        return `Product ${i + 1}: "${slot.name}"`;
+                    }
+                    return null;
+                }).filter(Boolean);
+                if (slotDescriptions.length > 0) {
+                    safePrompt += ` Product replacements: ${slotDescriptions.join('; ')}.`;
+                }
+            } else if (imageLabels.length > 0) {
+                // Fallback to labels without time ranges
                 safePrompt += `. Input Images: ${imageLabels.map((l, i) => `Image ${i + 1}: ${l}`).join(', ')}.`;
             }
 
@@ -477,9 +519,18 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
             // The block is lines 347-443. 
             // I will replace the RequestBody construction part instead to swap the image there.
 
+            // Calculate images payload correctly
+            const imagesPayload = (selectedModel === 'kwaivgi/kling-video-o1/reference-to-video' || selectedModel === 'kwaivgi/kling-video-o1/video-edit')
+                ? [...productImages]
+                : undefined;
+
+            if (imagesPayload && personaImage) {
+                imagesPayload.push(personaImage);
+            }
+
             const requestBody = {
                 image: (selectedModel === 'wavespeed-kling-o1' && refinedImageUrl) ? refinedImageUrl : sourceImage,
-                images: (selectedModel === 'kwaivgi/kling-video-o1/reference-to-video' || selectedModel === 'kwaivgi/kling-video-o1/video-edit') ? productImages : undefined,
+                images: imagesPayload,
                 prompt: safePrompt,
                 model: (selectedModel === 'wavespeed-kling-o1') ? 'kling-v1' : selectedModel, // Swap model ID
                 duration: duration,
@@ -526,7 +577,7 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
     return (
         <ProtectedRoute>
-            <div className="min-h-screen bg-zinc-950 pt-20 pb-12 px-4">
+            <div className="min-h-screen bg-zinc-950 pt-24 pb-12 px-4">
                 <div className="max-w-7xl mx-auto">
                     {/* Header */}
                     <div className="text-center mb-8">
@@ -543,18 +594,37 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                             <div className="bg-zinc-900 rounded-xl border border-white/10 p-4">
                                 <h3 className="text-white font-semibold mb-3 flex items-center gap-2 text-sm">
                                     <ImageIcon className="w-4 h-4 text-orange-500" />
-                                    Input Image
+                                    {template.product_slots && template.product_slots.length > 0
+                                        ? `Product Slots (${productImages.length}/${template.product_slots.filter(s => s.isRequired).length} required)`
+                                        : 'Input Image'}
                                 </h3>
 
                                 <div className="grid grid-cols-1 gap-3">
                                     {Array.from({ length: slotsToShow }).map((_, idx) => {
                                         const hasImage = idx < productImages.length;
-                                        // Default description
-                                        const defaultDesc = template.image_descriptions?.[idx] || `Image ${idx + 1}`;
+                                        // Get slot config if available
+                                        const slotConfig = template.product_slots?.[idx];
+                                        const slotName = slotConfig?.name || template.image_descriptions?.[idx] || `Image ${idx + 1}`;
+                                        const timeRange = slotConfig?.timeRange;
+                                        const isRequired = slotConfig?.isRequired ?? true;
 
                                         if (hasImage) {
                                             return (
                                                 <div key={idx} className="relative group">
+                                                    {/* Slot header with time range */}
+                                                    <div className="flex items-center justify-between mb-1 px-1">
+                                                        <span className="text-xs font-medium text-white truncate">{slotName}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            {timeRange && (
+                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                                                                    {timeRange.startSecond}s - {timeRange.endSecond}s
+                                                                </span>
+                                                            )}
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${isRequired ? 'bg-orange-500/20 text-orange-400' : 'bg-zinc-700 text-zinc-400'}`}>
+                                                                {isRequired ? 'Req' : 'Opt'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                     <div className="h-40 w-full rounded-lg bg-zinc-800 overflow-hidden border border-zinc-700 relative">
                                                         <img src={productImages[idx]} alt="Product" className="w-full h-full object-contain" />
                                                         <button
@@ -568,18 +638,34 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                                             );
                                         } else {
                                             return (
-                                                <label key={idx} className="h-40 w-full rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-800/30 hover:bg-zinc-800 flex flex-col items-center justify-center cursor-pointer transition-colors group">
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        className="hidden"
-                                                        onChange={(e) => handleImageUpload(e, idx)}
-                                                    />
-                                                    <div className="p-3 bg-zinc-800 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                                                        <Upload className="w-5 h-5 text-zinc-400" />
+                                                <div key={idx}>
+                                                    {/* Slot header with time range */}
+                                                    <div className="flex items-center justify-between mb-1 px-1">
+                                                        <span className="text-xs font-medium text-zinc-400 truncate">{slotName}</span>
+                                                        <div className="flex items-center gap-1">
+                                                            {timeRange && (
+                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400/60">
+                                                                    {timeRange.startSecond}s - {timeRange.endSecond}s
+                                                                </span>
+                                                            )}
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${isRequired ? 'bg-orange-500/10 text-orange-400/60' : 'bg-zinc-800 text-zinc-500'}`}>
+                                                                {isRequired ? 'Req' : 'Opt'}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <span className="text-xs text-zinc-500 px-2 text-center">Upload Image</span>
-                                                </label>
+                                                    <label className="h-40 w-full rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-800/30 hover:bg-zinc-800 flex flex-col items-center justify-center cursor-pointer transition-colors group">
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={(e) => handleImageUpload(e, idx)}
+                                                        />
+                                                        <div className="p-3 bg-zinc-800 rounded-full mb-2 group-hover:scale-110 transition-transform">
+                                                            <Upload className="w-5 h-5 text-zinc-400" />
+                                                        </div>
+                                                        <span className="text-xs text-zinc-500 px-2 text-center">Upload Image</span>
+                                                    </label>
+                                                </div>
                                             );
                                         }
                                     })}
@@ -587,10 +673,44 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                                 <div className="mt-3">
                                     <button
                                         className="w-full py-2 text-xs text-zinc-400 hover:text-white border border-dashed border-zinc-700 rounded-lg hover:bg-zinc-800 transition-colors"
-                                        onClick={() => setShowSavedMasksModal(true)} // Placeholder for now
+                                        onClick={() => setShowSavedMasksModal(true)}
                                     >
                                         Or choose saved mask
                                     </button>
+                                </div>
+
+                                {/* Change Persona (Optional) */}
+                                <div className="bg-zinc-900 rounded-xl border border-white/10 p-4 mt-6">
+                                    <h3 className="text-white font-semibold mb-2 text-sm">Change Persona (Optional)</h3>
+                                    {!personaImage ? (
+                                        <label className="flex items-center gap-2 p-3 rounded-lg border border-dashed border-zinc-700 bg-zinc-800/30 hover:bg-zinc-800 cursor-pointer transition-colors">
+                                            <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center">
+                                                <ImageIcon className="w-4 h-4 text-zinc-400" />
+                                            </div>
+                                            <span className="text-xs text-zinc-300">Upload Person Photo</span>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => handleImageUpload(e, -100)}
+                                            />
+                                        </label>
+                                    ) : (
+                                        <div className="flex items-center gap-3 p-2 rounded-lg bg-zinc-800 border border-white/5">
+                                            <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10">
+                                                <img src={personaImage} alt="Persona" className="w-full h-full object-cover" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="text-xs text-white font-medium block">Persona Active</span>
+                                            </div>
+                                            <button
+                                                onClick={() => setPersonaImage(null)}
+                                                className="text-zinc-500 hover:text-red-500 transition-colors"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -614,18 +734,14 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
                         </div>
 
                         {/* CENTER COLUMN: Video Preview (Span 6) */}
-                        <div className="lg:col-span-6 flex flex-col">
-                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl h-full flex items-center justify-center">
-                                {template.before_video_url && template.after_video_url ? (
-                                    <BeforeAfterVideoSlider
-                                        beforeVideoUrl={template.before_video_url}
-                                        afterVideoUrl={template.after_video_url}
-                                    />
-                                ) : (
-                                    <div className="aspect-[9/16] bg-zinc-900 flex items-center justify-center text-zinc-500">
-                                        No Preview Available
-                                    </div>
-                                )}
+                        <div className="lg:col-span-6 flex flex-col min-h-[600px]">
+                            <div className="bg-black/50 rounded-xl border border-white/5 overflow-hidden shadow-2xl h-full flex items-center justify-center relative">
+                                <BeforeAfterVideoSlider
+                                    beforeVideoUrl={template.before_video_url}
+                                    afterVideoUrl={template.after_video_url || template.video_url}
+                                    beforeImageUrl={template.before_image_url}
+                                    afterImageUrl={template.after_image_url}
+                                />
                             </div>
                         </div>
 
@@ -719,7 +835,7 @@ export default function RecreatePage({ params }: { params: Promise<{ id: string 
 
                                 {/* Stats/Info Minimal */}
                                 <div className="flex justify-between text-[10px] text-zinc-500 pt-2 border-t border-white/5">
-                                    <span>Cost: <span className="text-white">{estimatedCost}</span></span>
+                                    <span>Cost: <span className="text-orange-400 font-medium">75 credits</span></span>
                                     <span>Est: <span className="text-white">{estimatedTime}</span></span>
                                 </div>
 

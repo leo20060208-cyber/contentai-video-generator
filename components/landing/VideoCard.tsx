@@ -30,13 +30,13 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
     };
 
     return (
-        <Link href={`/recreate/${video.id}`}>
+        <Link href={`/recreate/${video.id}`} prefetch={false}>
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 viewport={{ once: true }}
-                className={`group relative rounded-2xl overflow-hidden bg-zinc-900 ${isLarge ? 'aspect-video md:aspect-[21/9]' : 'aspect-[16/10]'}`}
+                className={`group relative rounded-2xl overflow-hidden bg-black ${isLarge ? 'aspect-[16/7]' : 'aspect-[9/8]'}`}
             >
                 {/* Before/After Split View */}
                 <div className="absolute inset-0 flex">
@@ -45,14 +45,14 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                         {video.beforeVideo ? (
                             <LazyVideo
                                 src={video.beforeVideo}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain"
                             />
                         ) : video.beforeImage ? (
                             <Image
                                 src={video.beforeImage}
                                 alt="Before"
                                 fill
-                                className="object-cover"
+                                className="object-contain"
                                 loading="lazy"
                                 sizes="(max-width: 768px) 50vw, 25vw"
                             />
@@ -65,14 +65,14 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                         {video.afterVideo ? (
                             <LazyVideo
                                 src={video.afterVideo}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain"
                             />
                         ) : video.afterImage ? (
                             <Image
                                 src={video.afterImage}
                                 alt="After"
                                 fill
-                                className="object-cover"
+                                className="object-contain"
                                 loading="lazy"
                                 sizes="(max-width: 768px) 50vw, 25vw"
                             />
@@ -125,11 +125,11 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
                         </button>
                     </div>
 
-                    {/* Recreate Button */}
-                    <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-transparent border border-white/20 hover:bg-white/10 text-white font-medium text-sm transition-colors">
+                    {/* Recreate Button - Using div to avoid nested button issues */}
+                    <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-transparent border border-white/20 group-hover:bg-white/10 text-white font-medium text-sm transition-colors cursor-pointer">
                         <Play className="w-4 h-4 fill-current" />
                         Recreate
-                    </button>
+                    </div>
                 </div>
             </motion.div>
         </Link>

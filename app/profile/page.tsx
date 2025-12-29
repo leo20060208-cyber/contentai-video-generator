@@ -151,6 +151,16 @@ const VideoCard = ({ video, onDelete, onPlay }: VideoCardProps) => {
                     >
                         <Play className="w-5 h-5 text-white ml-0.5" />
                     </button>
+                    <a
+                        href={video.video_url || '#'}
+                        download={`video-${video.id}.mp4`}
+                        target="_blank"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-zinc-100 transition-colors shadow-lg"
+                        title="Descargar"
+                    >
+                        <Download className="w-4 h-4 text-zinc-900" />
+                    </a>
                     <button
                         onClick={() => onDelete(video.id)}
                         className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg"
@@ -463,7 +473,7 @@ export default function ProfilePage() {
                                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                                 {savedTemplates.map((template) => {
                                                     return (
-                                                        <Link key={template.id} href={`/recreate/${template.id}`} className="block group">
+                                                        <Link key={template.id} href={`/recreate/${template.id}`} prefetch={false} className="block group">
                                                             <motion.div
                                                                 whileHover={{ scale: 1.02 }}
                                                                 className="bg-zinc-900 rounded-2xl border border-white/5 overflow-hidden shadow-sm hover:shadow-md transition-all"
@@ -477,10 +487,7 @@ export default function ProfilePage() {
                                                                     />
                                                                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-                                                                    <div className="absolute bottom-3 left-3 flex items-center gap-1 text-white/90">
-                                                                        <Eye className="w-3 h-3" />
-                                                                        <span className="text-xs">{template.views_count}</span>
-                                                                    </div>
+
                                                                 </div>
                                                                 <div className="p-4 text-left">
                                                                     <h3 className="text-white font-semibold text-sm mb-1 truncate">{template.title}</h3>

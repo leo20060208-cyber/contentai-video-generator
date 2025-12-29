@@ -1,23 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import { CreateYoursModal } from '@/components/CreateYoursModal';
+import { CreateYoursFlow } from '@/components/create-yours/CreateYoursFlow';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { useRouter } from 'next/navigation';
 
 export default function CreateYoursPage() {
-    const [isModalOpen, setIsModalOpen] = useState(true);
+    const router = useRouter();
 
     return (
         <ProtectedRoute>
-            <div className="min-h-screen bg-zinc-950 pt-20">
-                <CreateYoursModal
-                    isOpen={isModalOpen}
-                    onClose={() => {
-                        setIsModalOpen(false);
-                        // Redirect to library when closed
-                        window.location.href = '/library';
-                    }}
-                />
+            <div className="min-h-screen bg-zinc-950 pt-24 pb-12 px-4">
+                <CreateYoursFlow onCancel={() => router.back()} />
             </div>
         </ProtectedRoute>
     );
