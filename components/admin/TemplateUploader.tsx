@@ -37,6 +37,7 @@ export function TemplateUploader({
     // Basic Info
     const [title, setTitle] = useState(initialData?.title || '');
     const [category, setCategory] = useState(initialData?.category || 'VISUAL');
+    const [allowedTiers, setAllowedTiers] = useState<string[]>(initialData?.allowed_tiers || ['normal', 'pro']);
 
     // Generation Method & Model
     const [generationMethod, setGenerationMethod] = useState<GenerationMethod>('video_to_video');
@@ -45,15 +46,29 @@ export function TemplateUploader({
     const isVideoEdit = aiModel === 'kwaivgi/kling-video-o1/video-edit';
     const isOriginal = aiModel === 'wavespeed-kling-o1';
 
+    // Template Type
+    const [templateType, setTemplateType] = useState<'video' | 'image'>(initialData?.type || ((initialData?.id && !initialData?.before_video_url) ? 'image' : 'video'));
+
+    const isVideoTemplate = templateType === 'video';
+    const isImageTemplate = templateType === 'image';
+
     // Video Files (New Uploads)
     const [beforeVideo, setBeforeVideo] = useState<File | null>(null);
     const [beforeThumb, setBeforeThumb] = useState<Blob | null>(null);
     const [afterVideo, setAfterVideo] = useState<File | null>(null);
     const [afterThumb, setAfterThumb] = useState<Blob | null>(null);
 
+    // Image Files (New Uploads)
+    const [beforeImage, setBeforeImage] = useState<File | null>(null);
+    const [afterImage, setAfterImage] = useState<File | null>(null);
+    const [productImage, setProductImage] = useState<File | null>(null);
+
     // Existing URLs (for Editing)
-    const [existingBeforeUrl, setExistingBeforeUrl] = useState<string | null>(initialData?.before_video_url || null);
-    const [existingAfterUrl, setExistingAfterUrl] = useState<string | null>(initialData?.after_video_url || null);
+    const [existingBeforeUrl, setExistingBeforeUrl] = useState<string | null>(initialData?.before_video_url || initialData?.before_image_url || null);
+    const [existingAfterUrl, setExistingAfterUrl] = useState<string | null>(initialData?.after_video_url || initialData?.after_image_url || null);
+    const [existingProductImageUrl, setExistingProductImageUrl] = useState<string | null>(initialData?.product_image_url || null);
+    const [productOutlineImage, setProductOutlineImage] = useState<File | null>(null);
+    const [existingProductOutlineImageUrl, setExistingProductOutlineImageUrl] = useState<string | null>(initialData?.product_outline_image_url || null);
 
     // Method-specific fields
     const [refImageStart, setRefImageStart] = useState<File | null>(null);
@@ -110,6 +125,7 @@ export function TemplateUploader({
         description: string;
         isRequired: boolean;
         timeRange: { startSecond: number; endSecond: number } | null;
+        type?: 'product' | 'person';
     }
     const [productSlots, setProductSlots] = useState<ProductSlotData[]>(
         initialData?.product_slots || []
@@ -165,9 +181,18 @@ export function TemplateUploader({
                 setBeforeThumb(thumb);
                 if (duration) {
                     setVideoDuration(duration);
+                    setMaskStart(0);
                     setMaskEnd(duration);
                     setGenEnd(duration);
                 }
+
+                // Auto-open Segmentation for Reference Video
+                if (thumb) {
+                    const url = URL.createObjectURL(thumb);
+                    setSegmentSource(url);
+                    setShowSegmentModal(true);
+                }
+
             } else if (type === 'after') {
                 setAfterVideo(file);
                 setExistingAfterUrl(null);
@@ -175,6 +200,54 @@ export function TemplateUploader({
             } else if (type === 'template') {
                 setTemplateVideo(file);
             }
+        }
+    };
+
+    const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload an image file');
+                return;
+            }
+
+            if (type === 'before') {
+                setBeforeImage(file);
+                setExistingBeforeUrl(null);
+
+                // Auto-open Segmentation for Reference Image
+                const url = URL.createObjectURL(file);
+                setSegmentSource(url);
+                setShowSegmentModal(true);
+
+            } else if (type === 'after') {
+                setAfterImage(file);
+                setExistingAfterUrl(null);
+            }
+        }
+    };
+
+    const handleProductImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload an image file');
+                return;
+            }
+            setProductImage(file);
+            setExistingProductImageUrl(null);
+        }
+    };
+
+    const handleProductOutlineImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload an image file');
+                return;
+            }
+            setProductOutlineImage(file);
+            setExistingProductOutlineImageUrl(null);
         }
     };
 
@@ -244,8 +317,8 @@ export function TemplateUploader({
         e.preventDefault();
 
         // Validation: Must have EITHER a new file OR an existing URL
-        const hasBefore = beforeVideo || existingBeforeUrl;
-        const hasAfter = afterVideo || existingAfterUrl;
+        const hasBefore = (templateType === 'video' ? (beforeVideo || existingBeforeUrl) : (beforeImage || existingBeforeUrl));
+        const hasAfter = (templateType === 'video' ? (afterVideo || existingAfterUrl) : (afterImage || existingAfterUrl));
 
         // Offline mode check
         if (!isSupabaseConfigured) {
@@ -260,25 +333,44 @@ export function TemplateUploader({
 
         setIsUploading(true);
         try {
-            // Upload only if new file exists
-            let beforeVideoUrl = existingBeforeUrl;
-            if (beforeVideo) {
-                beforeVideoUrl = await uploadFile(beforeVideo, 'templates/videos');
+            let beforeContentUrl = existingBeforeUrl;
+            let afterContentUrl = existingAfterUrl;
+
+            // Upload Video Files or Image Files
+            if (templateType === 'video') {
+                if (beforeVideo) beforeContentUrl = await uploadFile(beforeVideo, 'templates/videos');
+                if (afterVideo) afterContentUrl = await uploadFile(afterVideo, 'templates/videos');
+            } else {
+                if (beforeImage) beforeContentUrl = await uploadFile(beforeImage, 'templates/images');
+                if (afterImage) afterContentUrl = await uploadFile(afterImage, 'templates/images');
             }
 
-            let afterVideoUrl = existingAfterUrl;
-            if (afterVideo) {
-                afterVideoUrl = await uploadFile(afterVideo, 'templates/videos');
+            console.log('Product image upload check:', productImage, existingProductImageUrl);
+            let productImgUrl = existingProductImageUrl;
+            if (productImage) {
+                productImgUrl = await uploadFile(productImage, 'templates/images');
             }
 
-            // Thumbs - Only upload if new video matches (logic simplified)
-            const beforeImgUrl = beforeThumb
-                ? await uploadFile(beforeThumb, 'templates/images')
-                : initialData?.before_image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff';
+            console.log('Product outline image upload check:', productOutlineImage, existingProductOutlineImageUrl);
+            let productOutlineImgUrl = existingProductOutlineImageUrl;
+            if (productOutlineImage) {
+                productOutlineImgUrl = await uploadFile(productOutlineImage, 'templates/images');
+            }
 
-            const afterImgUrl = afterThumb
-                ? await uploadFile(afterThumb, 'templates/images')
-                : initialData?.after_image_url || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff';
+            // Thumbs - Only relevant for 'video' really, or as defaults.
+            // For Images, the content URL is the thumb URL.
+            let beforeImgUrl = beforeContentUrl;
+            let afterImgUrl = afterContentUrl;
+
+            if (templateType === 'video') {
+                if (beforeThumb) beforeImgUrl = await uploadFile(beforeThumb, 'templates/images');
+                else if (initialData?.before_image_url) beforeImgUrl = initialData.before_image_url;
+                else beforeImgUrl = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff'; // Placeholder
+
+                if (afterThumb) afterImgUrl = await uploadFile(afterThumb, 'templates/images');
+                else if (initialData?.after_image_url) afterImgUrl = initialData.after_image_url;
+                else afterImgUrl = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff'; // Placeholder
+            }
 
             let maskStorageUrl = initialData?.replaced_object_mask_url || null;
             if (maskBlob) {
@@ -288,24 +380,41 @@ export function TemplateUploader({
             const templateData: any = {
                 title,
                 category,
+                // Shared fields mapped:
+                // For images, we just use same columns. video_url can store image url if needed but we prefer standard columns.
+                // Assuming schema has before_image_url and after_image_url.
+
+                // CRITICAL FIX: Explicitly NULL out video fields if it is an image template
                 before_image_url: beforeImgUrl,
                 after_image_url: afterImgUrl,
-                before_video_url: beforeVideoUrl,
-                after_video_url: afterVideoUrl,
+                before_video_url: templateType === 'video' ? beforeContentUrl : null,
+                after_video_url: templateType === 'video' ? afterContentUrl : null,
+
+                // Explicit type storage
+                type: templateType,
+
                 replaced_object_mask_url: maskStorageUrl,
                 required_image_count: productSlots.length > 0 ? productSlots.filter(s => s.isRequired).length : requiredImageCount,
                 image_descriptions: productSlots.length > 0 ? productSlots.map(s => s.name) : imageDescriptions,
                 image_instructions: imageInstructions,
-                product_slots: productSlots.length > 0 ? productSlots : null,
-                description: transformationPrompt, // Save prompt
+                description: transformationPrompt,
+                hidden_prompt: transformationPrompt, // Save prompt for image recreation
                 ai_model: aiModel,
+
                 clean_background_url: await (async () => {
                     if (cleanBackground) {
                         return await uploadFile(cleanBackground, 'templates/images');
                     }
                     return existingCleanBackgroundUrl;
                 })(),
-                // ... other fields if needed
+
+                // Original Product Image
+                product_image_url: productImgUrl,
+                // Marked Product Image
+                product_outline_image_url: productOutlineImgUrl,
+
+                // Allowed Tiers
+                allowed_tiers: allowedTiers,
             };
 
             // ALWAYS set is_trending (for both INSERT and UPDATE)
@@ -339,6 +448,8 @@ export function TemplateUploader({
                 setTitle('');
                 setBeforeVideo(null);
                 setAfterVideo(null);
+                setBeforeImage(null);
+                setAfterImage(null);
                 setReplacedObjectMask(null);
                 setInternalIsOpen(false);
             } else {
@@ -389,10 +500,29 @@ export function TemplateUploader({
                             </button>
 
                             <h2 className="text-2xl font-bold text-white mb-6">
-                                {initialData ? 'Edit Video Template' : 'Add Video Template'}
+                                {initialData ? 'Edit Template' : 'Add Template'}
                             </h2>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
+
+                                {/* Template TYPE Selector */}
+                                <div className="flex bg-zinc-800 p-1 rounded-lg w-fit">
+                                    <button
+                                        type="button"
+                                        onClick={() => setTemplateType('video')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${templateType === 'video' ? 'bg-zinc-700 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                                    >
+                                        Video Template
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTemplateType('image')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${templateType === 'image' ? 'bg-zinc-700 text-white shadow' : 'text-zinc-400 hover:text-white'}`}
+                                    >
+                                        Image Template
+                                    </button>
+                                </div>
+
                                 {/* Basic Info */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -434,52 +564,155 @@ export function TemplateUploader({
                                     </div>
                                 </div>
 
-                                {/* AI Model Selection */}
-                                <div>
-                                    <label className="block text-xs text-zinc-400 mb-2">AI Model *</label>
-                                    <select
-                                        value={aiModel}
-                                        onChange={e => setAiModel(e.target.value as AIModel)}
-                                        className="w-full bg-zinc-800 rounded-lg border border-white/5 p-3 text-white text-sm focus:outline-none focus:border-orange-500"
-                                    >
-                                        <optgroup label="✨ REFINED (Standard High Quality)">
-                                            <option value="wavespeed-kling-o1">Kling Original (Smart Refinement)</option>
-                                        </optgroup>
-                                        <optgroup label="📹 VIDEO EDIT (Video-to-Video)">
-                                            <option value="kwaivgi/kling-video-o1/video-edit">Kling Video Edit (Source + Product)</option>
-                                        </optgroup>
-                                        <optgroup label="📸 MULTI-REF (Reference-to-Video)">
-                                            <option value="kwaivgi/kling-video-o1/reference-to-video">Kling Multi-Ref (3D Identity)</option>
-                                        </optgroup>
-                                    </select>
-                                    <div className="mt-2 flex items-center gap-2 text-xs">
-                                        <DollarSign className="w-4 h-4 text-orange-500" />
-                                        <span className="text-zinc-400">Estimated cost: <span className="text-orange-500 font-semibold">{estimatedCost.toFixed(2)} credits</span> (5 sec video)</span>
+                                {/* Allowed Tiers Selection - IMAGES ONLY */}
+                                {templateType === 'image' && (
+                                    <div className="bg-zinc-800/50 p-4 rounded-lg border border-white/5">
+                                        <label className="block text-xs text-zinc-400 mb-2">Allowed Generation Tiers</label>
+                                        <div className="flex gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allowedTiers.includes('normal')}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setAllowedTiers([...allowedTiers, 'normal']);
+                                                        } else {
+                                                            // Prevent unchecking both
+                                                            if (allowedTiers.length > 1) {
+                                                                setAllowedTiers(allowedTiers.filter(t => t !== 'normal'));
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-white/10 bg-zinc-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0"
+                                                />
+                                                <span className="text-sm text-white">Normal (6 Credits)</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allowedTiers.includes('pro')}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setAllowedTiers([...allowedTiers, 'pro']);
+                                                        } else {
+                                                            // Prevent unchecking both
+                                                            if (allowedTiers.length > 1) {
+                                                                setAllowedTiers(allowedTiers.filter(t => t !== 'pro'));
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-white/10 bg-zinc-800 text-pink-500 focus:ring-pink-500 focus:ring-offset-0"
+                                                />
+                                                <span className="text-sm text-white">Pro (18 Credits)</span>
+                                            </label>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Always Required: Before & After Videos */}
+                                {/* AI Model Selection - ONLY FOR VIDEO */}
+                                {templateType === 'video' && (
+                                    <div>
+                                        <label className="block text-xs text-zinc-400 mb-2">AI Model *</label>
+                                        <select
+                                            value={aiModel}
+                                            onChange={e => setAiModel(e.target.value as AIModel)}
+                                            className="w-full bg-zinc-800 rounded-lg border border-white/5 p-3 text-white text-sm focus:outline-none focus:border-orange-500"
+                                        >
+                                            <optgroup label="✨ REFINED (Standard High Quality)">
+                                                <option value="wavespeed-kling-o1">Kling Original (Smart Refinement)</option>
+                                            </optgroup>
+                                            <optgroup label="📹 VIDEO EDIT (Video-to-Video)">
+                                                <option value="kwaivgi/kling-video-o1/video-edit">Kling Video Edit (Source + Product)</option>
+                                            </optgroup>
+                                            <optgroup label="📸 MULTI-REF (Reference-to-Video)">
+                                                <option value="kwaivgi/kling-video-o1/reference-to-video">Kling Multi-Ref (3D Identity)</option>
+                                            </optgroup>
+                                        </select>
+                                        <div className="mt-2 flex items-center gap-2 text-xs">
+                                            <DollarSign className="w-4 h-4 text-orange-500" />
+                                            <span className="text-zinc-400">Estimated cost: <span className="text-orange-500 font-semibold">{estimatedCost.toFixed(2)} credits</span> (5 sec video)</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Always Required: Before & After Inputs */}
                                 <div>
-                                    <label className="block text-sm font-semibold text-white mb-3">Before & After Videos (Required)</label>
+                                    <label className="block text-sm font-semibold text-white mb-3">Before & After {templateType === 'video' ? 'Videos' : 'Images'} (Required)</label>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <VideoUpload
-                                            label="Before Video"
-                                            video={beforeVideo}
-                                            existingUrl={existingBeforeUrl}
-                                            onChange={(e) => handleVideoFile(e, 'before')}
-                                            onDefineObject={isOriginal ? openSegmentation : undefined}
-                                        />
-                                        <VideoUpload
-                                            label="After Video"
-                                            video={afterVideo}
-                                            existingUrl={existingAfterUrl}
-                                            onChange={(e) => handleVideoFile(e, 'after')}
+                                        {templateType === 'video' ? (
+                                            <>
+                                                <VideoUpload
+                                                    label="Before Video"
+                                                    video={beforeVideo}
+                                                    existingUrl={existingBeforeUrl}
+                                                    onChange={(e) => handleVideoFile(e, 'before')}
+                                                    onDefineObject={isOriginal ? openSegmentation : undefined}
+                                                />
+                                                <VideoUpload
+                                                    label="After Video"
+                                                    video={afterVideo}
+                                                    existingUrl={existingAfterUrl}
+                                                    onChange={(e) => handleVideoFile(e, 'after')}
+                                                />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ImageUpload
+                                                    label="Before Image"
+                                                    image={beforeImage}
+                                                    existingUrl={existingBeforeUrl}
+                                                    onChange={(e) => handleImageFile(e, 'before')}
+                                                />
+                                                <ImageUpload
+                                                    label="After Image"
+                                                    image={afterImage}
+                                                    existingUrl={existingAfterUrl}
+                                                    onChange={(e) => handleImageFile(e, 'after')}
+                                                />
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Product Image (Optional - for Before/After Toggle) */}
+                                <div className="p-4 bg-zinc-800/30 border border-white/5 rounded-lg">
+                                    <label className="block text-sm font-semibold text-white mb-3">Original Product Image (Optional)</label>
+                                    <p className="text-xs text-zinc-400 mb-3">
+                                        Upload the product image used to create this result.
+                                        This enables the "Reference vs Product" toggle in the Recreate page.
+                                    </p>
+                                    <div className="w-1/2">
+                                        <ImageUpload
+                                            label="Product Image"
+                                            image={productImage}
+                                            existingUrl={existingProductImageUrl}
+                                            onChange={handleProductImage}
                                         />
                                     </div>
                                 </div>
 
-                                {/* Mask Detection Result Preview */}
-                                {replacedObjectMask && (
+                                {/* Marked Product Image (Optional - for AI Context) */}
+                                <div className="p-4 bg-zinc-800/30 border border-white/5 rounded-lg">
+                                    <label className="block text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                                        Marked Product Image (Optional)
+                                        <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full uppercase tracking-wider">AI Context</span>
+                                    </label>
+                                    <p className="text-xs text-zinc-400 mb-3">
+                                        Upload an image with the product underlined or highlighted.
+                                        This helps the AI understand exactly where the product is in the scene.
+                                    </p>
+                                    <div className="w-1/2">
+                                        <ImageUpload
+                                            label="Marked Image (Underlined)"
+                                            image={productOutlineImage}
+                                            existingUrl={existingProductOutlineImageUrl}
+                                            onChange={handleProductOutlineImage}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Mask Detection Result Preview (Video Only usually) */}
+                                {isOriginal && templateType === 'video' && replacedObjectMask && (
                                     <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
                                         <div className="flex items-start gap-4">
                                             {/* Mask Preview Image */}
@@ -512,8 +745,8 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Mask Timing (Green Highlight Duration) - Only for Original */}
-                                {isOriginal && beforeVideo && (
+                                {/* Mask Timing (Green Highlight Duration) - Only for Original Video */}
+                                {isOriginal && templateType === 'video' && beforeVideo && (
                                     <div className="mt-4 bg-zinc-800/50 p-3 rounded-lg border border-white/5">
                                         <label className="block text-xs text-zinc-400 mb-2">Mask Active Duration (Green Overlay Impact)</label>
                                         <div className="flex items-center gap-4">
@@ -578,7 +811,8 @@ export function TemplateUploader({
                                                     name: `Product ${productSlots.length + 1}`,
                                                     description: '',
                                                     isRequired: true,
-                                                    timeRange: null
+                                                    timeRange: null,
+                                                    type: 'product'
                                                 };
                                                 setProductSlots([...productSlots, newSlot]);
                                             }}
@@ -620,6 +854,34 @@ export function TemplateUploader({
                                                             <Trash2 className="w-3 h-3" />
                                                         </button>
                                                     </div>
+                                                    {/* Slot Type Selector */}
+                                                    <div className="flex items-center gap-2 pl-6">
+                                                        <span className="text-[10px] text-zinc-500">Type:</span>
+                                                        <div className="flex bg-black/40 rounded p-0.5 border border-zinc-700">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newSlots = [...productSlots];
+                                                                    newSlots[idx].type = 'product';
+                                                                    setProductSlots(newSlots);
+                                                                }}
+                                                                className={`text-[10px] px-2 py-0.5 rounded transition-colors ${!slot.type || slot.type === 'product' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                            >
+                                                                Product
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newSlots = [...productSlots];
+                                                                    newSlots[idx].type = 'person';
+                                                                    setProductSlots(newSlots);
+                                                                }}
+                                                                className={`text-[10px] px-2 py-0.5 rounded transition-colors ${slot.type === 'person' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                            >
+                                                                Person
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-center gap-3 flex-wrap pl-6">
                                                         <label className="flex items-center gap-1 cursor-pointer">
                                                             <input
@@ -634,21 +896,23 @@ export function TemplateUploader({
                                                             />
                                                             <span className="text-[10px] text-zinc-400">Required</span>
                                                         </label>
-                                                        <label className="flex items-center gap-1 cursor-pointer">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={slot.timeRange !== null}
-                                                                onChange={(e) => {
-                                                                    const newSlots = [...productSlots];
-                                                                    newSlots[idx].timeRange = e.target.checked ? { startSecond: 0, endSecond: 5 } : null;
-                                                                    setProductSlots(newSlots);
-                                                                }}
-                                                                className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-blue-500"
-                                                            />
-                                                            <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
-                                                                <Clock className="w-2.5 h-2.5" /> Time
-                                                            </span>
-                                                        </label>
+                                                        {templateType === 'video' && (
+                                                            <label className="flex items-center gap-1 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={slot.timeRange !== null}
+                                                                    onChange={(e) => {
+                                                                        const newSlots = [...productSlots];
+                                                                        newSlots[idx].timeRange = e.target.checked ? { startSecond: 0, endSecond: 5 } : null;
+                                                                        setProductSlots(newSlots);
+                                                                    }}
+                                                                    className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-blue-500"
+                                                                />
+                                                                <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
+                                                                    <Clock className="w-2.5 h-2.5" /> Time
+                                                                </span>
+                                                            </label>
+                                                        )}
                                                         {slot.timeRange && (
                                                             <div className="flex items-center gap-1">
                                                                 <input
@@ -688,16 +952,10 @@ export function TemplateUploader({
                                             ))}
                                         </div>
                                     )}
-
-                                    {productSlots.length > 0 && (
-                                        <p className="text-[10px] text-zinc-600">
-                                            {productSlots.filter(s => s.isRequired).length} required, {productSlots.filter(s => !s.isRequired).length} optional
-                                        </p>
-                                    )}
                                 </div>
 
-                                {/* Advanced Assets (Clean Plate) - Only for Original/Refined */}
-                                {isOriginal && (
+                                {/* Advanced Assets (Clean Plate) - Only for Original/Refined & Video */}
+                                {isOriginal && templateType === 'video' && (
                                     <div className="mt-4 bg-zinc-800/50 p-4 rounded-lg border border-white/5 space-y-4">
                                         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                                             <Sparkles className="w-4 h-4 text-yellow-500" />
@@ -718,6 +976,8 @@ export function TemplateUploader({
 
                                             <ImageUpload
                                                 label={cleanBackground ? cleanBackground.name : "Upload Clean Frame"}
+                                                image={cleanBackground}
+                                                className="aspect-[9/16]"
                                                 onChange={(e) => {
                                                     if (e.target.files?.[0]) setCleanBackground(e.target.files[0]);
                                                 }}
@@ -726,14 +986,14 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Simplified Single Workflow Fields */}
+                                {/* Recreation Details */}
                                 <div className="space-y-4 border-t border-zinc-800 pt-4">
                                     <h3 className="text-sm font-semibold text-white">Recreation Details</h3>
 
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="block text-xs text-zinc-400">{isVideoEdit ? 'Base Context (Optional)' : 'AI Prompt (Auto-Generated)'}</label>
-                                            {!isVideoEdit && (
+                                            {!isVideoEdit && templateType === 'video' && (
                                                 <button
                                                     type="button"
                                                     onClick={() => generatePrompt()}
@@ -767,12 +1027,11 @@ export function TemplateUploader({
                                         </>
                                     )}
                                 </Button>
-                            </form >
-                        </motion.div >
-                    </motion.div >
-                )
-                }
-            </AnimatePresence >
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <SegmentationModal
                 isOpen={showSegmentModal}
@@ -829,12 +1088,31 @@ function VideoUpload({ label, video, existingUrl, onChange, onDefineObject }: { 
     );
 }
 
-function ImageUpload({ label, onChange }: { label: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void }) {
+function ImageUpload({ label, image, existingUrl, onChange, className }: { label: string; image: File | null; existingUrl?: string | null; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, className?: string }) {
+    const showPreview = image || existingUrl;
+    const previewSrc = image ? URL.createObjectURL(image) : existingUrl;
+
     return (
         <div>
             <label className="block text-xs text-zinc-400 mb-1">{label}</label>
-            <div className="relative aspect-square bg-zinc-800 rounded-lg border-2 border-dashed border-white/10 hover:border-orange-500/50 transition-colors flex items-center justify-center">
-                <Upload className="w-6 h-6 text-zinc-600" />
+            <div className={`relative ${className || 'aspect-square'} bg-zinc-800 rounded-lg border-2 border-dashed border-white/10 hover:border-orange-500/50 transition-colors flex items-center justify-center overflow-hidden group`}>
+                {showPreview ? (
+                    <div className="absolute inset-0">
+                        <img
+                            src={previewSrc!}
+                            className="w-full h-full object-cover"
+                            alt="Preview"
+                        />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <span className="text-xs text-white">Click to change</span>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center p-2">
+                        <Upload className="w-6 h-6 text-zinc-600 mx-auto mb-2" />
+                        <span className="text-[10px] text-zinc-500">Upload Image</span>
+                    </div>
+                )}
                 <input type="file" onChange={onChange} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" />
             </div>
         </div>

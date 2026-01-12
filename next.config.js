@@ -29,6 +29,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: '*.supabase.in',
       },
+      {
+        protocol: 'https',
+        hostname: 'd1q70pf5vjeyhc.cloudfront.net',
+      },
     ],
     // Optimize image loading
     deviceSizes: [640, 750, 828, 1080, 1200],

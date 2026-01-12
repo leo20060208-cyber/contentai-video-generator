@@ -155,12 +155,14 @@ export interface ProductSlot {
         endSecond: number;
     };
     defaultPromptPart?: string;
+    type?: 'product' | 'person';
 }
 
 export interface Template {
     id: number;
     title: string;
     category: string;
+    type?: 'video' | 'image';
     before_image_url: string;
     after_image_url: string;
     before_video_url?: string | null;
@@ -185,6 +187,7 @@ export interface Template {
     template_video_url?: string;
     estimated_cost_credits?: number; // Estimated cost in credits
     replaced_object_mask_url?: string; // URL of the mask defining the object to replace
+    mask_video_url?: string;
     hidden_prompt?: string;
     description?: string;
 
@@ -199,6 +202,14 @@ export interface Template {
 
     // Product Slots - Time-based product configuration
     product_slots?: ProductSlot[];
+
+    // Original Product Image (used for generating the result)
+    product_image_url?: string;
+    // Marked Product Image (with underlined products for AI)
+    product_outline_image_url?: string;
+
+    // Allowed Tiers Configuration
+    allowed_tiers?: string[]; // e.g. ['normal', 'pro']
 }
 
 // Mock data removed as per user request
@@ -211,24 +222,17 @@ export async function getTemplates(): Promise<Template[]> {
         .order('id', { ascending: true });
 
     if (error) {
-        // Suppress generic "Failed to fetch" errors which just mean Supabase is unreachable/offline
-        const isNetworkError =
-            error.message?.includes('fetch') ||
-            error.message?.includes('network') ||
-            // Supabase 500s can sometimes look like this if the URL is invalid
-            (typeof error.details === 'string' && error.details.includes('fetch'));
-
-        if (isNetworkError) {
-            console.warn('⚠️ Supabase unreachable (Offline Mode).');
-        } else {
-            console.warn('⚠️ Supabase getTemplates failed.');
-            console.error('Error message:', error.message);
-        }
+        console.error('❌ Supabase getTemplates error details:', JSON.stringify(error, null, 2));
         return [];
     }
 
-    // Filter out known fake templates by title
-    const FAKE_TITLES = [
+    console.log('✅ Supabase getTemplates data length:', data?.length);
+    if (data && data.length > 0) {
+        console.log('Sample template:', data[0].title);
+    }
+
+    // Filter out known fake templates by title and System/Hero templates
+    const BLACKLIST_TITLES = [
         'Product Showcase',
         'Unboxing Experience',
         'Skincare Routine',
@@ -239,13 +243,26 @@ export async function getTemplates(): Promise<Template[]> {
         'Makeup Tutorial',
         'Dropship Winner',
         'Street Style',
-        'Before & After'
+        'Before & After',
+        'Hero Video',
+        'Hero Image',
+        'Hero Library'
     ];
 
-    const cleanData = (data || []).filter(t => !FAKE_TITLES.includes(t.title));
+    const cleanData = (data || []).filter(t => {
+        // Filter out titles in blacklist
+        if (BLACKLIST_TITLES.includes(t.title)) return false;
+
+        // Filter out strict Hero templates (identified by description tag)
+        if (t.description && (t.description.includes('[HERO_VIDEO]') || t.description.includes('[HERO_IMAGE]') || t.description.includes('[HERO_LIBRARY]'))) {
+            return false;
+        }
+
+        return true;
+    });
 
     if (cleanData.length === 0) {
-        console.log("No templates found in DB.");
+        console.log("No templates found in DB after cleaning.");
         return [];
     }
 
@@ -262,6 +279,194 @@ export async function deleteTemplate(id: number): Promise<boolean> {
         console.error('Error deleting template:', error);
         return false;
     }
+    return true;
+}
+
+export async function setHeroTemplate(id: number, type: 'video' | 'image'): Promise<boolean> {
+    // First, clear existing hero of this type
+    const tag = `[HERO_${type.toUpperCase()}]`;
+    const { data: allTemplates } = await supabase.from('templates').select('*');
+
+    if (allTemplates) {
+        for (const t of allTemplates) {
+            if (t.description?.includes(tag)) {
+                const newDesc = t.description.replace(tag, '').trim();
+                await supabase.from('templates').update({ description: newDesc }).eq('id', t.id);
+            }
+        }
+    }
+
+    // Set new hero
+    const calculateNewDescription = (currentDesc: string | null) => {
+        const clean = (currentDesc || '').trim();
+        return `${clean} ${tag}`;
+    };
+
+    // Fetch current description to append
+    const { data: current } = await supabase.from('templates').select('description').eq('id', id).single();
+    if (!current) return false;
+
+    const { error } = await supabase
+        .from('templates')
+        .update({ description: calculateNewDescription(current.description) })
+        .eq('id', id);
+
+    if (error) {
+        console.error(`Error setting hero ${type}:`, error);
+        return false;
+    }
+    return true;
+}
+
+export async function getHeroTemplate(type: 'video' | 'image' | 'library'): Promise<Template | null> {
+    const tag = `[HERO_${type.toUpperCase()}]`;
+    const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .ilike('description', `%${tag}%`)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+        console.warn(`getHeroTemplate ${type} error:`, error);
+        return null;
+    }
+    return data;
+}
+
+export async function setHeroFromTask(taskId: string, type: 'video' | 'image', coverUrl?: string): Promise<boolean> {
+    // 1. Get the video from the task_id
+    const { data: videoData, error: videoError } = await supabase
+        .from('videos')
+        .select('*')
+        .eq('task_id', taskId)
+        .single();
+
+    if (videoError || !videoData) {
+        console.error('Error fetching video from task:', videoError);
+        return false;
+    }
+
+    const { video_url } = videoData;
+    if (!video_url) return false;
+
+    // 2. Find or Create the Hero Template
+    let heroTemplate = await getHeroTemplate(type);
+
+    if (!heroTemplate) {
+        // Create new if doesn't exist
+        const tag = `[HERO_${type.toUpperCase()}]`;
+        const { data: newTemplate, error: createError } = await supabase
+            .from('templates')
+            .insert([{
+                title: `Hero ${type === 'video' ? 'Video' : 'Image'}`,
+                category: 'VISUAL',
+                before_image_url: coverUrl || '',
+                after_image_url: coverUrl || '',
+                description: `Generated from Lab. ${tag}`,
+                views_count: '0',
+                is_trending: false
+            }])
+            .select()
+            .single();
+
+        if (createError || !newTemplate) {
+            console.error('Error creating hero template:', createError);
+            return false;
+        }
+        heroTemplate = newTemplate;
+    }
+
+    // 3. Update the template with the new content
+    const updates: any = {};
+    if (type === 'video') {
+        updates.after_video_url = video_url;
+        if (coverUrl) updates.after_image_url = coverUrl;
+    } else {
+        // Image mode
+        if (coverUrl) updates.after_image_url = coverUrl;
+        else updates.after_image_url = video_url;
+    }
+
+    if (!heroTemplate) return false;
+
+    const { error: updateError } = await supabase
+        .from('templates')
+        .update(updates)
+        .eq('id', heroTemplate.id);
+
+    if (updateError) {
+        console.error('Error updating hero template:', updateError);
+        return false;
+    }
+
+    return true;
+}
+
+export async function updateHeroContent(url: string, type: 'video' | 'image' | 'library'): Promise<boolean> {
+    // 1. Find or Create the Hero Template
+    let heroTemplate = await getHeroTemplate(type);
+
+    if (!heroTemplate) {
+        // Create new if doesn't exist
+        const tag = `[HERO_${type.toUpperCase()}]`;
+        const title = type === 'library' ? 'Hero Library' : type === 'video' ? 'Hero Video' : 'Hero Image';
+
+        const { data: newTemplate, error: createError } = await supabase
+            .from('templates')
+            .insert([{
+                title: title,
+                category: 'VISUAL',
+                before_image_url: url, // Use the uploaded URL as thumbnail/cover
+                after_image_url: url,
+                after_video_url: type === 'video' || type === 'library' ? url : null, // Library can be video too
+                description: `Uploaded from Lab. ${tag}`,
+                views_count: '0',
+                is_trending: false
+            }])
+            .select()
+            .single();
+
+        if (createError || !newTemplate) {
+            console.error('Error creating hero template:', createError);
+            return false;
+        }
+        heroTemplate = newTemplate;
+    }
+
+    if (!heroTemplate) return false;
+
+    // 2. Update the template with the new content
+    const updates: any = {};
+    if (type === 'video') {
+        updates.after_video_url = url;
+        updates.after_image_url = url;
+    } else if (type === 'library') {
+        // Library can be image or video depending on valid url extension, but we save to both for flexibility
+        // If it's a video file type:
+        if (url.match(/\.(mp4|webm|mov)$/i)) {
+            updates.after_video_url = url;
+            updates.after_image_url = url; // thumb
+        } else {
+            updates.after_image_url = url;
+            updates.before_image_url = url;
+        }
+    } else {
+        // Image mode
+        updates.after_image_url = url;
+        updates.before_image_url = url;
+    }
+
+    const { error: updateError } = await supabase
+        .from('templates')
+        .update(updates)
+        .eq('id', heroTemplate.id);
+
+    if (updateError) {
+        console.error('Error updating hero template:', updateError);
+        return false;
+    }
+
     return true;
 }
 

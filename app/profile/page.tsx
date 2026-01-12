@@ -1,793 +1,871 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
-import {
-    User,
-    Mail,
-    CreditCard,
-    Settings,
-    Video as VideoIcon,
-    Crown,
-    Check,
-    Clock,
-    Eye,
-    Zap,
-    Calendar,
-    BarChart3,
-    LogOut,
-    Sparkles,
-    Trash2,
-    Download,
-    ImageIcon,
-    Play
-} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { useState, useEffect } from 'react';
+import { getUserVideos, getSavedTemplatesWithData, Video, Template, deleteVideo } from '@/lib/db/videos';
+import { getUserMasks, UserMask } from '@/lib/db/masks';
+import { VideoCard } from '@/components/landing/VideoCard';
+import { Loader2, Film, Image as ImageIcon, Sparkles, CreditCard, Heart, Calendar, ShieldCheck, Zap, Download, X, Play, Maximize2, Settings, Trash2, LogOut, Lock, CheckCircle2, Wand2, Plus } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/Button';
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { useAuth } from '@/lib/auth/AuthContext';
-import { getUserVideos, getSavedTemplatesWithData, Video, Template } from '@/lib/db/videos';
-import { UserMask, getUserMasks, deleteUserMask } from '@/lib/db/masks';
 import { supabase } from '@/lib/supabase';
-import { VideoModal } from '@/components/profile/VideoModal';
+import { useRouter } from 'next/navigation';
+import { TransactionHistory } from '@/components/TransactionHistory';
 
-const plans = [
-    {
-        name: 'Free',
-        price: 0,
-        videos: 5,
-        features: ['5 videos/month', 'Basic templates', 'SD quality', 'Watermark'],
-        current: false
-    },
-    {
-        name: 'Pro',
-        price: 29,
-        videos: 50,
-        features: ['50 videos/month', 'All templates', 'HD quality', 'No watermark', 'Priority support'],
-        current: true,
-        popular: true
-    },
-    {
-        name: 'Enterprise',
-        price: 99,
-        videos: -1,
-        features: ['Unlimited videos', 'All templates', '4K quality', 'No watermark', 'API access', 'Dedicated support'],
-        current: false
-    },
-];
+// Tabs Component
+function Tabs({ activeTab, onTabChange }: { activeTab: string, onTabChange: (tab: string) => void }) {
+    const tabs = [
+        { id: 'videos', label: 'My Videos', icon: Film },
+        { id: 'images', label: 'My Images', icon: ImageIcon },
+        { id: 'masks', label: 'My Masks', icon: Sparkles },
+        { id: 'saved', label: 'Saved', icon: Heart },
+        { id: 'subscription', label: 'Subscription', icon: CreditCard },
+        { id: 'settings', label: 'Settings', icon: Settings },
+    ];
 
-interface VideoCardProps {
-    video: Video;
-    onDelete: (id: string) => void;
-    onPlay: (video: Video) => void;
+    return (
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar">
+            {tabs.map((tab) => (
+                <button
+                    key={tab.id}
+                    onClick={() => onTabChange(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === tab.id
+                        ? 'bg-white text-black shadow-lg shadow-white/10'
+                        : 'bg-zinc-900/50 text-zinc-400 border border-white/5 hover:bg-zinc-800 hover:text-white'
+                        }`}
+                >
+                    <tab.icon className="w-4 h-4" />
+                    {tab.label}
+                </button>
+            ))}
+        </div>
+    );
 }
 
-const VideoCard = ({ video, onDelete, onPlay }: VideoCardProps) => {
-    // ... (VideoCard implementation is fine, skipping lines for brevity if possible but I must replace entire block if I want to delete imports? No, imports are at top. I am replacing lines 35-480)
-    // Actually I can just replace the top imports and the component logic.
-    // Let's stick to the necessary changes.
-    // I need to update the default export component.
+// Media Lightbox Component
+function MediaLightbox({ item, type, onClose, onDelete }: { item: any; type: 'video' | 'image' | 'mask'; onClose: () => void; onDelete: () => void }) {
+    if (!item) return null;
 
-    // ... VideoCard code ...
-    const [isHovering, setIsHovering] = useState(false);
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const [isVideoReady, setIsVideoReady] = useState(false);
+    const handleDownload = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            const url = type === 'video' ? item.video_url : item.url;
+            const filename = type === 'video' ? `${item.title || 'video'}.mp4` : `${item.name || 'image'}.png`;
 
-    // Reset ready state when video changes
-    useEffect(() => {
-        setIsVideoReady(false);
-    }, [video.video_url]);
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
 
-    useEffect(() => {
-        if (!isHovering) {
-            if (videoRef.current) {
-                videoRef.current.pause();
-                videoRef.current.currentTime = 0;
-            }
-            // Optional: reset ready state if we want to show thumbnail again immediately on mouse leave
-            setIsVideoReady(false);
-        } else {
-            // When hovering, we want to play.
-            if (videoRef.current) {
-                videoRef.current.play().catch(() => { });
-            }
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error('Download failed:', error);
+            alert('Failed to download media');
         }
-    }, [isHovering]);
+    };
 
     return (
         <motion.div
-            whileHover={{ scale: 1.02 }}
-            onMouseEnter={() => setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
-            className="bg-zinc-900 rounded-2xl border border-white/5 overflow-hidden group shadow-sm hover:shadow-md transition-all h-full flex flex-col"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
+            onClick={onClose}
         >
-            <div
-                className="relative aspect-[9/16] bg-zinc-800 flex items-center justify-center overflow-hidden cursor-pointer"
-                onClick={() => onPlay(video)}
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center justify-center"
+                onClick={(e) => e.stopPropagation()}
             >
-                {/* Thumbnail Layer - Only fade out when VIDEO IS READY */}
-                <div className={`absolute inset-0 transition-opacity duration-300 z-10 ${isVideoReady && isHovering ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-                    {video.thumbnail_url ? (
-                        <Image src={video.thumbnail_url} alt={video.title} fill className="object-cover" />
+                {/* Content */}
+                <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-xl bg-black border border-white/10 shadow-2xl shadow-black/50">
+                    {type === 'video' ? (
+                        <video
+                            src={item.video_url}
+                            className="max-h-[80vh] w-auto max-w-full object-contain"
+                            controls
+                            autoPlay
+                        />
                     ) : (
-                        <div className="flex h-full items-center justify-center flex-col gap-2 text-zinc-500">
-                            <VideoIcon className="w-12 h-12" />
-                            {video.status === 'processing' && <span className="text-xs">Processing...</span>}
+                        <div className="relative w-full h-[80vh]">
+                            {type === 'mask' && <div className="absolute inset-0 bg-[url('/transparent-bg.png')] opacity-20" />}
+                            <img
+                                src={item.url}
+                                alt={item.name || 'Media'}
+                                className="w-full h-full object-contain"
+                            />
                         </div>
                     )}
                 </div>
 
-                {/* Video Layer - Render only when hovering, but behind thumbnail initally */}
-                {isHovering && video.video_url && (
-                    <video
-                        ref={videoRef}
-                        src={video.video_url}
-                        muted
-                        loop
-                        playsInline
-                        // Removes autoPlay to manually control it and ensure ready state
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onLoadedData={() => {
-                            if (videoRef.current) {
-                                videoRef.current.play().then(() => {
-                                    setIsVideoReady(true);
-                                }).catch(() => { }); // Autoplay might fail
-                            }
-                        }}
-                    />
-                )}
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none z-20" />
-
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-30"
-                    onClick={(e) => e.stopPropagation()}
-                >
+                {/* Controls */}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
                     <button
-                        onClick={() => onPlay(video)}
-                        className="w-12 h-12 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
-                        title="Ver Video"
+                        onClick={onDelete}
+                        className="p-3 rounded-full bg-white/10 hover:bg-red-500/20 text-white hover:text-red-500 transition-all backdrop-blur-sm group border border-white/5 hover:border-red-500/50"
+                        title="Delete"
                     >
-                        <Play className="w-5 h-5 text-white ml-0.5" />
+                        <Trash2 className="w-5 h-5" />
                     </button>
-                    <a
-                        href={video.video_url || '#'}
-                        download={`video-${video.id}.mp4`}
-                        target="_blank"
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-zinc-100 transition-colors shadow-lg"
-                        title="Descargar"
-                    >
-                        <Download className="w-4 h-4 text-zinc-900" />
-                    </a>
+
+                    <div className="w-px h-6 bg-white/10 mx-1" />
+
                     <button
-                        onClick={() => onDelete(video.id)}
-                        className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center hover:bg-red-50 transition-colors shadow-lg"
-                        title="Borrar"
+                        onClick={handleDownload}
+                        className="p-3 rounded-full bg-white/10 hover:bg-white text-white hover:text-black transition-all backdrop-blur-sm group border border-white/5"
+                        title="Download"
                     >
-                        <Trash2 className="w-4 h-4 text-red-500" />
+                        <Download className="w-5 h-5" />
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="p-3 rounded-full bg-white/10 hover:bg-zinc-800 text-white transition-all backdrop-blur-sm border border-white/5"
+                        title="Close"
+                    >
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
-                <div className="absolute bottom-3 left-3 flex items-center gap-1 text-white/90 pointer-events-none z-20">
-                    {/* Views Removed */}
+                {/* Info Bar */}
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center gap-4">
+                    <span className="text-sm font-medium text-white">{item.title || item.name || 'Untitled Media'}</span>
+                    <div className="h-4 w-px bg-white/20" />
+                    <span className="text-xs text-zinc-400 capitalize">{type}</span>
                 </div>
-                <div className="absolute bottom-3 right-3 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs text-white font-medium pointer-events-none z-20">
-                    {video.duration || '0:00'}
-                </div>
-            </div>
-
-            <div className="p-4 flex-1">
-                <h3 className="text-white font-semibold text-sm mb-1 truncate">{video.title || 'Untitled'}</h3>
-                <p className="text-xs text-zinc-500 flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {new Date(video.created_at).toLocaleDateString()}
-                </p>
-            </div>
+            </motion.div>
         </motion.div>
     );
-};
+}
 
 export default function ProfilePage() {
-    const { user, profile } = useAuth();
+    const { user, profile, isLoading: authLoading, updatePassword } = useAuth();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState<'videos' | 'saved' | 'masks' | 'settings' | 'billing'>('videos');
-    const [myVideos, setMyVideos] = useState<Video[]>([]);
-    const [savedTemplates, setSavedTemplates] = useState<Template[]>([]);
-    const [masks, setMasks] = useState<UserMask[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+    const [activeTab, setActiveTab] = useState('videos');
+    const [isLoadingData, setIsLoadingData] = useState(true);
 
-    const refreshProfile = async () => {
-        window.location.reload();
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.push('/');
+    };
+
+    // Lightbox State
+    const [selectedItem, setSelectedItem] = useState<any | null>(null);
+    const [selectedType, setSelectedType] = useState<'video' | 'image' | 'mask' | null>(null);
+
+    // Data states
+    const [videos, setVideos] = useState<Video[]>([]);
+    const [userImages, setUserImages] = useState<any[]>([]);
+    const [masks, setMasks] = useState<UserMask[]>([]);
+    const [savedTemplates, setSavedTemplates] = useState<Template[]>([]);
+
+    // Change Password State
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState('');
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+    // Create Mask State
+    const [showCreateMaskModal, setShowCreateMaskModal] = useState(false);
+    const [tempMaskFile, setTempMaskFile] = useState<{ file: File, preview: string } | null>(null);
+    const [isProcessingMask, setIsProcessingMask] = useState(false);
+
+    // Mask Handlers
+    const handleMaskUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            const preview = URL.createObjectURL(file);
+            setTempMaskFile({ file, preview });
+            setShowCreateMaskModal(true);
+        }
+    };
+
+    const handleProcessMask = async (mode: 'skip' | 'process') => {
+        if (!tempMaskFile || !user) return;
+        setIsProcessingMask(true);
+
+        try {
+            let finalImageUrl = '';
+
+            if (mode === 'process') {
+                // Upload to temp storage or send as base64 to API?
+                // For simplicity, let's use the remove-bg API which accepts a URL.
+                // But we have a file. So first we must upload the raw file to Supabase Storage temporarily.
+
+                // 1. Upload Raw
+                const fileExt = tempMaskFile.file.name.split('.').pop();
+                const fileName = `raw_${Math.random()}.${fileExt}`;
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('masks') // Using masks bucket for temp storage too? Or maybe a 'temp' folder.
+                    .upload(`${user.id}/temp/${fileName}`, tempMaskFile.file);
+
+                if (uploadError) throw uploadError;
+
+                const publicUrl = supabase.storage.from('masks').getPublicUrl(`${user.id}/temp/${fileName}`).data.publicUrl;
+
+                // 2. Call Remove BG API
+                const res = await fetch('/api/remove-background', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl: publicUrl })
+                });
+
+                if (!res.ok) throw new Error('Failed to remove background');
+                const data = await res.json();
+                finalImageUrl = data.resultUrl; // This is a Replicate URL (temporary)
+
+                // 3. We need to save this RESULT to our storage permanently (since Replicate URLs expire)
+                const savedRes = await fetch(finalImageUrl);
+                const savedBlob = await savedRes.blob();
+                const savedFile = new File([savedBlob], `mask_${Date.now()}.png`, { type: 'image/png' });
+
+                // Upload processed mask to permanent storage
+                const finalFileName = `mask_${Date.now()}.png`;
+                const { error: finalUploadError } = await supabase.storage
+                    .from('masks')
+                    .upload(`${user.id}/${finalFileName}`, savedFile);
+
+                if (finalUploadError) throw finalUploadError;
+
+                finalImageUrl = supabase.storage.from('masks').getPublicUrl(`${user.id}/${finalFileName}`).data.publicUrl;
+
+            } else {
+                // Skip processing - just upload original
+                const fileExt = tempMaskFile.file.name.split('.').pop();
+                const fileName = `mask_${Date.now()}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage
+                    .from('masks')
+                    .upload(`${user.id}/${fileName}`, tempMaskFile.file);
+
+                if (uploadError) throw uploadError;
+                finalImageUrl = supabase.storage.from('masks').getPublicUrl(`${user.id}/${fileName}`).data.publicUrl;
+            }
+
+            // Save to DB
+            const { data: newMask, error: dbError } = await supabase
+                .from('user_masks')
+                .insert({
+                    user_id: user.id,
+                    url: finalImageUrl,
+                    name: tempMaskFile.file.name,
+                    type: 'image'
+                })
+                .select()
+                .single();
+
+            if (dbError) throw dbError;
+
+            // Update UI
+            setMasks(prev => [newMask, ...prev]);
+            setShowCreateMaskModal(false);
+            setTempMaskFile(null);
+
+        } catch (error) {
+            console.error('Error creating mask:', error);
+            alert('Failed to create mask');
+        } finally {
+            setIsProcessingMask(false);
+        }
+    };
+
+    const handleUpdatePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordError('');
+        setPasswordSuccess('');
+
+        if (newPassword !== confirmPassword) {
+            setPasswordError("Passwords don't match");
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            setPasswordError("Password must be at least 6 characters");
+            return;
+        }
+
+        setIsUpdatingPassword(true);
+        const result = await updatePassword(newPassword);
+        setIsUpdatingPassword(false);
+
+        if (result.error) {
+            setPasswordError(result.error);
+        } else {
+            setPasswordSuccess("Password updated successfully");
+            setNewPassword('');
+            setConfirmPassword('');
+        }
     };
 
     useEffect(() => {
-        let isMounted = true;
+        if (!user) return;
 
         async function loadData() {
-            if (!user?.id) return; // Wait for user ID to be available
-
+            setIsLoadingData(true);
             try {
-                // Fetch videos, saved templates, and masks in parallel
-                const [videos, saved, userMasks] = await Promise.all([
-                    getUserVideos(user.id),
-                    getSavedTemplatesWithData(user.id),
-                    getUserMasks(user.id)
+                // Fetch user images from images table
+                const { data: imagesData, error: imagesError } = await supabase
+                    .from('images')
+                    .select('*')
+                    .eq('user_id', user!.id)
+                    .order('created_at', { ascending: false });
+
+                if (imagesError) console.error('Error fetching user images:', imagesError);
+                else setUserImages(imagesData || []);
+
+                const [videosData, masksData, savedData] = await Promise.all([
+                    getUserVideos(user!.id),
+                    getUserMasks(user!.id),
+                    getSavedTemplatesWithData(user!.id)
                 ]);
 
-                if (isMounted) {
-                    setMyVideos(videos);
-                    setSavedTemplates(saved || []);
-                    setMasks(userMasks || []);
-                    setLoading(false);
-                }
+                setVideos(videosData);
+                setMasks(masksData);
+                setSavedTemplates(savedData);
             } catch (error) {
-                console.error('Error loading profile data:', error);
-                if (isMounted) setLoading(false);
+                console.error("Failed to load profile data", error);
+            } finally {
+                setIsLoadingData(false);
             }
         }
 
-        if (user) {
-            loadData();
-        }
-    }, [user]); // Depend on user object
+        loadData();
+    }, [user]);
 
-    const videosThisMonth = myVideos.filter(v => {
-        const date = new Date(v.created_at);
-        const now = new Date();
-        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-    }).length;
+    const openLightbox = (item: any, type: 'video' | 'image' | 'mask') => {
+        setSelectedItem(item);
+        setSelectedType(type);
+    };
 
-    // totalViews removed
-    const planLimit = 50; // Hardcoded for now, should come from subscription
-    const usagePercentage = (videosThisMonth / planLimit) * 100;
+    const closeLightbox = () => {
+        setSelectedItem(null);
+        setSelectedType(null);
+    };
 
-    // Fallback for missing profile
-    const displayProfile = profile || (user ? {
-        id: user.id,
-        name: user.email?.split('@')[0] || 'User',
-        avatar_url: null,
-        plan: 'Free',
-        created_at: new Date().toISOString(),
-    } : null);
+    const handleDeleteItem = async () => {
+        if (!selectedItem || !selectedType) return;
+        if (!confirm('Are you sure you want to delete this? This action cannot be undone.')) return;
 
-    // If user is not yet loaded, let ProtectedRoute handle the loading/redirect state
-    // We render the content only when user exists to avoid crashes
-    return (
-        <ProtectedRoute>
-            {user && displayProfile && (
-                <div className="min-h-screen bg-zinc-950 pt-20 pb-16">
-                    <div className="max-w-6xl mx-auto px-4">
-
-                        {/* Profile Header */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="relative rounded-3xl overflow-hidden mb-8 shadow-lg shadow-primary/5"
-                        >
-                            {/* Background gradient */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 via-orange-500/5 to-transparent" />
-                            <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=%2260%22 height=%2260%22 viewBox=%220 0 60 60%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cg fill=%22none%22 fill-rule=%22evenodd%22%3E%3Cg fill=%22%23000000%22 fill-opacity=%220.03%22%3E%3Cpath d=%22M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50" />
-
-                            <div className="relative p-8">
-                                <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-                                    {/* Avatar Removed */}
-
-                                    {/* User Info */}
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <h1 className="text-2xl md:text-3xl font-bold text-white">{displayProfile.name || 'User'}</h1>
-                                            <span className="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-sm font-semibold flex items-center gap-1">
-                                                <Crown className="w-4 h-4" />
-                                                {displayProfile.plan || 'Free'}
-                                            </span>
-                                        </div>
-                                        <p className="text-zinc-500 flex items-center gap-2 mb-4">
-                                            <Mail className="w-4 h-4" />
-                                            {user.email}
-                                        </p>
-                                        <div className="flex flex-wrap items-center gap-4 text-sm">
-                                            <div className="flex items-center gap-2 text-zinc-500">
-                                                <Calendar className="w-4 h-4" />
-                                                <span>Joined {new Date(displayProfile.created_at).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 text-zinc-500">
-                                                <VideoIcon className="w-4 h-4" />
-                                                <span>{myVideos.length} videos created</span>
-                                            </div>
-                                            {/* Views Stats Removed */}
-                                        </div>
-                                    </div>
-
-                                    {/* Quick Actions */}
-                                    <div className="flex gap-2">
-                                        {/* Create Button Removed */}
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-
-                        {/* Stats Cards */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.1 }}
-                            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
-                        >
-                            <div className="bg-zinc-900 rounded-2xl border border-white/5 p-5 shadow-sm">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                                        <VideoIcon className="w-5 h-5 text-orange-500" />
-                                    </div>
-                                </div>
-                                <p className="text-2xl font-bold text-white mb-1">{myVideos.length}</p>
-                                <p className="text-xs text-zinc-500">Total Videos</p>
-                            </div>
-
-                            {/* Total Views Card Removed */}
-
-                            <div className="bg-zinc-900 rounded-2xl border border-white/5 p-5 shadow-sm">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                                        <Zap className="w-5 h-5 text-purple-500" />
-                                    </div>
-                                </div>
-                                <p className="text-2xl font-bold text-white mb-1">{videosThisMonth}</p>
-                                <p className="text-xs text-zinc-500">This Month</p>
-                            </div>
-
-                            <div className="bg-zinc-900 rounded-2xl border border-white/5 p-5 shadow-sm">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                                        <BarChart3 className="w-5 h-5 text-orange-500" />
-                                    </div>
-                                </div>
-                                <div className="mb-2">
-                                    <div className="flex justify-between text-xs mb-1">
-                                        <span className="text-white font-medium">{videosThisMonth}/{planLimit}</span>
-                                        <span className="text-zinc-500">{Math.round(usagePercentage)}%</span>
-                                    </div>
-                                    <div className="h-2 bg-black/5 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-primary to-orange-500 rounded-full transition-all"
-                                            style={{ width: `${usagePercentage}%` }}
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-xs text-zinc-500">Monthly Usage</p>
-                            </div>
-                        </motion.div>
-
-                        {/* Tabs */}
-                        <div className="flex gap-2 mb-6 border-b border-black/5 pb-4 overflow-x-auto">
-                            {[
-                                { id: 'videos', label: 'My Videos', icon: VideoIcon },
-                                { id: 'saved', label: 'Saved', icon: Sparkles },
-                                { id: 'masks', label: 'Masks', icon: ImageIcon },
-                                { id: 'billing', label: 'Billing', icon: CreditCard },
-                                { id: 'settings', label: 'Settings', icon: Settings },
-                            ].map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                                    className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id
-                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                        : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
-                                        }`}
-                                >
-                                    <tab.icon className="w-4 h-4" />
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Tab Content */}
-                        <motion.div
-                            key={activeTab}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                        >
-                            {/* Videos Tab */}
-                            {activeTab === 'videos' && (
-                                <div>
-                                    <div className="flex justify-end mb-4">
-                                        <Button
-                                            onClick={async () => {
-                                                setLoading(true);
-                                                try {
-                                                    const res = await fetch('/api/video/sync');
-                                                    const data = await res.json();
-                                                    console.log('Sync result:', data);
-                                                    window.location.reload();
-                                                } catch (e) {
-                                                    console.error('Sync failed', e);
-                                                    setLoading(false);
-                                                }
-                                            }}
-                                            variant="secondary"
-                                            size="sm"
-                                            className="gap-2 bg-zinc-900 border border-white/10 hover:bg-zinc-800"
-                                        >
-                                            <Sparkles className="w-4 h-4" /> {/* Or RefreshCw if available */}
-                                            Sync Status
-                                        </Button>
-                                    </div>
-                                    {loading ? (
-                                        <div className="text-center py-20">
-                                            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-                                        </div>
-                                    ) : myVideos.length > 0 ? (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                            {myVideos.map((video) => (
-                                                <VideoCard
-                                                    key={video.id}
-                                                    video={video}
-                                                    onPlay={(v) => setSelectedVideo(v)}
-                                                    onDelete={async (id) => {
-                                                        try {
-                                                            const { data: { session } } = await supabase.auth.getSession();
-                                                            if (!session) return;
-
-                                                            const response = await fetch(`/api/video/delete?id=${id}`, {
-                                                                method: 'DELETE',
-                                                                headers: { 'Authorization': `Bearer ${session.access_token}` },
-                                                            });
-
-                                                            if (response.ok) {
-                                                                setMyVideos(prev => prev.filter(v => v.id !== id));
-                                                            } else {
-                                                                const err = await response.json();
-                                                                console.error('Delete failed:', err);
-                                                                alert(`No se pudo borrar: ${err.error || 'Error desconocido'}`);
-                                                            }
-                                                        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                                                            console.error('Error:', error);
-                                                            alert(`Error de red: ${(error as Error).message}`);
-                                                        }
-                                                    }}
-                                                />
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-20 bg-zinc-900 rounded-3xl border border-white/5 shadow-sm">
-                                            <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-6">
-                                                <VideoIcon className="w-10 h-10 text-zinc-600" />
-                                            </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">No videos yet</h3>
-                                            <Link href="/videos">
-                                                <Button variant="primary">Browse Templates</Button>
-                                            </Link>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Saved Tab */}
-                            {activeTab === 'saved' && (
-                                <div className="text-center py-20 bg-zinc-900 rounded-3xl border border-white/5 shadow-sm">
-                                    {savedTemplates.length > 0 ? (
-                                        <div className="text-white px-6">
-                                            <h3 className="text-xl font-bold mb-6">Saved Templates</h3>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                                {savedTemplates.map((template) => {
-                                                    return (
-                                                        <Link key={template.id} href={`/recreate/${template.id}`} prefetch={false} className="block group">
-                                                            <motion.div
-                                                                whileHover={{ scale: 1.02 }}
-                                                                className="bg-zinc-900 rounded-2xl border border-white/5 overflow-hidden shadow-sm hover:shadow-md transition-all"
-                                                            >
-                                                                <div className="relative aspect-[9/16]">
-                                                                    <Image
-                                                                        src={template.after_image_url}
-                                                                        alt={template.title}
-                                                                        fill
-                                                                        className="object-cover"
-                                                                    />
-                                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-
-                                                                </div>
-                                                                <div className="p-4 text-left">
-                                                                    <h3 className="text-white font-semibold text-sm mb-1 truncate">{template.title}</h3>
-                                                                    <p className="text-xs text-zinc-500">{template.category}</p>
-                                                                </div>
-                                                            </motion.div>
-                                                        </Link>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-6">
-                                                <Sparkles className="w-10 h-10 text-zinc-600" />
-                                            </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">No saved templates</h3>
-                                            <p className="text-zinc-500 mb-6">Save templates you like to access them quickly</p>
-                                            <Link href="/videos">
-                                                <Button variant="primary">Browse Templates</Button>
-                                            </Link>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Masks Tab */}
-                            {activeTab === 'masks' && (
-                                <div className="space-y-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-white font-semibold">My Saved Masks</h3>
-                                        {/* Create Button Removed */}
-                                    </div>
-
-                                    {masks.length > 0 ? (
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                                            {masks.map((mask) => (
-                                                <motion.div
-                                                    initial={{ opacity: 0, scale: 0.95 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    key={mask.id}
-                                                    className="group relative bg-zinc-900/50 rounded-xl border border-white/5 overflow-hidden aspect-square hover:border-orange-500/50 transition-colors"
-                                                >
-                                                    <div className="absolute inset-0 p-4 flex items-center justify-center bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMiLz48cGF0aCBkPSJNMCAwSDRWNEg4VjhINFY0SDB6IiBmaWxsPSIjNDQ0Ii8+PC9zdmc+')] bg-repeat opacity-30"></div>
-                                                    <img
-                                                        src={mask.url}
-                                                        alt={mask.name}
-                                                        className="relative z-10 max-w-full max-h-full object-contain drop-shadow-lg"
-                                                    />
-
-                                                    {/* Hover Overlay */}
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 z-20">
-                                                        <p className="text-white text-xs font-medium truncate mb-2">{mask.name}</p>
-                                                        <div className="flex gap-2 justify-end">
-                                                            <a
-                                                                href={mask.url}
-                                                                download={`mask-${mask.id}.png`}
-                                                                target="_blank"
-                                                                className="p-1.5 bg-white/10 rounded-md text-white hover:bg-white/20 hover:text-orange-400 transition-colors"
-                                                                title="Download"
-                                                            >
-                                                                <Download className="w-3.5 h-3.5" />
-                                                            </a>
-                                                            <button
-                                                                onClick={async () => {
-                                                                    if (confirm('Are you sure you want to delete this mask?')) {
-                                                                        await deleteUserMask(mask.id);
-                                                                        setMasks(prev => prev.filter(m => m.id !== mask.id));
-                                                                    }
-                                                                }}
-                                                                className="p-1.5 bg-red-500/10 rounded-md text-red-400 hover:bg-red-500 hover:text-white transition-colors"
-                                                                title="Delete"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </motion.div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="text-center py-20 bg-zinc-900 rounded-3xl border border-white/5 shadow-sm">
-                                            <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-6">
-                                                <ImageIcon className="w-10 h-10 text-zinc-600" />
-                                            </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">No saved masks</h3>
-                                            <p className="text-zinc-500 mb-6">Generated masks will be automatically saved here.</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Billing Tab */}
-                            {activeTab === 'billing' && (
-                                <div className="space-y-6">
-                                    {/* Current Plan */}
-                                    <div className="bg-zinc-900 rounded-2xl border border-orange-500/30 p-6 shadow-sm">
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div>
-                                                <p className="text-sm text-zinc-500 mb-1">Current Plan</p>
-                                                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                                                    {displayProfile.plan || 'Free'}
-                                                    <Crown className="w-5 h-5 text-orange-500" />
-                                                </h3>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-3xl font-bold text-white">$0<span className="text-sm text-zinc-500">/mo</span></p>
-                                                <p className="text-xs text-zinc-500">Next billing: N/A</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-3">
-                                            <Button variant="primary" size="sm">
-                                                Upgrade Plan
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    {/* All Plans */}
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-white mb-4">All Plans</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            {plans.map((plan) => (
-                                                <div
-                                                    key={plan.name}
-                                                    className={`relative bg-zinc-900 rounded-2xl border-2 p-6 transition-all shadow-sm ${plan.name === (displayProfile.plan || 'Free')
-                                                        ? 'border-orange-500'
-                                                        : 'border-white/5 hover:border-white/10'
-                                                        }`}
-                                                >
-                                                    {plan.popular && (
-                                                        <span className="absolute -top-3 left-1/2 transform -translate-x-1/2 px-3 py-1 rounded-full bg-orange-500 text-white text-xs font-bold shadow-md">
-                                                            POPULAR
-                                                        </span>
-                                                    )}
-                                                    {plan.name === (displayProfile.plan || 'Free') && (
-                                                        <span className="absolute top-4 right-4 px-2 py-1 rounded-full bg-orange-500/10 text-orange-500 text-xs font-bold">
-                                                            CURRENT
-                                                        </span>
-                                                    )}
-                                                    <h4 className="text-xl font-bold text-white mb-2">{plan.name}</h4>
-                                                    <p className="text-3xl font-bold text-white mb-1">
-                                                        ${plan.price}<span className="text-sm text-zinc-500">/mo</span>
-                                                    </p>
-                                                    <p className="text-sm text-zinc-500 mb-4">
-                                                        {plan.videos === -1 ? 'Unlimited' : plan.videos} videos/month
-                                                    </p>
-                                                    <ul className="space-y-2 mb-6">
-                                                        {plan.features.map((feature, i) => (
-                                                            <li key={i} className="flex items-center gap-2 text-sm text-zinc-500">
-                                                                <Check className="w-4 h-4 text-orange-500" />
-                                                                {feature}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                    {plan.name !== (displayProfile.plan || 'Free') && (
-                                                        <Button variant={plan.popular ? 'primary' : 'outline'} size="sm" className="w-full">
-                                                            {plan.price === 0 ? 'Downgrade' : 'Upgrade'}
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Settings Tab */}
-                            {activeTab === 'settings' && (
-                                <SettingsTab user={user} displayProfile={displayProfile} refreshProfile={refreshProfile} />
-                            )}
-                        </motion.div>
-                    </div>
-                </div>
-            )}
-
-            {/* Video Modal */}
-            <VideoModal
-                video={selectedVideo}
-                onClose={() => setSelectedVideo(null)}
-                onDelete={async (id) => {
-                    try {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        if (!session) return;
-
-                        const response = await fetch(`/api/video/delete?id=${id}`, {
-                            method: 'DELETE',
-                            headers: { 'Authorization': `Bearer ${session.access_token}` },
-                        });
-
-                        if (response.ok) {
-                            setMyVideos(prev => prev.filter(v => v.id !== id));
-                            setSelectedVideo(null); // Close modal
-                        } else {
-                            alert('Failed to delete video');
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        alert('Error deleting video');
-                    }
-                }}
-            />
-        </ProtectedRoute>
-    );
-}
-
-interface SettingsTabProps {
-    user: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    displayProfile: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-    refreshProfile: () => Promise<void>;
-}
-
-function SettingsTab({ user, displayProfile, refreshProfile }: SettingsTabProps) {
-    const [name, setName] = useState(displayProfile.name || '');
-    const [isSaving, setIsSaving] = useState(false);
-    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-
-    const handleSave = async () => {
-        setIsSaving(true);
-        setMessage(null);
         try {
-            const { updateProfile } = await import('@/lib/db/profiles');
-            const updated = await updateProfile(user.id, { name });
+            if (selectedType === 'video') {
+                const success = await deleteVideo(selectedItem.id);
+                if (success) {
+                    setVideos(prev => prev.filter(v => v.id !== selectedItem.id));
+                    closeLightbox();
+                } else {
+                    alert('Failed to delete video');
+                }
+            } else if (selectedType === 'image') {
+                const { error } = await supabase.from('images').delete().eq('id', selectedItem.id);
 
-            if (updated) {
-                await refreshProfile();
-                setMessage({ type: 'success', text: 'Profile updated successfully!' });
-            } else {
-                setMessage({ type: 'error', text: 'Failed to update profile.' });
+                if (error) {
+                    console.error('Delete error:', error);
+                    alert(`Failed to delete image: ${error.message}`);
+                    return;
+                }
+
+                setUserImages(prev => prev.filter(i => i.id !== selectedItem.id));
+                closeLightbox();
+
+            } else if (selectedType === 'mask') {
+                const { error } = await supabase.from('user_masks').delete().eq('id', selectedItem.id);
+                if (!error) {
+                    setMasks(prev => prev.filter(m => m.id !== selectedItem.id));
+                    closeLightbox();
+                } else {
+                    console.error(error);
+                    alert('Failed to delete mask');
+                }
             }
-        } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            console.error('Error saving profile:', error);
-            setMessage({ type: 'error', text: error.message || 'An error occurred.' });
-        } finally {
-            setIsSaving(false);
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            alert('An error occurred during deletion');
         }
     };
 
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Account Info */}
-            <div className="bg-zinc-900 rounded-2xl border border-white/5 p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
-                    <User className="w-5 h-5 text-orange-500" />
-                    Account Information
-                </h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-xs text-zinc-500 mb-2">Full Name</label>
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-transparent text-white focus:outline-none focus:bg-zinc-800 focus:border-orange-500/50 transition-all"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs text-zinc-500 mb-2">Email</label>
-                        <input
-                            type="email"
-                            defaultValue={user.email || ''}
-                            disabled
-                            className="w-full px-4 py-3 rounded-xl bg-zinc-800/50 border border-transparent text-zinc-500 cursor-not-allowed transition-all"
-                        />
-                    </div>
+    if (authLoading) {
+        return (
+            <div className="min-h-screen pt-24 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+            </div>
+        );
+    }
 
-                    {message && (
-                        <p className={`text-sm ${message.type === 'success' ? 'text-green-500' : 'text-red-500'}`}>
-                            {message.text}
-                        </p>
+    if (!user) {
+        return (
+            <div className="min-h-screen pt-24 flex flex-col items-center justify-center px-4 text-center">
+                <h1 className="text-2xl font-bold text-white mb-4">Please log in to view your profile</h1>
+                <Link href="/login" className="px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors">
+                    Login
+                </Link>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen pt-24 pb-16 px-4">
+            <div className="container mx-auto max-w-7xl">
+
+                {/* Modern Header */}
+                <div className="mb-12">
+                    <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 pb-6 border-b border-white/10">
+                        {/* Profile Info & Mobile Logout */}
+                        <div className="w-full md:w-auto flex items-center justify-between md:block">
+                            <div>
+                                <div className="flex items-center gap-3 mb-2">
+                                    <h1 className="text-3xl md:text-4xl font-black text-white">{profile?.name || 'Creator'}</h1>
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white text-black uppercase tracking-wider">
+                                        {profile?.plan || 'FREE'}
+                                    </span>
+                                </div>
+                                <p className="text-zinc-500 font-medium text-sm md:text-base">{user.email}</p>
+                            </div>
+
+                            {/* Mobile Logout Button */}
+                            <button
+                                onClick={handleLogout}
+                                className="md:hidden p-3 rounded-2xl bg-zinc-900 border border-white/5 hover:bg-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all group"
+                                title="Sign Out"
+                            >
+                                <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                            </button>
+                        </div>
+
+                        {/* Stats & Desktop Logout */}
+                        <div className="w-full md:w-auto flex items-center gap-4">
+                            <div className="flex-1 md:flex-none flex justify-between md:justify-start gap-4 md:gap-6 px-4 py-2 rounded-xl bg-white/5 border border-white/5 overflow-x-auto no-scrollbar">
+                                <div className="text-center min-w-[50px]">
+                                    <div className="text-base md:text-lg font-semibold text-white/80">{profile?.credits?.toLocaleString() ?? 0}</div>
+                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Credits</div>
+                                </div>
+                                <div className="w-px bg-white/5" />
+                                <div className="text-center min-w-[50px]">
+                                    <div className="text-base md:text-lg font-semibold text-white/80">{videos.length}</div>
+                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Videos</div>
+                                </div>
+                                <div className="w-px bg-white/5" />
+                                <div className="text-center min-w-[50px]">
+                                    <div className="text-base md:text-lg font-semibold text-white/80">{userImages.length}</div>
+                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Images</div>
+                                </div>
+                                <div className="w-px bg-white/5" />
+                                <div className="text-center min-w-[50px]">
+                                    <div className="text-base md:text-lg font-semibold text-white/80">{masks.length}</div>
+                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Masks</div>
+                                </div>
+                            </div>
+
+                            {/* Desktop Logout Button */}
+                            <button
+                                onClick={handleLogout}
+                                className="hidden md:block p-3 rounded-2xl bg-zinc-900 border border-white/5 hover:bg-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all group"
+                                title="Sign Out"
+                            >
+                                <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
+
+                <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="min-h-[400px]"
+                >
+                    {/* VIDEOS TAB */}
+                    {activeTab === 'videos' && (
+                        <div>
+                            {isLoadingData ? (
+                                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-zinc-500 animate-spin" /></div>
+                            ) : videos.length > 0 ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {videos.map((video) => (
+                                        <motion.div
+                                            key={video.id}
+                                            layoutId={`video-${video.id}`}
+                                            className="group relative rounded-xl overflow-hidden bg-zinc-900 aspect-[9/16] cursor-pointer border border-transparent hover:border-orange-500/50 transition-colors"
+                                            onClick={() => openLightbox(video, 'video')}
+                                        >
+                                            {video.video_url ? (
+                                                <video
+                                                    src={video.video_url}
+                                                    className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                                                    <Film className="w-8 h-8 text-zinc-600" />
+                                                </div>
+                                            )}
+                                            {/* Overlay */}
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                                    <Maximize2 className="w-5 h-5 text-white" />
+                                                </div>
+                                            </div>
+                                            {/* Metas */}
+                                            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent">
+                                                <h3 className="text-white text-sm font-bold truncate">{video.title}</h3>
+                                                <p className="text-zinc-400 text-[10px]">{new Date(video.created_at).toLocaleDateString()}</p>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-20 bg-zinc-900/20 rounded-2xl border border-white/5">
+                                    <Film className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                                    <h3 className="text-white font-bold mb-2">No videos yet</h3>
+                                    <p className="text-zinc-400 mb-6">Create your first viral video today</p>
+                                    <Link href="/create-yours" className="text-orange-500 hover:text-orange-400 font-medium text-sm">Create Video →</Link>
+                                </div>
+                            )}
+                        </div>
                     )}
 
-                    <Button variant="primary" size="sm" onClick={handleSave} disabled={isSaving}>
-                        {isSaving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                </div>
-            </div>
-
-            {/* Danger Zone */}
-            <div className="bg-zinc-900 rounded-2xl border border-red-500/20 p-6 shadow-sm">
-                <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
-                    <LogOut className="w-5 h-5 text-red-500" />
-                    Danger Zone
-                </h3>
-                <div className="space-y-4">
-                    <button
-                        onClick={async () => {
-                            const { supabase } = await import('@/lib/supabase');
-                            await supabase.auth.signOut();
-                            window.location.reload();
-                        }}
-                        className="w-full flex items-center justify-between p-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 transition-colors text-left border border-red-500/20"
-                    >
+                    {/* IMAGES TAB */}
+                    {activeTab === 'images' && (
                         <div>
-                            <p className="text-red-600 text-sm font-medium">Log Out</p>
-                            <p className="text-xs text-red-400">Sign out of your account</p>
+                            {isLoadingData ? (
+                                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-zinc-500 animate-spin" /></div>
+                            ) : userImages.length > 0 ? (
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                                    {userImages.map((img) => (
+                                        <motion.div
+                                            key={img.id}
+                                            layoutId={`image-${img.id}`}
+                                            className="group relative rounded-xl overflow-hidden bg-zinc-900 aspect-square cursor-pointer border border-transparent hover:border-purple-500/50 transition-colors"
+                                            onClick={() => openLightbox(img, 'image')}
+                                        >
+                                            <img
+                                                src={img.url}
+                                                alt={img.prompt || 'Generated Image'}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                            />
+                                            {/* Overlay */}
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                                    <Maximize2 className="w-5 h-5 text-white" />
+                                                </div>
+                                            </div>
+                                            {/* Meta */}
+                                            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent">
+                                                <h3 className="text-white text-xs font-medium truncate">{img.prompt?.slice(0, 30) || 'Generated Image'}</h3>
+                                                <p className="text-zinc-400 text-[10px]">{new Date(img.created_at).toLocaleDateString()}</p>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-20 bg-zinc-900/20 rounded-2xl border border-white/5">
+                                    <ImageIcon className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                                    <h3 className="text-white font-bold mb-2">No images yet</h3>
+                                    <p className="text-zinc-400 mb-6">Start generating amazing photos</p>
+                                    <Link href="/create-image" className="text-purple-500 hover:text-purple-400 font-medium text-sm">Create Image →</Link>
+                                </div>
+                            )}
                         </div>
-                        <LogOut className="w-5 h-5 text-red-500" />
-                    </button>
-                </div>
-            </div>
-        </div>
+                    )}
+
+                    {/* CREATE MASK MODAL */}
+                    <AnimatePresence>
+                        {showCreateMaskModal && tempMaskFile && (
+                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                                <motion.div
+                                    initial={{ scale: 0.95, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0.95, opacity: 0 }}
+                                    className="bg-zinc-900 border border-white/10 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl"
+                                >
+                                    <div className="p-4 border-b border-white/5 flex justify-between items-center">
+                                        <h3 className="font-bold text-white">Create Mask</h3>
+                                        <button onClick={() => { setShowCreateMaskModal(false); setTempMaskFile(null); }}><X className="w-4 h-4 text-zinc-500" /></button>
+                                    </div>
+
+                                    <div className="p-6 flex flex-col items-center gap-6">
+                                        <div className="w-32 h-32 rounded-lg bg-zinc-800 border border-white/10 overflow-hidden relative">
+                                            <img src={tempMaskFile.preview} className="w-full h-full object-contain" />
+                                        </div>
+
+                                        <p className="text-sm text-zinc-400 text-center">
+                                            Is this image already transparent, or do you need to remove the background?
+                                        </p>
+
+                                        <div className="grid grid-cols-2 gap-3 w-full">
+                                            <button
+                                                onClick={() => handleProcessMask('skip')}
+                                                disabled={isProcessingMask}
+                                                className="py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-sm transition-colors"
+                                            >
+                                                Skip Masking
+                                            </button>
+                                            <button
+                                                onClick={() => handleProcessMask('process')}
+                                                disabled={isProcessingMask}
+                                                className="py-3 rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                {isProcessingMask ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Wand2 className="w-4 h-4" /> Remove BG</>}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* MASKS TAB */}
+                    {activeTab === 'masks' && (
+                        <div>
+                            {isLoadingData ? (
+                                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-zinc-500 animate-spin" /></div>
+                            ) : (
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                    {/* CREATE NEW MASK CARD */}
+                                    <label className="group relative rounded-xl overflow-hidden bg-zinc-900 border border-dashed border-white/20 hover:border-white/50 cursor-pointer aspect-square flex flex-col items-center justify-center gap-2 transition-all hover:bg-zinc-800">
+                                        <div className="w-10 h-10 rounded-full bg-white/5 group-hover:bg-white/10 flex items-center justify-center transition-colors">
+                                            <Plus className="w-5 h-5 text-zinc-400 group-hover:text-white" />
+                                        </div>
+                                        <span className="text-xs font-medium text-zinc-500 group-hover:text-zinc-300">Create Mask</span>
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            accept="image/*"
+                                            onChange={handleMaskUpload}
+                                        />
+                                    </label>
+
+                                    {masks.map((mask) => (
+                                        <div
+                                            key={mask.id}
+                                            className="group relative rounded-xl overflow-hidden bg-zinc-800 aspect-square border border-white/5 cursor-pointer"
+                                            onClick={() => openLightbox(mask, 'mask')}
+                                        >
+                                            <div className="absolute inset-0 bg-[url('/transparent-bg.png')] opacity-20" />
+                                            <img src={mask.url} alt={mask.name} className="relative w-full h-full object-contain p-2 group-hover:scale-110 transition-transform" />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                                <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* SAVED TAB */}
+                    {activeTab === 'saved' && (
+                        <div>
+                            {isLoadingData ? (
+                                <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 text-zinc-500 animate-spin" /></div>
+                            ) : savedTemplates.length > 0 ? (
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                                    {savedTemplates.map((template, idx) => (
+                                        <div key={template.id} className="transform scale-90 origin-top-left w-[110%]">
+                                            <VideoCard video={template} index={idx} size="normal" />
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-20 bg-zinc-900/20 rounded-2xl border border-white/5">
+                                    <Heart className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
+                                    <h3 className="text-white font-bold mb-2">No saved templates</h3>
+                                    <p className="text-zinc-400 mb-6">Save templates you like to access them quickly.</p>
+                                    <Link href="/videos" className="text-orange-500 hover:text-orange-400 font-medium text-sm">Browse Library →</Link>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* SUBSCRIPTION TAB */}
+                    {activeTab === 'subscription' && (
+                        <div className="space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Current Plan Card */}
+                                <div className="p-8 rounded-3xl bg-zinc-900/50 border border-white/5 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-32 bg-orange-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+                                    <h3 className="text-lg font-bold text-white mb-6">Current Subscription</h3>
+
+                                    <div className="space-y-6">
+                                        <div>
+                                            <p className="text-zinc-400 text-sm mb-1">Plan</p>
+                                            <h2 className="text-3xl font-black text-white capitalize">{profile?.plan || 'Free'}</h2>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-zinc-400 text-sm mb-1">Status</p>
+                                            <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${profile?.subscription_status === 'active' ? 'bg-green-500/10 text-green-500' :
+                                                profile?.subscription_status === 'past_due' ? 'bg-red-500/10 text-red-500' :
+                                                    'bg-zinc-800 text-zinc-400'
+                                                }`}>
+                                                <ShieldCheck className="w-3 h-3" />
+                                                {profile?.subscription_status || 'Inactive'}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-zinc-400 text-sm mb-1">Renewal Date</p>
+                                            <div className="flex items-center gap-2 text-white">
+                                                <Calendar className="w-4 h-4 text-zinc-500" />
+                                                <span>
+                                                    {profile?.subscription_period_end
+                                                        ? new Date(profile.subscription_period_end).toLocaleDateString()
+                                                        : 'N/A'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Payment Method & Actions */}
+                                <div className="p-8 rounded-3xl bg-zinc-900/50 border border-white/5">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h3 className="text-lg font-bold text-white">Manage Subscription</h3>
+                                        <CreditCard className="w-5 h-5 text-zinc-400" />
+                                    </div>
+
+                                    <div className="flex items-center gap-4 mb-8 p-4 rounded-xl bg-black/40 border border-white/5">
+                                        <div className="w-12 h-8 rounded bg-zinc-700 flex items-center justify-center">
+                                            <div className="w-6 h-4 bg-white/20 rounded-sm" />
+                                        </div>
+                                        <div>
+                                            <p className="text-white font-medium text-sm">Stripe Secure Payment</p>
+                                            <p className="text-zinc-500 text-xs">Managed via Stripe</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <Link href="/pricing" className="block w-full py-3 rounded-lg bg-white text-black font-bold text-sm hover:bg-zinc-200 transition-colors text-center">
+                                            {profile?.plan === 'free' ? 'Upgrade Plan' : 'Change Plan'}
+                                        </Link>
+
+                                        {profile?.subscription_status === 'active' && (
+                                            <button
+                                                onClick={async () => {
+                                                    if (!confirm('Are you sure you want to request a cancellation? This will send a request to our support team.')) return;
+
+                                                    try {
+                                                        const res = await fetch('/api/subscription/cancel', {
+                                                            method: 'POST',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ reason: 'User requested via profile' })
+                                                        });
+
+                                                        if (res.ok) {
+                                                            alert('Cancellation request sent. You will receive an email confirmation shortly.');
+                                                        } else {
+                                                            alert('Failed to send request. Please contact support.');
+                                                        }
+                                                    } catch (e) {
+                                                        console.error(e);
+                                                        alert('Error sending request.');
+                                                    }
+                                                }}
+                                                className="w-full py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 font-bold text-sm hover:bg-red-500/20 transition-colors"
+                                            >
+                                                Cancel Subscription
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Transaction History */}
+                            <div className="mt-8">
+                                <TransactionHistory userId={user.id} />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SETTINGS TAB */}
+                    {activeTab === 'settings' && (
+                        <div className="max-w-2xl mx-auto">
+                            <div className="p-8 rounded-3xl bg-zinc-900/50 border border-white/5">
+                                <div className="flex items-center gap-3 mb-8">
+                                    <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                                        <Lock className="w-5 h-5 text-orange-500" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white">Security</h3>
+                                        <p className="text-zinc-500 text-sm">Manage your password and security settings</p>
+                                    </div>
+                                </div>
+
+                                <form onSubmit={handleUpdatePassword} className="space-y-6">
+                                    {passwordError && (
+                                        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                                            {passwordError}
+                                        </div>
+                                    )}
+                                    {passwordSuccess && (
+                                        <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-sm flex items-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4" />
+                                            {passwordSuccess}
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-xs text-zinc-400 mb-2">New Password</label>
+                                        <input
+                                            type="password"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-orange-500/50 text-white placeholder:text-zinc-600 focus:outline-none transition-all"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs text-zinc-400 mb-2">Confirm New Password</label>
+                                        <input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 focus:border-orange-500/50 text-white placeholder:text-zinc-600 focus:outline-none transition-all"
+                                        />
+                                    </div>
+
+                                    <div className="pt-4 border-t border-white/5 flex justify-end">
+                                        <button
+                                            type="submit"
+                                            disabled={isUpdatingPassword || !newPassword || !confirmPassword}
+                                            className="px-6 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            {isUpdatingPassword ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    Updating...
+                                                </>
+                                            ) : (
+                                                'Update Password'
+                                            )}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </motion.div>
+            </div >
+
+            {/* Lightbox Portal */}
+            <AnimatePresence>
+                {
+                    selectedItem && (
+                        <MediaLightbox item={selectedItem} type={selectedType!} onClose={closeLightbox} onDelete={handleDeleteItem} />
+                    )
+                }
+            </AnimatePresence >
+        </div >
     );
 }

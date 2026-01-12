@@ -4,6 +4,8 @@ import './globals.css';
 import { Providers } from './providers';
 import { ChunkErrorBoundary } from '@/components/ChunkErrorBoundary';
 import { ChunkErrorHandler } from '@/components/ChunkErrorHandler';
+import { StarBackground } from '@/components/ui/StarBackground';
+import { AppFeaturePopup } from '@/components/AppFeaturePopup';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,14 +21,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning translate="no" style={{ backgroundColor: '#000', color: '#fff' }}>
-      <body className={`${inter.className} bg-black text-white min-h-screen`} style={{ backgroundColor: '#000', color: '#fff' }} suppressHydrationWarning>
-        <div className="fixed inset-0 pointer-events-none z-[100] shadow-[inset_0_0_180px_rgba(255,107,0,0.15)]" />
-        <ChunkErrorHandler />
-        <ChunkErrorBoundary>
-          <Providers>{children}</Providers>
-        </ChunkErrorBoundary>
+      <body className={`${inter.className} min-h-screen relative`} suppressHydrationWarning>
+        <StarBackground />
+        <AppFeaturePopup />
+
+        {/* Global Orange Glow Overlay */}
+
+
+        <div className="relative z-10">
+          <ChunkErrorHandler />
+          <ChunkErrorBoundary>
+            <Providers>{children}</Providers>
+          </ChunkErrorBoundary>
+        </div>
       </body>
     </html>
   );
 }
-

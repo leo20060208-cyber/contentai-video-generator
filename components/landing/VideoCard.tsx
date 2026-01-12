@@ -1,22 +1,30 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Eye, Heart, Play } from 'lucide-react';
+import { Eye, Heart, Play, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState } from 'react';
 import { LazyVideo } from '@/components/LazyVideo';
+import { useLikedTemplates } from '@/lib/contexts/LikedTemplatesContext';
 
-export function VideoCard({ video, index, size = 'normal' }: { video: any; index: number; size?: 'normal' | 'large' }) {
+export function VideoCard({ video, index, size = 'normal', baseRoute = '/recreate', previewMode = 'reference', additionalParams }: { video: any; index: number; size?: 'normal' | 'large' | 'square' | 'vertical'; baseRoute?: string; previewMode?: 'reference' | 'product'; additionalParams?: string }) {
     const isLarge = size === 'large';
-    const [isLiked, setIsLiked] = useState(false);
+    const isSquare = size === 'square';
+    const isVertical = size === 'vertical';
+    const { isLiked: checkIsLiked, toggleLike: globalToggleLike } = useLikedTemplates();
+    const isLiked = checkIsLiked(video.id);
+
+    // Determine content layout
+    const hasBefore = video.beforeVideo || video.before_video_url || video.beforeImage || video.before_image_url;
+    const hasResult = video.afterVideo || video.after_video_url || video.afterImage || video.after_image_url;
+    const isSplit = hasBefore && hasResult;
 
     // Toggle like/save
-    const toggleLike = (e: React.MouseEvent) => {
+    const toggleLike = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsLiked(!isLiked);
-        // TODO: Implement save to database when user auth is ready
+        await globalToggleLike(video);
     };
 
     // Share - copy link
@@ -24,114 +32,155 @@ export function VideoCard({ video, index, size = 'normal' }: { video: any; index
         e.preventDefault();
         e.stopPropagation();
 
-        const link = `${window.location.origin}/recreate/${video.id}`;
+        const link = `${window.location.origin}${baseRoute}/${video.id}`;
         navigator.clipboard.writeText(link);
         alert('Link copied to clipboard!');
     };
 
     return (
-        <Link href={`/recreate/${video.id}`} prefetch={false}>
+        <Link href={`${baseRoute}/${video.id}${additionalParams ? `?${additionalParams}` : ''}`} prefetch={false}>
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
                 viewport={{ once: true }}
-                className={`group relative rounded-2xl overflow-hidden bg-black ${isLarge ? 'aspect-[16/7]' : 'aspect-[9/8]'}`}
+                className={`group relative rounded-md overflow-hidden bg-black border border-white/10 ${isSquare ? 'aspect-square' : isVertical ? (isSplit ? 'aspect-[4/3]' : 'aspect-[9/16]') : isLarge ? 'aspect-[21/9]' : 'aspect-[4/3] md:aspect-[16/10]'}`}
             >
-                {/* Before/After Split View */}
-                <div className="absolute inset-0 flex">
-                    {/* Before Side */}
-                    <div className="relative w-1/2 overflow-hidden">
-                        {video.beforeVideo ? (
-                            <LazyVideo
-                                src={video.beforeVideo}
-                                className="w-full h-full object-contain"
-                            />
-                        ) : video.beforeImage ? (
-                            <Image
-                                src={video.beforeImage}
-                                alt="Before"
-                                fill
-                                className="object-contain"
-                                loading="lazy"
-                                sizes="(max-width: 768px) 50vw, 25vw"
-                            />
-                        ) : null}
-                        <span className="absolute top-3 left-3 px-2 py-1 rounded bg-zinc-800/80 backdrop-blur-sm text-[10px] font-bold text-white z-10">BEFORE</span>
-                    </div>
+                <div className="absolute inset-0 transition-transform duration-700 group-hover:scale-105 flex">
+                    {(() => {
+                        const renderMedia = (vidUrl?: string, imgUrl?: string, alt?: string, isPlaceholder: boolean = false) => {
+                            if (isPlaceholder) {
+                                return (
+                                    <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center border border-white/5 relative group/prod">
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover/prod:opacity-100 transition-opacity" />
+                                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-2 group-hover/prod:scale-110 transition-transform">
+                                            <Sparkles className="w-4 h-4 text-zinc-400" />
+                                        </div>
+                                        <span className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest">Product</span>
+                                    </div>
+                                );
+                            }
 
-                    {/* After Side */}
-                    <div className="relative w-1/2 overflow-hidden">
-                        {video.afterVideo ? (
-                            <LazyVideo
-                                src={video.afterVideo}
-                                className="w-full h-full object-contain"
-                            />
-                        ) : video.afterImage ? (
-                            <Image
-                                src={video.afterImage}
-                                alt="After"
-                                fill
-                                className="object-contain"
-                                loading="lazy"
-                                sizes="(max-width: 768px) 50vw, 25vw"
-                            />
-                        ) : null}
-                        <span className="absolute top-3 right-3 px-2 py-1 rounded bg-orange-500 text-[10px] font-bold text-white z-10">AFTER</span>
-                    </div>
+                            if (vidUrl) {
+                                return (
+                                    <LazyVideo
+                                        src={vidUrl}
+                                        className="w-full h-full object-cover"
+                                    />
+                                );
+                            }
+                            if (imgUrl) {
+                                return (
+                                    <Image
+                                        src={imgUrl}
+                                        alt={alt || 'Media'}
+                                        fill
+                                        className="object-cover"
+                                        loading="lazy"
+                                        sizes="(max-width: 768px) 33vw, 20vw"
+                                    />
+                                );
+                            }
+                            return <div className="w-full h-full bg-zinc-900" />;
+                        };
+
+                        const beforeContent = previewMode === 'product'
+                            ? renderMedia(
+                                undefined,
+                                video.productImage || video.product_image_url,
+                                "Product",
+                                !video.productImage && !video.product_image_url
+                            )
+                            : renderMedia(
+                                video.beforeVideo || video.before_video_url,
+                                video.beforeImage || video.before_image_url,
+                                "Reference"
+                            );
+
+                        const resultContent = renderMedia(
+                            video.afterVideo || video.after_video_url,
+                            video.afterImage || video.after_image_url,
+                            "Result"
+                        );
+
+                        if (isSplit) {
+                            return (
+                                <>
+                                    <div className="w-1/2 h-full relative border-r border-white/10">
+                                        {beforeContent}
+                                        {/* Tag Overlay */}
+                                        <div className="absolute top-4 left-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                            <span className="px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-md text-[10px] font-bold text-white uppercase tracking-wider border border-white/10">
+                                                {previewMode === 'product' ? 'Product' : 'Reference'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="w-1/2 h-full relative">
+                                        {resultContent}
+                                        <div className="absolute top-4 right-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                            <span className="px-3 py-1.5 rounded-lg bg-orange-500 text-[10px] font-bold text-white uppercase tracking-wider shadow-lg shadow-orange-900/20">
+                                                Result
+                                            </span>
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        }
+
+                        return hasResult ? resultContent : beforeContent;
+                    })()}
                 </div>
 
-                {/* Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                {/* Gradient Overlay - Always visible at bottom for text, darker on hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-90 group-hover:from-black/90 group-hover:via-black/40 transition-all duration-300 z-10" />
 
-                {/* Content - Bottom */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
-                    {/* Category Badge */}
-                    <div className="mb-2">
-                        <span className="px-2 py-1 rounded-md bg-black/50 backdrop-blur-md border border-white/10 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
-                            {video.category}
-                        </span>
-                    </div>
+                {/* Content - Bottom Layout */}
+                <div className="absolute bottom-0 left-0 right-0 p-5 z-20">
+                    <div className="flex items-end justify-between gap-4">
+                        {/* Left: Text Info */}
+                        <div className="flex-1 min-w-0 transform transition-transform duration-300 group-hover:-translate-y-2">
+                            <div className="mb-1 text-[10px] uppercase tracking-widest text-zinc-400 font-bold">
+                                {video.category || 'Recreate'}
+                            </div>
+                            <h3 className="text-white font-black text-lg uppercase leading-tight truncate pr-2">
+                                {video.title}
+                            </h3>
+                        </div>
 
-                    {/* Title */}
-                    <h3 className="text-white font-bold text-base mb-3 line-clamp-1">
-                        {video.title}
-                    </h3>
+                        {/* Right: Actions (Hidden by default, slide/fade in on hover) */}
+                        <div className="flex items-center gap-2 shrink-0 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                            {/* Share */}
+                            <button
+                                onClick={handleShare}
+                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white text-white hover:text-black backdrop-blur-md flex items-center justify-center transition-all border border-white/10"
+                                title="Share"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="18" cy="5" r="3" />
+                                    <circle cx="6" cy="12" r="3" />
+                                    <circle cx="18" cy="19" r="3" />
+                                    <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+                                    <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
+                                </svg>
+                            </button>
 
-                    {/* Action Buttons Row */}
-                    <div className="flex items-center justify-end gap-2 mb-3">
-                        {/* Share Button */}
-                        <button
-                            onClick={handleShare}
-                            className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/20 transition-colors"
-                            title="Share"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white w-3.5 h-3.5">
-                                <circle cx="18" cy="5" r="3" />
-                                <circle cx="6" cy="12" r="3" />
-                                <circle cx="18" cy="19" r="3" />
-                                <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
-                                <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
-                            </svg>
-                        </button>
+                            {/* Like */}
+                            <button
+                                onClick={toggleLike}
+                                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white text-white hover:text-red-500 backdrop-blur-md flex items-center justify-center transition-all border border-white/10"
+                                title="Like"
+                            >
+                                <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : 'fill-none'}`} />
+                            </button>
 
-                        {/* Like/Save Button */}
-                        <button
-                            onClick={toggleLike}
-                            className="w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/20 transition-colors"
-                            title={isLiked ? "Remove from saved" : "Save template"}
-                        >
-                            <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500 text-red-500' : 'text-white'}`} />
-                        </button>
-                    </div>
-
-                    {/* Recreate Button - Using div to avoid nested button issues */}
-                    <div className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-transparent border border-white/20 group-hover:bg-white/10 text-white font-medium text-sm transition-colors cursor-pointer">
-                        <Play className="w-4 h-4 fill-current" />
-                        Recreate
+                            {/* Recreate Button - Orange Pill */}
+                            <div className="h-10 px-6 rounded-md bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs uppercase tracking-wider flex items-center shadow-lg shadow-orange-900/40 transition-transform hover:scale-105 cursor-pointer ml-1">
+                                Recreate
+                            </div>
+                        </div>
                     </div>
                 </div>
             </motion.div>
-        </Link>
+        </Link >
     );
 }

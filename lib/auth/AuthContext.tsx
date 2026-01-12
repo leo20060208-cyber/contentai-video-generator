@@ -13,8 +13,13 @@ interface AuthContextType {
     login: (email: string, password: string) => Promise<{ error: string | null }>;
     signup: (name: string, email: string, password: string) => Promise<{ error: string | null }>;
     loginWithGoogle: () => Promise<void>;
+    loginWithOtp: (email: string) => Promise<{ error: string | null }>;
+    verifyOtp: (email: string, token: string) => Promise<{ error: string | null }>;
+    updatePassword: (password: string) => Promise<{ error: string | null }>;
     logout: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    deductCreditsOptimistic: (amount: number, description?: string) => void;
+    logCreditTransaction: (amount: number, type: 'add' | 'deduct', description: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,11 +30,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [session, setSession] = useState<Session | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const hasResolved = useRef(false);
+    const [isMounted, setIsMounted] = useState(false);
 
     const refreshProfile = async () => {
         if (user) {
             const userProfile = await getProfile(user.id);
             setProfile(userProfile);
+        }
+    };
+
+    // Helper to log credit transactions to database
+    const logCreditTransaction = async (amount: number, type: 'add' | 'deduct', description: string) => {
+        if (!user || !profile) return;
+
+        try {
+            const newBalance = type === 'add'
+                ? (profile.credits || 0) + amount
+                : (profile.credits || 0) - amount;
+
+            await supabase.from('credit_transactions').insert({
+                user_id: user.id,
+                amount: type === 'add' ? amount : -amount,
+                balance_after: newBalance,
+                type,
+                description
+            });
+        } catch (error) {
+            console.error('Error logging credit transaction:', error);
+        }
+    };
+
+    const deductCreditsOptimistic = (amount: number, description: string = 'Credit deduction') => {
+        if (profile) {
+            setProfile({ ...profile, credits: (profile.credits || 0) - amount });
+            // Logic moved to server-side (API) to ensure single source of truth and avoid duplicates
+            // The transaction history will update via Realtime subscription or refresh
         }
     };
 
@@ -41,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 hasResolved.current = true;
                 setIsLoading(false);
             }
-        }, 1000); // Reduced to 1s for snappier navigation
+        }, 500); // Reduced to 500ms for snappier navigation
 
         // Get initial session
         if (!isSupabaseConfigured) {
@@ -103,6 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
             subscription = data.subscription;
         }
+
+        setIsMounted(true); // Signal mount
 
         return () => {
             clearTimeout(timeout);
@@ -292,20 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return { error: error.message };
             }
 
-            // Create profile manually after signup
-            if (data.user) {
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .upsert({
-                        id: data.user.id,
-                        name: name,
-                        plan: 'Free',
-                    }, { onConflict: 'id' });
 
-                if (profileError) {
-                    console.error('Profile creation error:', profileError);
-                }
-            }
 
             return { error: null };
         } catch (err: any) {
@@ -333,6 +357,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
     };
 
+    const loginWithOtp = async (email: string) => {
+        if (!isSupabaseConfigured) {
+            console.warn('⚠️ Offline Mode: Mock OTP sent');
+            return { error: null };
+        }
+        const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: {
+                shouldCreateUser: false,
+                emailRedirectTo: `${window.location.origin}/profile`,
+            },
+        });
+        return { error: error?.message || null };
+    };
+
+    const verifyOtp = async (email: string, token: string) => {
+        if (!isSupabaseConfigured) {
+            console.warn('⚠️ Offline Mode: Mock OTP verified');
+            // Mock login
+            const mockUser: User = { id: 'mock-user-id', email, app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: new Date().toISOString() } as User;
+            const mockSession: Session = { access_token: 'mock', refresh_token: 'mock', expires_in: 3600, token_type: 'bearer', user: mockUser };
+            setSession(mockSession);
+            setUser(mockUser);
+            return { error: null };
+        }
+        const { data, error } = await supabase.auth.verifyOtp({
+            email,
+            token,
+            type: 'email',
+        });
+
+        if (error) return { error: error.message };
+
+        if (data.session) {
+            setSession(data.session);
+            setUser(data.session.user);
+        }
+
+        return { error: null };
+    };
+
+    const updatePassword = async (password: string) => {
+        if (!isSupabaseConfigured) {
+            console.warn('⚠️ Offline Mode: Mock password updated');
+            return { error: null };
+        }
+        const { error } = await supabase.auth.updateUser({ password });
+        return { error: error?.message || null };
+    };
+
     const logout = async () => {
         await supabase.auth.signOut();
         setUser(null);
@@ -350,8 +424,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 login,
                 signup,
                 loginWithGoogle,
+                loginWithOtp,
+                verifyOtp,
+                updatePassword,
                 logout,
                 refreshProfile,
+                deductCreditsOptimistic,
+                logCreditTransaction,
             }}
         >
             {children}

@@ -72,3 +72,5 @@ service-account.json
 # Scripts with hardcoded secrets
 scripts/force_add_env.js
 scripts/update_env.js
+scripts/fix-env.js
+scripts/update-env.js

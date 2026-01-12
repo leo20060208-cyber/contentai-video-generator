@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { useCategories } from '@/hooks/useCategories';
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
-import { FeaturesModal } from './FeaturesModal';
 
 interface HeroProps {
     selectedCategory: string;
@@ -13,7 +14,35 @@ interface HeroProps {
 export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
     const { categories, loading } = useCategories();
     const [businessRows, setBusinessRows] = useState<string[][]>([]);
-    const [showFeatures, setShowFeatures] = useState(false);
+    const [heroVideo, setHeroVideo] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const [heroImage, setHeroImage] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const [heroLibrary, setHeroLibrary] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
+    const [libraryContent, setLibraryContent] = useState<any>(null);
+
+    useEffect(() => {
+        async function loadHeroContent() {
+            try {
+                const { getHeroTemplate } = await import('@/lib/db/videos');
+                const { getSectionContent } = await import('@/lib/db/content');
+
+                const [vid, img, lib, libContent] = await Promise.all([
+                    getHeroTemplate('video'),
+                    getHeroTemplate('image'),
+                    getHeroTemplate('library'), // Fetch library card content
+                    getSectionContent('what_we_do_v2')
+                ]);
+
+                if (vid) setHeroVideo(vid);
+                if (img) setHeroImage(img);
+                if (lib) setHeroLibrary(lib);
+                if (libContent) setLibraryContent(libContent);
+            } catch (e) {
+                console.error("Failed to load hero content", e);
+            }
+        }
+        loadHeroContent();
+    }, []);
 
     useEffect(() => {
         if (categories.length > 0) {
@@ -31,8 +60,8 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
     };
 
     return (
-        <section className="pt-24 pb-12 px-4">
-            <div className="max-w-[1200px] mx-auto text-center">
+        <section className="pt-24 pb-4 w-full px-2">
+            <div className="max-w-[1200px] mx-auto text-center mb-12">
 
                 {/* Main Title - LARGE ORANGE TEXT */}
                 <h1
@@ -45,51 +74,197 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
                 >
                     RECREATE VIRAL PRODUCT
                     <br />
-                    VIDEOS IN SECONDS
+                    CONTENT IN SECONDS
                 </h1>
 
-                {/* Discover Button (Triggers Popup) */}
-                <div className="flex justify-center mb-12">
-                    <button
-                        onClick={() => setShowFeatures(true)}
-                        className="inline-flex items-center gap-3 px-1 py-1 pr-5 rounded-full bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 hover:border-orange-500/30 transition-all group cursor-pointer"
+                {/* Scrolling Marquee of Buttons */}
+                <div className="w-full overflow-hidden relative py-4">
+                    {/* Gradient Masks */}
+                    <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-black via-black/80 to-transparent z-20 pointer-events-none" />
+                    <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-black via-black/80 to-transparent z-20 pointer-events-none" />
+
+                    <motion.div
+                        className="flex gap-6 w-max"
+                        animate={{ x: "-50%" }}
+                        transition={{
+                            ease: "linear",
+                            duration: 30,
+                            repeat: Infinity,
+                        }}
                     >
-                        <div className="w-10 h-10 rounded-full bg-zinc-900 shadow-sm flex items-center justify-center border border-zinc-700 group-hover:border-orange-500/50 transition-colors">
-                            <Sparkles className="w-4 h-4 text-orange-500 fill-orange-500/20" />
+                        {/* Repeat buttons enough times to fill screen and loop smoothly */}
+                        {[...Array(20)].map((_, i) => {
+                            const texts = ['EXPLORE', 'HOW?', 'WHAT CAN YOU CREATE'];
+                            const text = texts[i % texts.length];
+                            return (
+                                <Link
+                                    key={i}
+                                    href="/what-we-do"
+                                    className="group relative px-6 py-2 bg-transparent border border-zinc-800 hover:border-orange-500/50 transition-all duration-300 active:scale-95 flex items-center justify-center"
+                                >
+                                    {/* Glow effect */}
+                                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+                                    {/* Main Text */}
+                                    <span className="relative text-white font-bold tracking-widest text-xs z-10 whitespace-nowrap uppercase">
+                                        {text}
+                                    </span>
+                                </Link>
+                            );
+                        })}
+                    </motion.div>
+                </div>
+            </div>
+
+            {/* Layout Container */}
+            <div className="flex flex-col w-full gap-2 pb-12">
+
+                {/* TOP ROW: Two Main Cards Layout - Video vs Image */}
+                <div className="flex flex-col md:flex-row w-full gap-2 h-[80vh]">
+
+                    {/* Card 1: Recreate Video */}
+                    <div className="w-full md:w-1/2 flex-1 relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10">
+                        {/* Background Content */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                            {heroVideo ? (
+                                <video
+                                    src={heroVideo.after_video_url || heroVideo.video_url}
+                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                />
+                            ) : (
+                                <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center" />
+                            )}
                         </div>
-                        <span className="text-white font-medium">Discover Platform</span>
-                        <span className="text-zinc-500 text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/5">Prime AI</span>
-                    </button>
+
+                        {/* Gradient Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+
+                        {/* Content / Controls */}
+                        <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            {/* Minimalist Rectangular Button */}
+                            <a href="/create-yours" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                Create Video
+                            </a>
+                        </div>
+
+                        {/* Bottom Tray - Thinner/Minimal */}
+                        <div className="absolute bottom-4 left-4 right-4 z-20">
+                            <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">Video Editing</h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">Powered by Kling.ai</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Card 2: Recreate Image */}
+                    <div className="w-full md:w-1/2 flex-1 relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10">
+                        {/* Background Content */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                            {heroImage ? (
+                                (heroImage.after_video_url || heroImage.url?.match(/\.(mp4|webm|mov)$/i) || heroImage.after_image_url?.match(/\.(mp4|webm|mov)$/i)) ? (
+                                    <video
+                                        src={heroImage.after_video_url || heroImage.after_image_url || heroImage.url}
+                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                                        autoPlay
+                                        loop
+                                        muted
+                                        playsInline
+                                    />
+                                ) : (
+                                    <img
+                                        src={heroImage.after_image_url || heroImage.url}
+                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                                        alt="Hero Image"
+                                    />
+                                )
+                            ) : (
+                                <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop')] bg-cover bg-center" />
+                            )}
+                        </div>
+
+                        {/* Gradient Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+
+                        {/* Content / Controls */}
+                        <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            {/* Minimalist Rectangular Button */}
+                            <a href="/create-image" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                Create Image
+                            </a>
+                        </div>
+
+                        {/* Bottom Tray - Thinner/Minimal */}
+                        <div className="absolute bottom-4 left-4 right-4 z-20">
+                            <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
+                                <div className="flex flex-col">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">Image Editing</h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">Powered by Nano Banana Pro</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
-                <FeaturesModal isOpen={showFeatures} onClose={() => setShowFeatures(false)} />
+                {/* BOTTOM ROW: 3rd Library Card (Full Width) */}
+                <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 h-[80vh]">
+                    {/* Background Content */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                        {heroLibrary ? (
+                            heroLibrary.after_video_url ? (
+                                <video
+                                    src={heroLibrary.after_video_url}
+                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                                    autoPlay
+                                    loop
+                                    muted
+                                    playsInline
+                                />
+                            ) : (
+                                <img
+                                    src={heroLibrary.after_image_url || heroLibrary.url}
+                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                                    alt="Hero Library"
+                                />
+                            )
+                        ) : (
+                            <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center" />
+                        )}
+                    </div>
 
-                {/* Business Tags - Clickable Filters */}
-                <div className="space-y-3">
-                    {loading ? (
-                        <div className="text-zinc-500 text-sm">Loading categories...</div>
-                    ) : (
-                        businessRows.map((row, rowIndex) => (
-                            <div key={rowIndex} className="flex flex-wrap justify-center gap-2">
-                                {row.map((business) => {
-                                    const isActive = selectedCategory === business && selectedCategory !== 'All';
+                    {/* Gradient Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
 
-                                    return (
-                                        <button
-                                            key={business}
-                                            onClick={() => handleBusinessClick(business)}
-                                            className={`px-4 py-2 rounded-full text-xs font-medium uppercase tracking-wide transition-all cursor-pointer ${isActive
-                                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                                : 'bg-zinc-900 border border-zinc-700 text-zinc-400 hover:border-zinc-600 hover:text-white'
-                                                }`}
-                                        >
-                                            {business}
-                                        </button>
-                                    );
-                                })}
+                    {/* Content / Controls */}
+                    <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <div className="flex gap-4">
+                            {/* Image Library Button */}
+                            <Link href="/images" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                Image Library
+                            </Link>
+
+                            {/* Video Library Button */}
+                            <Link href="/videos" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                Video Library
+                            </Link>
+                        </div>
+                    </div>
+
+                    {/* Bottom Tray - Library */}
+                    <div className="absolute bottom-4 left-4 right-4 z-20">
+                        <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <h3 className="text-white font-bold uppercase tracking-tight text-sm">Library</h3>
+                                <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">Recreate viral content in 1 step</p>
                             </div>
-                        ))
-                    )}
+                        </div>
+                    </div>
                 </div>
 
             </div>

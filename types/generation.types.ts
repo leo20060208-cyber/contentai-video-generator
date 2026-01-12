@@ -12,7 +12,9 @@ export type AIModel =
   | 'nano-banana'
   | 'kling-standard'
   | 'kling-pro'
-  | 'wavespeed-kling-o1';
+  | 'wavespeed-kling-o1'
+  | 'kwaivgi/kling-video-o1/video-edit'
+  | 'kwaivgi/kling-video-o1/reference-to-video';
 
 export interface GenerationConfig {
   method: GenerationMethod;

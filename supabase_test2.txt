@@ -1,0 +1,9 @@
+﻿--- SUPABASE CONNECTION TEST ---
+URL: https://hjttjmqawnasdfmvpobn.supabase.co
+Service Role Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd... (length: 219)
+
+Testing with Service Role Key...
+[SUCCESS] Supabase connection works! Got data: [ { id: 'a8e12102-ccc3-4015-9e36-dfd81e2dc4ef' } ]
+
+Testing with Anon Key...
+[SUCCESS] Supabase (anon) connection works! Got data: [ { id: 'a8e12102-ccc3-4015-9e36-dfd81e2dc4ef' } ]

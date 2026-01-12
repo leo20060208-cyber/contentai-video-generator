@@ -16,17 +16,26 @@ export class WavespeedClient {
         images: string[];
         prompt: string;
         model?: string;
+        width?: number;
+        height?: number;
     }) {
         const modelPath = params.model || 'google/nano-banana/edit';
         const endpoint = `${this.baseUrl}/${modelPath}`;
 
-        const body = {
+        const body: any = {
             images: params.images.map(url => this.cleanUrl(url)),
             prompt: params.prompt,
             output_format: 'png',
-            enable_base64_output: false, // Prefer URL
-            enable_sync_mode: true       // Wait for result immediately if possible (docs say valid for API)
+            enable_base64_output: false,
+            enable_sync_mode: true
         };
+
+        if (params.width && params.height) {
+            body.image_size = { width: params.width, height: params.height };
+            // Some models fallback
+            body.width = params.width;
+            body.height = params.height;
+        }
 
         console.log(`🎨 [Wavespeed] Editing Image...`);
         console.log(`⚙️ [Wavespeed] Model: ${modelPath}`);
@@ -56,20 +65,30 @@ export class WavespeedClient {
 
             // Try to extract URL from various possible locations
             let outputUrl: string | undefined;
+
+            // Common patterns
             if (result.output && result.output.url) outputUrl = result.output.url;
-            if (result.data?.output?.url) outputUrl = result.data.output.url;
+            else if (result.data?.output?.url) outputUrl = result.data.output.url;
+            else if (result.url) outputUrl = result.url; // Top level url
+            else if (result.data?.url) outputUrl = result.data.url; // Data level url
+
             // Check array
-            if (result.output && Array.isArray(result.output)) outputUrl = result.output[0];
-            if (result.data?.output && Array.isArray(result.data.output)) outputUrl = result.data.output[0];
+            else if (result.output && Array.isArray(result.output)) outputUrl = result.output[0];
+            else if (result.data?.output && Array.isArray(result.data.output)) outputUrl = result.data.output[0];
             // Check simple string
-            if (typeof result.output === 'string') outputUrl = result.output;
+            else if (typeof result.output === 'string') outputUrl = result.output;
+
+            // Nano Banana specific: sometimes returns { image: "base64" } or { image: "url" }
+            else if (result.image) outputUrl = result.image;
+            else if (result.data?.image) outputUrl = result.data.image;
 
             if (outputUrl) {
                 return { url: outputUrl, status: 'completed' };
-            } else if (result.id || result.request_id) {
+            } else if (result.id || result.request_id || result.data?.id) {
                 // If async fallback
-                return { taskId: result.id || result.request_id, status: 'processing' };
+                return { taskId: result.id || result.request_id || result.data?.id, status: 'processing' };
             } else {
+                console.error('🛑 Unknown Wavespeed Response Format:', JSON.stringify(result, null, 2));
                 throw new Error('No output URL or Task ID in response');
             }
 
@@ -88,6 +107,7 @@ export class WavespeedClient {
         image_url?: string; // For Standard I2V
         images?: string[];  // For Reference-to-Video
         video_url?: string; // For Video-Edit
+        target_mask?: string; // For Masking
         model?: string;
         duration?: number;
         aspect_ratio?: string;
@@ -143,6 +163,11 @@ export class WavespeedClient {
                 body.images = [this.cleanUrl(params.image_url)];
             } else {
                 body.images = [];
+            }
+
+            // Add target mask if provided
+            if (params.target_mask) {
+                body.target_mask = this.cleanUrl(params.target_mask);
             }
             // Note: Duration for Video Edit is usually derived from input or limited to 3-10s.
         }

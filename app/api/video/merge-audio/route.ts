@@ -24,11 +24,11 @@ if (ffmpegPath) {
 function getSupabaseClient() {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
+
     if (!supabaseUrl || !supabaseKey) {
         throw new Error('Missing Supabase environment variables');
     }
-    
+
     return createClient(supabaseUrl, supabaseKey);
 }
 
@@ -69,6 +69,8 @@ export async function POST(req: Request) {
             downloadFile(audioUrl, audioPath)
         ]);
 
+        console.log(`Using ffmpeg path: ${ffmpegPath}`);
+
         // 2. Merge with FFMPEG
         await new Promise((resolve, reject) => {
             ffmpeg()
@@ -82,7 +84,9 @@ export async function POST(req: Request) {
                     '-map 1:a:0',
                     '-shortest' // Finish when the shortest stream ends (usually video)
                 ])
-                .save(outputPath)
+                .on('start', (commandLine) => {
+                    console.log('Spawned Ffmpeg with command: ' + commandLine);
+                })
                 .on('end', () => {
                     console.log('✅ Merge completed');
                     resolve(null);
@@ -90,7 +94,10 @@ export async function POST(req: Request) {
                 .on('error', (err) => {
                     console.error('❌ FFMpeg error:', err);
                     reject(err);
-                });
+                })
+                // @ts-ignore
+                .timeout(60) // Safety timeout
+                .save(outputPath);
         });
 
         // 3. Upload Result to Supabase

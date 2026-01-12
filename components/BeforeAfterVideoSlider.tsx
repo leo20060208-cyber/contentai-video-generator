@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Image as ImageIcon } from 'lucide-react';
+import { Play, Pause, Image as ImageIcon, Volume2, VolumeX } from 'lucide-react';
 import Image from 'next/image';
 
 interface BeforeAfterVideoSliderProps {
@@ -10,6 +11,10 @@ interface BeforeAfterVideoSliderProps {
     beforeImageUrl?: string | null;
     afterImageUrl?: string | null;
     className?: string;
+    // New Props for Base Toggle
+    baseMode?: 'reference' | 'product';
+    onBaseModeChange?: (mode: 'reference' | 'product') => void;
+    showBaseToggle?: boolean;
 }
 
 export function BeforeAfterVideoSlider({
@@ -17,14 +22,14 @@ export function BeforeAfterVideoSlider({
     afterVideoUrl,
     beforeImageUrl,
     afterImageUrl,
-    className = ''
+    className = '',
+    baseMode = 'reference',
+    onBaseModeChange,
+    showBaseToggle = false
 }: BeforeAfterVideoSliderProps) {
     const [sliderPosition, setSliderPosition] = useState(50); // 0-100%
-    const [isDragging, setIsDragging] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [isMuted, setIsMuted] = useState(true);
-    const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal'); // horizontal line (up/down), vertical line (left/right)
-    const [showLabels, setShowLabels] = useState(true);
     const [isHovering, setIsHovering] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -39,79 +44,60 @@ export function BeforeAfterVideoSlider({
     const isAfterVideo = !!afterVideoUrl;
     const hasAnyVideo = isBeforeVideo || isAfterVideo;
 
-    // Handle drag events
-    const handleDrag = (clientX: number, clientY: number) => {
+    // Handle Hover Interaction
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
-
-        let percentage;
-        if (orientation === 'horizontal') {
-            // Horizontal line moves Vertically (Y axis)
-            const y = clientY - rect.top;
-            percentage = Math.max(0, Math.min(100, (y / rect.height) * 100));
-        } else {
-            // Vertical line moves Horizontally (X axis)
-            const x = clientX - rect.left;
-            percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-        }
+        const x = e.clientX - rect.left;
+        const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
         setSliderPosition(percentage);
+        setIsHovering(true);
     };
 
-    const handleMouseDown = () => setIsDragging(true);
-    const handleMouseUp = () => setIsDragging(false);
-
-    const handleMouseMove = (e: MouseEvent) => {
-        if (!isDragging) return;
-        handleDrag(e.clientX, e.clientY);
+    const handleMouseLeave = () => {
+        setIsHovering(false);
+        setSliderPosition(50); // Optional: Reset to center on leave, or keep last position
     };
-
-    const handleTouchMove = (e: TouchEvent) => {
-        if (!isDragging) return;
-        handleDrag(e.touches[0].clientX, e.touches[0].clientY);
-    };
-
-    useEffect(() => {
-        if (isDragging) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-            document.addEventListener('touchmove', handleTouchMove);
-            document.addEventListener('touchend', handleMouseUp);
-        }
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-            document.removeEventListener('touchmove', handleTouchMove);
-            document.removeEventListener('touchend', handleMouseUp);
-        };
-    }, [isDragging, orientation]);
 
     // Sync video playback
-    const togglePlayPause = () => {
+    const togglePlayPause = async () => {
         const bVideo = beforeVideoRef.current;
         const aVideo = afterVideoRef.current;
 
+        // If currently playing, we want to pause
         if (isPlaying) {
             if (bVideo) bVideo.pause();
             if (aVideo) aVideo.pause();
+            setIsPlaying(false);
         } else {
-            if (bVideo) bVideo.play().catch(() => { });
-            if (aVideo) aVideo.play().catch(() => { });
+            // If currently paused, we want to play
+            // Reset to sync if significant drift? 
+            // For now just play both
+            try {
+                const promises = [];
+                if (bVideo) promises.push(bVideo.play());
+                if (aVideo) promises.push(aVideo.play());
+
+                await Promise.allSettled(promises);
+                setIsPlaying(true);
+            } catch (e) {
+                console.error("Playback failed", e);
+                // Even if one fails, we set state to what we attempted? 
+                // Better to set isPlaying to true if at least one works
+                setIsPlaying(true);
+            }
         }
-        setIsPlaying(!isPlaying);
     };
 
     const toggleMute = () => {
         setIsMuted(!isMuted);
-        if (beforeVideoRef.current) beforeVideoRef.current.muted = !isMuted;
-        if (afterVideoRef.current) afterVideoRef.current.muted = !isMuted;
     };
 
-    // Auto-sync mute state when refs change or mount
+    // Auto-sync mute/volume state
     useEffect(() => {
         if (beforeVideoRef.current) beforeVideoRef.current.muted = isMuted;
         if (afterVideoRef.current) afterVideoRef.current.muted = isMuted;
-    }, [isMuted, beforeVideoUrl, afterVideoUrl]);
-
+    }, [isMuted]);
 
     // Sync video times
     const handleTimeUpdate = () => {
@@ -120,12 +106,6 @@ export function BeforeAfterVideoSlider({
         if (timeDiff > 0.1) {
             afterVideoRef.current.currentTime = beforeVideoRef.current.currentTime;
         }
-    };
-
-    const handleVideoEnd = () => {
-        setIsPlaying(false);
-        if (beforeVideoRef.current) beforeVideoRef.current.currentTime = 0;
-        if (afterVideoRef.current) afterVideoRef.current.currentTime = 0;
     };
 
     // Render helper
@@ -137,7 +117,7 @@ export function BeforeAfterVideoSlider({
 
         if (!src) {
             return (
-                <div className="absolute inset-0 w-full h-full bg-zinc-900/50 flex items-center justify-center">
+                <div className="absolute inset-0 w-full h-full bg-transparent flex items-center justify-center">
                     <span className="text-zinc-600 font-mono text-xs p-4 text-center">
                         {isTopLayer ? "After" : "Before"} Empty
                     </span>
@@ -150,22 +130,21 @@ export function BeforeAfterVideoSlider({
                 <video
                     ref={ref}
                     src={videoSrc}
-                    className="absolute inset-0 w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none" // pointer-events-none is key for hover passthrough
                     loop
                     playsInline
-                    muted={isMuted} // Controlled
+                    muted={isMuted}
                     onTimeUpdate={!isTopLayer ? handleTimeUpdate : undefined}
-                // onEnded={handleVideoEnd}
                 />
             );
         } else {
             return (
-                <div className="relative w-full h-full">
+                <div className="absolute inset-0 w-full h-full pointer-events-none !bg-transparent">
                     <Image
                         src={src}
                         alt={isTopLayer ? "After" : "Before"}
                         fill
-                        className="object-cover"
+                        className="object-contain !bg-transparent"
                     />
                 </div>
             );
@@ -188,99 +167,75 @@ export function BeforeAfterVideoSlider({
     }, [hasAnyVideo]);
 
 
-    // Styles based on orientation
-    const isHorizontal = orientation === 'horizontal'; // Line is horizontal, moves vertical
-
-    const sliderBarStyle = isHorizontal
-        ? { top: `${sliderPosition}%`, left: 0, right: 0, height: '2px', cursor: 'ns-resize' }
-        : { left: `${sliderPosition}%`, top: 0, bottom: 0, width: '2px', cursor: 'ew-resize' };
+    const sliderNavStyle = { left: `${sliderPosition}%`, top: 0, bottom: 0, width: '2px', cursor: 'ew-resize' };
 
     return (
         <div className={`flex flex-col gap-4 w-full h-full ${className}`}>
 
             {/* Main Video Container */}
             <div
-                className="relative overflow-hidden rounded-2xl bg-zinc-900 w-full flex-1 flex items-center justify-center border border-white/5 shadow-2xl"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
+                className="relative overflow-hidden rounded-2xl bg-transparent w-full flex-1 flex items-center justify-center border border-white/5 shadow-2xl cursor-crosshair group"
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+                ref={containerRef}
             >
-                <div
-                    ref={containerRef}
-                    className="relative w-full h-full mx-auto"
-                    style={{
+                <div className="relative w-full h-full mx-auto bg-transparent">
 
-                    }}
-                >
                     {/* Before Media (Background Layer) */}
                     {renderMedia(false)}
 
                     {/* After Media (Top Layer, Clipped) */}
                     <div
-                        className="absolute inset-0 overflow-hidden"
-                        style={isHorizontal
-                            ? { clipPath: `inset(0 0 ${100 - sliderPosition}% 0)` } // Shows top part
-                            : { clipPath: `inset(0 0 0 ${sliderPosition}%)` } // Shows right part
-                        }
+                        className="absolute inset-0 overflow-hidden pointer-events-none bg-transparent"
+                        style={{ clipPath: `inset(0 0 0 ${sliderPosition}%)` }} // Shows right part
                     >
                         {renderMedia(true)}
                     </div>
 
-                    {/* Slider Handle - thin line only */}
+                    {/* Slider Line */}
                     <div
-                        className={`absolute bg-white z-20 transition-opacity duration-300 hover:opacity-100 ${isDragging ? 'opacity-100' : 'opacity-70'}`}
-                        style={sliderBarStyle}
-                        onMouseDown={handleMouseDown}
-                        onTouchStart={handleMouseDown}
+                        className="absolute top-0 bottom-0 w-0.5 bg-white z-20 pointer-events-none shadow-[0_0_10px_rgba(0,0,0,0.5)]"
+                        style={{ left: `${sliderPosition}%` }}
                     />
 
                     {/* Labels */}
-                    {showLabels && (
-                        <>
-                            <div className={`absolute transition-opacity duration-300 ${isHovering ? 'opacity-0' : 'opacity-100'} top-4 left-4 px-2 py-1 rounded bg-black/40 text-white/70 text-[10px] uppercase tracking-wider font-medium pointer-events-none`}>
-                                Before
-                            </div>
-                            <div className={`absolute transition-opacity duration-300 ${isHovering ? 'opacity-0' : 'opacity-100'} bottom-4 right-4 px-2 py-1 rounded bg-orange-500/80 text-white text-[10px] uppercase tracking-wider font-medium pointer-events-none`}>
-                                After
-                            </div>
-                        </>
-                    )}
+                    <div className={`absolute top-4 left-4 pointer-events-none transition-opacity duration-300 ${isHovering ? 'opacity-0' : 'opacity-100'}`}>
+                        <span className="bg-black/50 text-white text-[10px] uppercase font-bold px-2 py-1 rounded backdrop-blur-sm tracking-wider">Original</span>
+                    </div>
+                    <div className={`absolute bottom-4 right-4 pointer-events-none transition-opacity duration-300 ${isHovering ? 'opacity-0' : 'opacity-100'}`}>
+                        <span className="bg-white/90 text-black text-[10px] uppercase font-bold px-2 py-1 rounded backdrop-blur-sm tracking-wider shadow-lg">Generated</span>
+                    </div>
+
                 </div>
             </div>
 
-            {/* Controls Bar */}
-            <div className="h-14 bg-zinc-900 border border-white/10 rounded-xl flex items-center justify-between px-4 shadow-lg shrink-0">
-
-                {/* Left: Orientation */}
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setOrientation(prev => prev === 'horizontal' ? 'vertical' : 'horizontal')}
-                        className="w-10 h-10 rounded-lg flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
-                        title="Change Comparison Layout"
-                    >
-                        {orientation === 'horizontal' ? (
-                            <div className="flex flex-col gap-1 items-center">
-                                <div className="w-5 h-2 bg-current opacity-30 rounded-sm"></div>
-                                <div className="w-5 h-0.5 bg-current"></div>
-                                <div className="w-5 h-2 bg-current opacity-30 rounded-sm"></div>
-                            </div>
-                        ) : (
-                            <div className="flex gap-1 items-center">
-                                <div className="h-4 w-1.5 bg-current opacity-30 rounded-sm"></div>
-                                <div className="h-4 w-0.5 bg-current"></div>
-                                <div className="h-4 w-1.5 bg-current opacity-30 rounded-sm"></div>
-                            </div>
-                        )}
-                    </button>
-                    <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider hidden sm:block">
-                        {orientation === 'horizontal' ? 'Vertical Swipe' : 'Horizontal Swipe'}
-                    </span>
+            {/* Controls Below - Spread across bottom */}
+            <div className="flex items-center justify-between w-full">
+                {/* Left: Base Toggle */}
+                <div className="flex items-center gap-2 min-w-[140px]">
+                    {showBaseToggle && onBaseModeChange && (
+                        <>
+                            <button
+                                onClick={() => onBaseModeChange('reference')}
+                                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${baseMode === 'reference' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                            >
+                                Reference
+                            </button>
+                            <button
+                                onClick={() => onBaseModeChange('product')}
+                                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${baseMode === 'product' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                            >
+                                Product
+                            </button>
+                        </>
+                    )}
                 </div>
 
-                {/* Center: Play/Pause */}
+                {/* Center: Play/Pause Button */}
                 {hasAnyVideo && (
                     <button
                         onClick={togglePlayPause}
-                        className="w-12 h-12 rounded-full flex items-center justify-center bg-white text-black hover:bg-zinc-200 transition-transform active:scale-95 shadow-lg shadow-white/5"
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white hover:text-zinc-300 transition-all"
                     >
                         {isPlaying ? (
                             <Pause className="w-5 h-5 fill-current" />
@@ -290,22 +245,17 @@ export function BeforeAfterVideoSlider({
                     </button>
                 )}
 
-                {/* Right: Mute/Unmute */}
-                <div className="flex items-center gap-2 justify-end min-w-[100px]">
+                {/* Right: Mute/Unmute Button */}
+                <div className="flex items-center gap-2 justify-end min-w-[140px]">
                     {hasAnyVideo && (
                         <button
                             onClick={toggleMute}
-                            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isMuted ? 'bg-zinc-800 text-zinc-400 hover:text-white' : 'bg-zinc-800 text-white'}`}
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${isMuted ? 'text-zinc-500 hover:text-white' : 'text-white hover:text-zinc-300'}`}
                         >
-                            {isMuted ? (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-                            )}
+                            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                         </button>
                     )}
                 </div>
-
             </div>
         </div>
     );

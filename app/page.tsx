@@ -6,30 +6,20 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
 
-// Lazy load the video library preview to speed up initial page load
-const VideoLibraryPreview = dynamic(
-  () => import('@/components/landing/VideoLibraryPreview').then(mod => mod.VideoLibraryPreview),
-  {
-    loading: () => <div className="h-[500px] w-full bg-zinc-950 flex items-center justify-center text-zinc-600">Loading library...</div>,
-    ssr: true
-  }
-);
+
 
 export default function HomePage() {
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   return (
-    <div className="min-h-screen bg-zinc-950 overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden">
       {/* Hero Section */}
       <Hero
         selectedCategory={selectedCategory}
         onCategoryChange={setSelectedCategory}
       />
 
-      {/* Video Library Preview - Filtered by selected category */}
-
-      {/* Video Library Preview - Filtered by selected category */}
-      <VideoLibraryPreview selectedCategory={selectedCategory} />
+      {/* Video Library Preview Removed as per user request */}
 
       {/* Simple Footer */}
       <footer className="py-8 px-4 border-t border-white/10">

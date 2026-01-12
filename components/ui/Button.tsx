@@ -24,7 +24,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                     size === 'md' && "px-6 py-3 text-sm",
                     size === 'lg' && "px-8 py-4 text-base",
                     // Variants
-                    variant === 'primary' && "bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/25",
+                    variant === 'primary' && "bg-orange-500 text-white hover:bg-orange-600",
                     variant === 'secondary' && "bg-zinc-800 text-white hover:bg-zinc-700",
                     variant === 'ghost' && "bg-transparent text-white hover:bg-white/10",
                     variant === 'outline' && "bg-transparent border border-white/20 text-white hover:bg-white/5 hover:border-white/40",

@@ -7,6 +7,8 @@ import { FreepikClient } from '@/lib/freepik';
 import { AtlasClient } from '@/lib/atlas';
 import { WavespeedClient } from '@/lib/wavespeed';
 
+import { checkCredits, deductCredits } from '@/lib/db/credits';
+
 // Initialize client with environment variables
 const klingClient = new KlingClient({
     accessKey: process.env.KLING_ACCESS_KEY || '',
@@ -40,19 +42,70 @@ export async function POST(request: Request) {
             if (user) userId = user.id;
         }
 
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized: Login required for video generation' }, { status: 401 });
+        }
+
         const body = await request.json();
-        const { prompt, image, images, model, duration, aspect_ratio, target_mask, audio_url } = body;
+        const { prompt, image, images, video, model, duration, aspect_ratio, target_mask, audio_url } = body;
+
+        // Calculate Cost with Correct Formula
+        const vidDuration = duration || 5;
+        let cost = 75;
+
+        if (vidDuration <= 15) {
+            cost = 75;
+        } else if (vidDuration <= 20) {
+            cost = 130;
+        } else {
+            // +30 credits per each additional 5 seconds after 20s
+            const extraSeconds = vidDuration - 20;
+            const extraBlocks = Math.ceil(extraSeconds / 5);
+            cost = 130 + (extraBlocks * 30);
+        }
+
+        // Check Credits
+        const hasCredits = await checkCredits(userId, cost);
+        if (!hasCredits) {
+            console.warn(`[API] User ${userId} has insufficient credits for video gen (Cost: ${cost}).`);
+            return NextResponse.json({ error: 'Insufficient credits', code: 'INSUFFICIENT_CREDITS' }, { status: 402 });
+        }
+
+        // Deduct Credits
+        const deducted = await deductCredits(userId, cost, `Video Generation (${model}, ${vidDuration}s)`);
+        if (!deducted) {
+            return NextResponse.json({ error: 'Failed to process credits' }, { status: 500 });
+        }
 
         console.log('[API] Request parsed:', {
             hasPrompt: !!prompt,
             promptLength: prompt?.length,
             hasImage: !!image,
             hasImages: !!images && images.length > 0,
+            hasVideo: !!video,
+            videoLength: video?.length,
             imageLength: image?.length,
             model,
             hasAudio: !!audio_url,
-            userId // Log userId to debug
+            userId,
+            cost,
+            duration: vidDuration
         });
+
+        // === DETAILED API LOG ===
+        console.log('');
+        console.log('╔═══════════════════════════════════════╗');
+        console.log('║  API VIDEO GENERATE - RECEIVED        ║');
+        console.log('╠═══════════════════════════════════════╣');
+        console.log('║ Video:        ', video ? `✅ ${(video.length / 1024).toFixed(0)}KB` : '❌ NO');
+        console.log('║ Image (frame):', image ? `✅ ${(image.length / 1024).toFixed(0)}KB` : '❌ NO');
+        console.log('║ Images:       ', images ? `✅ ${images.length} items` : '❌ NO');
+        console.log('║ Target Mask:  ', target_mask ? `✅ ${(target_mask.length / 1024).toFixed(0)}KB` : '❌ NO');
+        console.log('║ Duration:', `${vidDuration}s`.padEnd(32), '║');
+        console.log('║ Cost:', `${cost} crèdits`.padEnd(34), '║');
+        console.log('║ Model:', (model || '').substring(0, 33).padEnd(34), '║');
+        console.log('╚═══════════════════════════════════════╝');
+        console.log('');
 
         // Helper to save video to DB
         const saveVideoToDb = async (taskId: string, provider: string) => {
@@ -115,30 +168,53 @@ export async function POST(request: Request) {
         if (useWavespeed) {
             console.log(`[API] Using Wavespeed for model: ${model}`);
 
-            // 1. Handle "images" array (Reference-to-Video)
+            // 1. Handle "images" array (Reference-to-Video / Video-Edit)
             let finalImages: string[] = [];
             if (images && Array.isArray(images) && images.length > 0) {
                 console.log(`[API] Processing ${images.length} images for Wavespeed...`);
-                finalImages = await Promise.all(images.map(async (img: string) => {
+                const uploadedImages = await Promise.all(images.map(async (img: string, index: number) => {
+                    // Skip blob URLs - they won't work server-side
+                    if (img && img.startsWith('blob:')) {
+                        console.warn(`[API] Image ${index}: Skipping blob URL (not valid server-side)`);
+                        return null;
+                    }
+                    // Upload base64 images to Supabase
                     if (img && img.startsWith('data:')) {
                         try {
                             const base64Data = img.split('base64,')[1];
                             const buffer = Buffer.from(base64Data, 'base64');
-                            const fileName = `temp-gen/${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+                            const mimeType = img.split(';')[0].split(':')[1] || 'image/png';
+                            const ext = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png';
+                            const fileName = `temp-gen/${Date.now()}-${index}-${Math.random().toString(36).substring(7)}.${ext}`;
                             const { error: uploadError } = await supabase.storage.from('videos').upload(fileName, buffer, {
-                                contentType: 'image/png',
+                                contentType: mimeType,
                                 upsert: true
                             });
                             if (!uploadError) {
                                 const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
+                                console.log(`[API] Image ${index}: Uploaded to ${publicUrl}`);
                                 return publicUrl;
+                            } else {
+                                console.error(`[API] Image ${index}: Upload failed:`, uploadError);
+                                return null;
                             }
                         } catch (e) {
-                            console.error('[API] Error uploading image from array:', e);
+                            console.error(`[API] Image ${index}: Error uploading:`, e);
+                            return null;
                         }
                     }
-                    return img; // Return original if not base64 or upload failed (fallback)
+                    // Already a valid URL
+                    if (img && (img.startsWith('http://') || img.startsWith('https://'))) {
+                        console.log(`[API] Image ${index}: Using existing URL`);
+                        return img;
+                    }
+                    console.warn(`[API] Image ${index}: Unknown format, skipping`);
+                    return null;
                 }));
+
+                // Filter out nulls and ensure we only have valid URLs
+                finalImages = uploadedImages.filter((url): url is string => url !== null && url.startsWith('http'));
+                console.log(`[API] Final images count: ${finalImages.length} (from ${images.length} inputs)`);
             }
 
             // 2. Handle single "image" (Standard I2V or fallback)
@@ -163,11 +239,64 @@ export async function POST(request: Request) {
             }
 
             // 3. Handle Video Input (Video-Edit)
-            // Use provided 'audio_url' as the source video if model is video-edit
-            // (Assuming audio_url points to the template's video)
             let finalVideoUrl = undefined;
             if (model === 'kwaivgi/kling-video-o1/video-edit') {
-                finalVideoUrl = audio_url;
+                // First try the video field (new Create Yours flow)
+                if (video && video.startsWith('data:')) {
+                    try {
+                        console.log('[API] Converting base64 video to URL...');
+                        const base64Data = video.split('base64,')[1];
+                        const buffer = Buffer.from(base64Data, 'base64');
+                        const mimeType = video.split(';')[0].split(':')[1] || 'video/mp4';
+                        const ext = mimeType.includes('webm') ? 'webm' : 'mp4';
+                        const fileName = `temp-gen/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+                        const { error: uploadError } = await supabase.storage.from('videos').upload(fileName, buffer, {
+                            contentType: mimeType,
+                            upsert: true
+                        });
+                        if (!uploadError) {
+                            const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
+                            finalVideoUrl = publicUrl;
+                            console.log('[API] Video uploaded to:', finalVideoUrl);
+                        } else {
+                            console.error('[API] Video upload error:', uploadError);
+                        }
+                    } catch (e) {
+                        console.error('[API] Error processing base64 video:', e);
+                    }
+                } else if (video) {
+                    // Already a URL
+                    finalVideoUrl = video;
+                } else if (audio_url) {
+                    // Fallback to audio_url (template's video)
+                    finalVideoUrl = audio_url;
+                }
+            }
+
+            // 3.5. Handle Target Mask (if exists)
+            let finalMaskUrl = undefined;
+            if (target_mask && target_mask.startsWith('data:')) {
+                try {
+                    console.log('[API] Converting base64 mask to URL...');
+                    const base64Data = target_mask.split('base64,')[1];
+                    const buffer = Buffer.from(base64Data, 'base64');
+                    const fileName = `temp-gen/${Date.now()}-mask-${Math.random().toString(36).substring(7)}.png`;
+                    const { error: uploadError } = await supabase.storage.from('videos').upload(fileName, buffer, {
+                        contentType: 'image/png',
+                        upsert: true
+                    });
+                    if (!uploadError) {
+                        const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
+                        finalMaskUrl = publicUrl;
+                        console.log('[API] Mask uploaded to:', finalMaskUrl);
+                    } else {
+                        console.error('[API] Mask upload error:', uploadError);
+                    }
+                } catch (e) {
+                    console.error('[API] Error processing mask:', e);
+                }
+            } else if (target_mask) {
+                finalMaskUrl = target_mask;
             }
 
             // 4. AI Image Refinement (Nano Banana) for "Original" Mode
@@ -198,11 +327,13 @@ export async function POST(request: Request) {
                 }
             }
 
+            // Always send image_url (extracted frame or image), not just for non-video-edit models
             const result = await wavespeedClient.generateVideo({
                 prompt,
-                image_url: finalImageUrl,
+                image_url: finalImageUrl,  // ✅ SEMPRE enviar frame extret
                 images: finalImages,
                 video_url: finalVideoUrl,
+                target_mask: finalMaskUrl,  // ✅ Enviar màscara
                 duration: duration || 5,
                 aspect_ratio: aspect_ratio || '16:9',
                 model: model

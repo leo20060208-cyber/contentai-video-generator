@@ -49,9 +49,7 @@ export default function SignupPage() {
             setIsLoading(false);
         } else {
             setSuccess(true);
-            setTimeout(() => {
-                router.push('/profile');
-            }, 1500);
+            // Don't redirect, wait for email confirmation
         }
     };
 
@@ -62,65 +60,71 @@ export default function SignupPage() {
 
     if (success) {
         return (
-            <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+            <div className="min-h-screen flex items-center justify-center px-4">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="text-center"
+                    className="text-center max-w-md mx-auto"
                 >
                     <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
-                        <Check className="w-10 h-10 text-green-500" />
+                        <Mail className="w-10 h-10 text-green-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Account created!</h2>
-                    <p className="text-zinc-400">Redirecting to your profile...</p>
+                    <h2 className="text-2xl font-bold text-white mb-2">Check your email</h2>
+                    <p className="text-zinc-400 mb-6">
+                        We&apos;ve sent a confirmation link to <span className="text-white">{email}</span>.
+                        Please verify your account to continue.
+                    </p>
+                    <Button
+                        variant="secondary"
+                        onClick={() => router.push('/login')}
+                        className="min-w-[200px]"
+                    >
+                        Back to Login
+                    </Button>
                 </motion.div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4 pt-14">
+        <div className="min-h-screen flex items-center justify-center px-4 pt-14">
             <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 items-center">
 
-                {/* Left: Benefits */}
                 <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     className="hidden md:block"
                 >
-                    <h2 className="text-3xl font-bold text-white mb-6">
-                        Start creating <span className="text-orange-500">viral videos</span> today
+                    <h2 className="text-4xl font-black text-white mb-12">
+                        Start recreating <span className="text-orange-500">viral videos</span> today
                     </h2>
-                    <ul className="space-y-4">
-                        {features.map((feature, i) => (
-                            <motion.li
-                                key={i}
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: 0.1 * i }}
-                                className="flex items-center gap-3"
-                            >
-                                <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-                                    <Check className="w-4 h-4 text-orange-500" />
-                                </div>
-                                <span className="text-zinc-300">{feature}</span>
-                            </motion.li>
-                        ))}
-                    </ul>
 
-                    <div className="mt-8 p-4 rounded-2xl bg-zinc-900 border border-zinc-800">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center text-white font-bold">
-                                S
-                            </div>
-                            <div>
-                                <p className="text-white font-medium text-sm">Sarah Johnson</p>
-                                <p className="text-xs text-zinc-500">@sarahj • Fashion Brand</p>
+                    <div className="space-y-8">
+                        {/* Powered By Section */}
+                        <div className="space-y-4">
+                            <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest pl-1">Powered by</p>
+                            <div className="grid gap-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 relative flex-shrink-0">
+                                        <img src="/nanobanana-logo.png" alt="Nanobanana" className="object-contain w-full h-full" />
+                                    </div>
+                                    <div>
+                                        <span className="block font-bold text-white text-lg leading-none mb-1">Nanobanana</span>
+                                        <span className="text-xs text-zinc-500">Advanced GPU Cluster</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 relative flex-shrink-0">
+                                        <img src="/kling-ai-logo.png" alt="Kling AI" className="object-contain w-full h-full" />
+                                    </div>
+                                    <div>
+                                        <span className="block font-bold text-white text-lg leading-none mb-1">Kling AI</span>
+                                        <span className="text-xs text-zinc-500">Video Generation Model</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <p className="text-zinc-400 text-sm">
-                            &quot;ContentAI helped us increase our social media engagement by 300%. The AI-generated videos are incredible!&quot;
-                        </p>
                     </div>
                 </motion.div>
 
@@ -129,7 +133,8 @@ export default function SignupPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-zinc-900 rounded-3xl border border-zinc-800 p-8 shadow-xl"
+
+                    className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 p-8 shadow-2xl"
                 >
 
                     <div className="text-center mb-8">
@@ -141,7 +146,7 @@ export default function SignupPage() {
                     <button
                         onClick={handleGoogleSignup}
                         disabled={isGoogleLoading}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white font-medium hover:bg-zinc-700 transition-colors mb-6 disabled:opacity-50"
+                        className="w-full h-12 flex items-center justify-center gap-3 rounded-sm bg-zinc-800/50 border border-white/10 text-white font-bold text-xs uppercase tracking-wide hover:bg-zinc-800 transition-colors mb-6 disabled:opacity-50"
                     >
                         {isGoogleLoading ? (
                             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -157,11 +162,8 @@ export default function SignupPage() {
                     </button>
 
                     <div className="relative mb-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-zinc-700" />
-                        </div>
                         <div className="relative flex justify-center">
-                            <span className="px-4 bg-zinc-900 text-xs text-zinc-500">or continue with email</span>
+                            <span className="px-4 text-xs text-zinc-500">or continue with email</span>
                         </div>
                     </div>
 
@@ -230,7 +232,7 @@ export default function SignupPage() {
                         <Button
                             type="submit"
                             variant="primary"
-                            className="w-full"
+                            className="w-full !rounded-sm !bg-orange-500 hover:!bg-orange-600 border-none uppercase tracking-wide font-bold text-xs"
                             disabled={isLoading}
                         >
                             {isLoading ? (
@@ -260,8 +262,8 @@ export default function SignupPage() {
                             Sign in
                         </Link>
                     </p>
-                </motion.div>
-            </div>
-        </div>
+                </motion.div >
+            </div >
+        </div >
     );
 }

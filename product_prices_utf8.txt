@@ -1,0 +1,16 @@
+Fetching all active products...
+
+Product: Elite (prod_TkNqf4iNeNW4jt)
+  Default Price ID: price_1Smt4S3pHdaDhch3JQZ2Sd99
+  Amount: 59 EUR
+  Type: recurring
+
+Product: Pro (prod_TkNph8L18ppFLG)
+  Default Price ID: price_1Smt4A3pHdaDhch3FI9DCmnU
+  Amount: 34 EUR
+  Type: recurring
+
+Product: Starter (prod_TkNpabBzx8A1Wk)
+  Default Price ID: price_1Smt3w3pHdaDhch3uYpZJJ4g
+  Amount: 19 EUR
+  Type: recurring

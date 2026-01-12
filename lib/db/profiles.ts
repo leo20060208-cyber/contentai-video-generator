@@ -8,6 +8,8 @@ export interface Profile {
     credits: number;
     subscription_status: 'active' | 'inactive' | 'trial' | 'past_due' | 'canceled' | null;
     created_at: string;
+    subscription_period_end?: string | null;
+    stripe_customer_id?: string | null;
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {

@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
     Mail,
@@ -15,8 +15,11 @@ import {
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
 
-export default function LoginPage() {
+import { Suspense } from 'react'; // Added import
+
+function LoginForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { login, loginWithGoogle } = useAuth();
 
     const [email, setEmail] = useState('');
@@ -25,6 +28,12 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Load error from URL if present
+    const urlError = searchParams.get('error');
+    if (urlError && !error) {
+        setError(decodeURIComponent(urlError));
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,7 +56,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4 pt-14">
+        <div className="min-h-screen flex items-center justify-center px-4 pt-14">
             <div className="w-full max-w-md">
 
                 {/* Login Card */}
@@ -55,7 +64,7 @@ export default function LoginPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-zinc-900 rounded-3xl border border-zinc-800 p-8 shadow-xl"
+                    className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 p-8 shadow-2xl"
                 >
                     <div className="text-center mb-8">
                         <h1 className="text-2xl font-bold text-white mb-2">Welcome back</h1>
@@ -66,7 +75,7 @@ export default function LoginPage() {
                     <button
                         onClick={handleGoogleLogin}
                         disabled={isGoogleLoading}
-                        className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white font-medium hover:bg-zinc-700 transition-colors mb-6 disabled:opacity-50"
+                        className="w-full h-12 flex items-center justify-center gap-3 rounded-sm bg-zinc-800/50 border border-white/10 text-white font-bold text-xs uppercase tracking-wide hover:bg-zinc-800 transition-colors mb-6 disabled:opacity-50"
                     >
                         {isGoogleLoading ? (
                             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -82,11 +91,8 @@ export default function LoginPage() {
                     </button>
 
                     <div className="relative mb-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-zinc-700" />
-                        </div>
                         <div className="relative flex justify-center">
-                            <span className="px-4 bg-zinc-900 text-xs text-zinc-500">or continue with email</span>
+                            <span className="px-4 text-xs text-zinc-500">or continue with email</span>
                         </div>
                     </div>
 
@@ -140,13 +146,13 @@ export default function LoginPage() {
                                 <input type="checkbox" className="w-4 h-4 rounded bg-zinc-800 border-zinc-700 text-orange-500 focus:ring-orange-500" />
                                 <span className="text-sm text-zinc-400">Remember me</span>
                             </label>
-                            <a href="#" className="text-sm text-orange-500 hover:underline">Forgot password?</a>
+                            <Link href="/forgot-password" className="text-sm text-orange-500 hover:underline">Forgot password?</Link>
                         </div>
 
                         <Button
                             type="submit"
                             variant="primary"
-                            className="w-full"
+                            className="w-full !rounded-sm !bg-orange-500 hover:!bg-orange-600 border-none uppercase tracking-wide font-bold text-xs"
                             disabled={isLoading}
                         >
                             {isLoading ? (
@@ -169,11 +175,12 @@ export default function LoginPage() {
                             Sign up free
                         </Link>
                     </p>
-                </motion.div>
+                </motion.div >
 
                 {/* Features */}
-                <motion.div
-                    initial={{ opacity: 0 }}
+                < motion.div
+                    initial={{ opacity: 0 }
+                    }
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.3 }}
                     className="mt-8 text-center"
@@ -188,8 +195,16 @@ export default function LoginPage() {
                         <span>•</span>
                         <span>Cancel anytime</span>
                     </div>
-                </motion.div>
-            </div>
-        </div>
+                </motion.div >
+            </div >
+        </div >
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">Loading...</div>}>
+            <LoginForm />
+        </Suspense>
     );
 }

@@ -429,7 +429,7 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                 type="button"
                                 onClick={() => onConfirm(null)}
                                 variant="outline"
-                                className="border-zinc-700 hover:bg-zinc-800 mr-2"
+                                className="border-zinc-700 hover:bg-zinc-800 mr-2 rounded-md"
                             >
                                 Skip Masking
                             </Button>
@@ -454,7 +454,7 @@ export function SegmentationModal({ isOpen, imageSource, initialMask, videoDurat
                                     onConfirm(segmentMask, points, finalIdx, trackEnd);
                                 }}
                                 // Always enabled (acts as Skip if empty)
-                                className="bg-orange-600 hover:bg-orange-700 min-w-[140px]"
+                                className="bg-orange-600 hover:bg-orange-700 min-w-[140px] rounded-md shadow-none"
                             >
                                 <Check className="w-4 h-4 mr-2" />
                                 {(!segmentMask && points.length === 0) ? 'Use Original' : 'Done'}

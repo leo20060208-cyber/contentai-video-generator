@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Loader2, ArrowRight, X, Play, Monitor, Film } from 'lucide-react';
+import { Sparkles, Loader2, ArrowRight, X, Play, Film } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 
@@ -21,6 +21,15 @@ export const GeneratingModal = ({
     onGoToMyVideos
 }: GeneratingModalProps) => {
     const videoRef = useRef<HTMLVideoElement>(null);
+    // ... rest of component
+    // ...
+    // ...
+    // (We only need to fix the props interface and imports mostly, but I need to make sure the lower part works with `taskId` not `props.taskId` if I destructured it)
+
+    // Timer Logic and other effects remain same...
+
+    // To ensure I don't break the component, I will replace the top part and then the bottom part separately or use a large block if needed.
+    // Actually, I can just replace the imports and interface and the destructuring.
 
     // Auto-play video when completed
     useEffect(() => {
