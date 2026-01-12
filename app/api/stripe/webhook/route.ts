@@ -5,10 +5,20 @@ import { headers } from 'next/headers';
 
 export const runtime = 'nodejs';
 
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2023-10-16' as any,
-});
+// Initialize Stripe lazily to avoid build-time errors when env vars aren't available
+let _stripe: Stripe | null = null;
+function getStripe() {
+    if (!_stripe) {
+        const key = process.env.STRIPE_SECRET_KEY;
+        if (!key) {
+            throw new Error('STRIPE_SECRET_KEY is not set');
+        }
+        _stripe = new Stripe(key, {
+            apiVersion: '2023-10-16' as any,
+        });
+    }
+    return _stripe;
+}
 
 // Initialize Supabase Admin (Service Role) - created lazily to ensure env vars are loaded
 let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
@@ -23,7 +33,7 @@ function getSupabaseAdmin() {
     return _supabaseAdmin;
 }
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const getEndpointSecret = () => process.env.STRIPE_WEBHOOK_SECRET;
 
 export async function POST(request: Request) {
     const body = await request.text();
@@ -33,6 +43,9 @@ export async function POST(request: Request) {
     let event: Stripe.Event;
 
     try {
+        const stripe = getStripe();
+        const endpointSecret = getEndpointSecret();
+
         if (!sig || !endpointSecret) {
             console.warn('[Webhook] Missing signature or secret. Using basic parsing (insecure for prod if secret exists but strictly safer with it).');
             // Check if we are in local dev without CLI proxy (often user hasn't set up secret)
@@ -140,6 +153,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         // Get subscription period end from Stripe if subscription exists
         if (session.subscription) {
             try {
+                const stripe = getStripe();
                 const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
                 updates.subscription_period_end = new Date(subscription.current_period_end * 1000).toISOString();
                 console.log(`[Webhook] Subscription period end: ${updates.subscription_period_end}`);
