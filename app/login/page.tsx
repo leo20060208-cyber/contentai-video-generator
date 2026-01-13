@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -20,7 +20,7 @@ import { Suspense } from 'react'; // Added import
 function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { login, loginWithGoogle } = useAuth();
+    const { login, loginWithGoogle, user, isLoading: authLoading } = useAuth();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -28,6 +28,13 @@ function LoginForm() {
     const [isLoading, setIsLoading] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState('');
+
+    // Redirect if already logged in
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.push('/profile');
+        }
+    }, [user, authLoading, router]);
 
     // Load error from URL if present
     const urlError = searchParams.get('error');

@@ -8,6 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { createClient } from '@supabase/supabase-js';
+import { SavedMasksModal } from '@/components/SavedMasksModal';
 
 // Initialize Supabase Client for Realtime (if needed) or direct DB access
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -19,7 +20,8 @@ interface ProductLayer {
     url: string; // The image source
     type: 'product' | 'mask'; // Is this a product or a text/shape mask?
     name: string;
-    detailText?: string;
+    prompt: string;
+    details: { id: string; url: string; description: string }[]; // New: Array of detail images with descriptions
     maskPoints: { points: number[][]; type: 'brush' | 'eraser'; width: number }[];
     maskColor: string;
 }
@@ -60,6 +62,16 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     const [layers, setLayers] = useState<ProductLayer[]>([]);
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
     const [isUploadingProduct, setIsUploadingProduct] = useState(false); // UI toggle if needed
+    const [skipMask, setSkipMask] = useState(false);
+
+    // Additional Tools
+    const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+    const [personImage, setPersonImage] = useState<string | null>(null);
+    const [uploadType, setUploadType] = useState<'product' | 'background' | 'person' | 'detail'>('product');
+    const [targetLayerId, setTargetLayerId] = useState<string | null>(null); // For detail image upload
+    const [detailUploadTargetId, setDetailUploadTargetId] = useState<string | null>(null);
+    const [showSavedMasksModal, setShowSavedMasksModal] = useState(false);
+    const [showAddOptions, setShowAddOptions] = useState(false);
 
     // Prompt
     const [prompt, setPrompt] = useState('');
@@ -89,34 +101,60 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     }, [layers]);
 
     // Construct Prompt (Auto)
+    // Construct Prompt (Auto)
     useEffect(() => {
-        if (layers.length > 0 || prompt === '') {
-            let p = "Recreate the reference video EXACTLY, shot by shot, frame by frame. ";
-            p += "The ONLY change allowed is the integration of the provided product(s) in place of the original subject/object.\n\n";
+        let p = "Recreate the reference video EXACTLY, shot by shot, frame by frame. ";
+        p += "The ONLY changes allowed are the instructions below. Maintain original camera movement, lighting, and physics.\n\n";
 
-            if (layers.length > 0) {
-                p += "PRODUCT INTEGRATION:\n";
-                layers.forEach((layer, i) => {
-                    const sub = productSubstitutions[i] || layer.name;
-                    p += `• Product ${i + 1} (${sub}): Integrate realistically.\n`;
-                    if (layer.detailText) p += `  Detail: ${layer.detailText}\n`;
-                });
-            }
+        let imgIndexCounter = 1; // Assuming 0 is video frames? Or just count inputs.
+        // Actually, we should reference products by order.
 
-            const hasMask = layers.some(l => l.maskPoints.length > 0);
-            if (hasMask) {
-                p += "\nMASK: content in the masked area should be replaced/modified.\n";
-            }
+        if (layers.length > 0) {
+            p += "PRODUCT INTEGRATION:\n";
+            layers.forEach((layer, i) => {
+                const sub = productSubstitutions[i] || layer.name;
+                p += `• Product ${i + 1} (${sub}): Integrate realistically.`;
+                if (layer.prompt) {
+                    p += ` Description: ${layer.prompt}`;
+                }
 
-            p += "\nSTRICT RECREATION REQUIREMENTS:\n";
-            p += "- Camera movement: identical to original.\n";
-            p += "- Lighting: identical direction, intensity, shadows.\n";
-            p += "- Physics: realistic material behavior.\n";
-            p += "- 8K resolution, high fidelity, photorealistic.\n";
-
-            if (prompt !== p) setPrompt(p);
+                if (layer.details && layer.details.length > 0) {
+                    layer.details.forEach((detail, idx) => {
+                        p += ` Detail ${idx + 1}: Use provided detail image. Note: ${detail.description || 'Texture/Material reference'}.`;
+                    });
+                }
+                p += "\n";
+            });
         }
-    }, [layers, productSubstitutions, layers.map(l => l.maskPoints.length).join(',')]);
+
+        if (backgroundImage) {
+            p += "\nBACKGROUND CHANGE:\n";
+            p += "Replace the environment/background with the provided background image. Keep the main subject and foreground elements intact.\n";
+        }
+
+        if (personImage) {
+            p += "\nPERSON REPLACEMENT / FACE SWAP:\n";
+            p += "Replace the main person/face in the video with the provided person image. Maintain original expression and lighting.\n";
+        }
+
+        const hasMask = layers.some(l => l.maskPoints.length > 0);
+        if (hasMask && !skipMask) {
+            p += "\nMASK: Only modify the content within the provided mask area.\n";
+        } else if (skipMask) {
+            p += "\nMODE: Full frame editing (Masking skipped). Modify the entire scene as needed based on instructions.\n";
+        }
+
+        p += "\nSTRICT RECREATION REQUIREMENTS:\n";
+        p += `- EXACT DURATION: ${Math.ceil(videoDuration)} seconds. Do not change the speed.\n`;
+        p += "- Camera movement: identical to original.\n";
+        p += "- Lighting: identical direction, intensity, shadows.\n";
+        p += "- Physics: realistic material behavior.\n";
+        p += "- 8K resolution, high fidelity, photorealistic.\n";
+        p += "- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE VIDEO.\n";
+
+        // Only update if changed to avoid loop
+        if (prompt !== p) setPrompt(p);
+    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask]);
 
     // Timer Logic
     useEffect(() => {
@@ -224,20 +262,51 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
         const reader = new FileReader();
         reader.onload = async (ev) => {
             const processed = await processImage(ev.target?.result as string);
-            const newLayer: ProductLayer = {
-                id: crypto.randomUUID(),
-                url: processed,
-                type: 'product',
-                name: file.name.replace(/\.[^/.]+$/, ''),
-                maskPoints: [],
-                maskColor: LAYER_COLORS[layers.length % LAYER_COLORS.length],
-            };
-            setLayers([...layers, newLayer]);
-            setSelectedLayerId(newLayer.id);
 
-            // Trigger frame selection immediately after adding a product
-            setIsExtractingFrame(false); // Reset just in case
-            // Focus video text?
+
+            if (uploadType === 'background') {
+                setBackgroundImage(processed);
+                setUploadType('product');
+            } else if (uploadType === 'person') {
+                setPersonImage(processed);
+                setUploadType('product');
+            } else if (uploadType === 'detail' && detailUploadTargetId) {
+                // Add new detail to specific layer
+                setLayers(layers.map(l => {
+                    if (l.id === detailUploadTargetId) {
+                        return {
+                            ...l,
+                            details: [
+                                ...(l.details || []),
+                                {
+                                    id: crypto.randomUUID(),
+                                    url: processed,
+                                    description: ''
+                                }
+                            ]
+                        };
+                    }
+                    return l;
+                }));
+                setUploadType('product');
+                setDetailUploadTargetId(null);
+            } else {
+                // Default: Add new Product Layer
+                const newLayer: ProductLayer = {
+                    id: crypto.randomUUID(),
+                    url: processed,
+                    type: 'product',
+                    name: file.name.replace(/\.[^/.]+$/, ''),
+                    prompt: '',
+                    maskPoints: [],
+                    maskColor: LAYER_COLORS[layers.length % LAYER_COLORS.length],
+                    details: []
+                };
+                setLayers([...layers, newLayer]);
+                setSelectedLayerId(newLayer.id);
+                // Trigger frame selection immediately after adding a product
+                setIsExtractingFrame(false);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -361,6 +430,43 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
         return 130 + (extraBlocks * 30);
     };
 
+    const uploadToSupabase = async (file: File | string, path: string): Promise<string | null> => {
+        try {
+            let body: File | Blob | Buffer;
+            let contentType: string;
+
+            if (file instanceof File) {
+                body = file;
+                contentType = file.type;
+            } else if (typeof file === 'string' && file.startsWith('data:')) {
+                // Convert Base64 to Blob
+                const res = await fetch(file);
+                const blob = await res.blob();
+                body = blob;
+                contentType = blob.type;
+            } else {
+                return file as string; // Already a URL
+            }
+
+            const fileName = `${path}/${Date.now()}-${Math.random().toString(36).substring(7)}.${contentType.split('/')[1]}`;
+            const { error: uploadError } = await supabase.storage.from('videos').upload(fileName, body, {
+                contentType,
+                upsert: true
+            });
+
+            if (uploadError) {
+                console.error('Upload error:', uploadError);
+                return null;
+            }
+
+            const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
+            return publicUrl;
+        } catch (e) {
+            console.error('Upload exception:', e);
+            return null;
+        }
+    };
+
     const handleGenerate = async () => {
         if (!videoFile || layers.length === 0) {
             alert("Please upload a video and at least one product layer.");
@@ -371,12 +477,11 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
         setGenStatus('preparing');
 
         try {
-            // 1. Prepare Video Base64
-            const videoBase64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.readAsDataURL(videoFile);
-            });
+            // 1. Upload Base Video to Supabase Storage (Avoid Payload Limits)
+            setGenStatus('Uploading video...');
+            const uploadedVideoUrl = await uploadToSupabase(videoFile, 'user-inputs');
+            if (!uploadedVideoUrl) throw new Error('Failed to upload video file');
+            console.log('[Create] Video uploaded to:', uploadedVideoUrl);
 
             // 2. Video Dimensions & Resize Helper
             let videoW = 1280;
@@ -408,26 +513,47 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             // 3. Prepare Mask
             let finalMaskUrl = null;
             const hasMask = layers.some(l => l.maskPoints.length > 0);
-            if (hasMask) {
+            if (hasMask && !skipMask) {
                 const rawMask = await generateMaskImage(videoW, videoH);
                 if (rawMask) {
-                    finalMaskUrl = rawMask; // Already correct dims from generateMaskImage args if we passed them right
+                    // Upload Mask too? Usually small enough, but safer to upload.
+                    // For now, keep as base64 or upload if needed. The API handles base64 for masks fairly well.
+                    // Let's upload to be consistent and safe.
+                    finalMaskUrl = await uploadToSupabase(rawMask, 'masks');
                 }
             }
+
             // Also extracted frame if available
             let finalFrameUrl = null;
             if (extractedFrameUrl) {
-                finalFrameUrl = await resizeToExact(extractedFrameUrl, videoW, videoH);
+                const resizedFrame = await resizeToExact(extractedFrameUrl, videoW, videoH);
+                finalFrameUrl = await uploadToSupabase(resizedFrame, 'frames');
             }
 
-            // 4. Products Payload
+            // 4. Products & Tools Payload - Upload All
             const imagesPayload: string[] = [];
             for (const layer of layers) {
-                imagesPayload.push(layer.url);
-                // We send raw product images, model handles integration
+                const url = await uploadToSupabase(layer.url, 'products');
+                if (url) imagesPayload.push(url);
+
+                if (layer.details) {
+                    for (const d of layer.details) {
+                        const dUrl = await uploadToSupabase(d.url, 'details');
+                        if (dUrl) imagesPayload.push(dUrl);
+                    }
+                }
+            }
+            if (backgroundImage) {
+                const bgUrl = await uploadToSupabase(backgroundImage, 'backgrounds');
+                if (bgUrl) imagesPayload.push(bgUrl);
+            }
+            if (personImage) {
+                const pUrl = await uploadToSupabase(personImage, 'people');
+                if (pUrl) imagesPayload.push(pUrl);
             }
 
             // 5. Submit
+            setGenStatus('Submitting job...');
             const cost = getCreditsCost();
             if (deductCreditsOptimistic) deductCreditsOptimistic(cost);
 
@@ -441,14 +567,10 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             console.log('╔═══════════════════════════════════════╗');
             console.log('║     CREATE VIDEO PAYLOAD              ║');
             console.log('╠═══════════════════════════════════════╣');
-            console.log('║ 1. Vídeo Ref:       ', videoBase64 ? `✅ ${(videoBase64.length / 1024).toFixed(0)}KB` : '❌ NO');
-            console.log('║ 2. Frame Extret:    ', finalFrameUrl ? '✅ YES' : '❌ NO');
-            console.log('║ 3. Màscara Pintada: ', finalMaskUrl ? '✅ YES' : '❌ NO');
-            console.log('║ 4. Productes:                         ║');
-            imagesPayload.forEach((img, i) => {
-                console.log(`║    Product ${i + 1}:       ✅ ${img.substring(0, 30)}...`);
-            });
-            console.log('║                                       ║');
+            console.log('║ 1. Vídeo URL:       ', uploadedVideoUrl ? '✅ YES' : '❌ NO');
+            console.log('║ 2. Frame URL:       ', finalFrameUrl ? '✅ YES' : '❌ NO');
+            console.log('║ 3. Màscara URL:     ', finalMaskUrl ? '✅ YES' : '❌ NO');
+            console.log('║ 4. Imatges (URLs):  ', imagesPayload.length);
             console.log('║ Duració:', `${Math.ceil(videoDuration)}s`.padEnd(31), '║');
             console.log('║ Cost:', `${getCreditsCost()} crèdits`.padEnd(34), '║');
             console.log('╚═══════════════════════════════════════╝');
@@ -461,14 +583,14 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
                     ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
                 },
                 body: JSON.stringify({
-                    video: videoBase64,
-                    images: imagesPayload,
+                    video: uploadedVideoUrl, // Send URL!
+                    images: imagesPayload, // Send URLs!
                     prompt: prompt,
                     model: 'kwaivgi/kling-video-o1/video-edit',
                     duration: Math.ceil(videoDuration),
                     aspect_ratio: aspectRatio,
-                    image: finalFrameUrl || undefined,
-                    target_mask: finalMaskUrl || undefined,
+                    image: finalFrameUrl || undefined, // Send URL
+                    target_mask: finalMaskUrl || undefined, // Send URL
                 })
             });
 
@@ -488,6 +610,7 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             console.error(e);
             alert("Error: " + e.message);
             setIsGenerating(false);
+            setGenStatus(null);
         }
     };
 
@@ -524,10 +647,10 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     // --- RENDER ---
 
     return (
-        <div className="w-full max-w-[1600px] mx-auto h-[90vh] flex flex-col gap-4">
+        <div className="w-full max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col gap-2 md:gap-4 overflow-hidden">
 
             {/* Header */}
-            <div className="flex items-center justify-between shrink-0 px-4">
+            <div className="flex items-center justify-between shrink-0 px-4 py-2">
                 <h1 className="text-xl font-medium text-white flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-zinc-400" /> AI Video Studio
                 </h1>
@@ -542,10 +665,10 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 px-4 overflow-hidden">
+            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 px-4 pb-4 overflow-hidden">
 
                 {/* LEFT SIDEBAR (Inputs) */}
-                <div className="w-full md:w-[340px] flex flex-col gap-0 shrink-0 h-[55%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm">
+                <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] flex flex-col gap-0 shrink-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
 
                         {/* 1. Base Video */}
@@ -583,12 +706,29 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
                         <div className="p-4 border-b border-white/5">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Product Layers</h3>
-                                <button onClick={() => setIsUploadingProduct(true)} className="relative overflow-hidden">
-                                    <label className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowAddOptions(!showAddOptions)}
+                                        className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1"
+                                    >
                                         <Plus className="w-3 h-3" /> Add
-                                        <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
-                                    </label>
-                                </button>
+                                    </button>
+
+                                    {showAddOptions && (
+                                        <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-white/10 rounded-sm shadow-xl z-20 flex flex-col p-1">
+                                            <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-sm cursor-pointer text-[10px] text-zinc-300">
+                                                <ImageIcon className="w-3 h-3" /> Image
+                                                <input type="file" onChange={(e) => { handleProductUpload(e); setShowAddOptions(false); }} className="hidden" accept="image/*" />
+                                            </label>
+                                            <button
+                                                onClick={() => { setShowSavedMasksModal(true); setShowAddOptions(false); }}
+                                                className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-sm cursor-pointer text-[10px] text-zinc-300 w-full text-left"
+                                            >
+                                                <Layers className="w-3 h-3" /> Saved Mask
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <div className="space-y-1">
                                 {layers.map((layer, i) => (
@@ -606,25 +746,119 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
                                             </div>
                                             <button onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
                                         </div>
-                                        {/* Detail Text for this layer */}
-                                        <textarea
-                                            placeholder="Detail/Texture (e.g. 'Matte finish')..."
-                                            className="w-full bg-black/20 text-[9px] text-zinc-300 p-1 rounded-sm border border-white/5 focus:outline-none resize-none"
-                                            rows={1}
-                                            value={layer.detailText || ''}
-                                            onChange={(e) => {
-                                                const newLayers = [...layers];
-                                                newLayers[i].detailText = e.target.value;
-                                                setLayers(newLayers);
-                                            }}
-                                        />
+
+                                        {/* Product Prompt */}
+                                        <div className="mt-2 px-1" onClick={(e) => e.stopPropagation()}>
+                                            <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
+                                            <textarea
+                                                value={layer.prompt}
+                                                onChange={(e) => {
+                                                    const newLayers = [...layers];
+                                                    newLayers[i].prompt = e.target.value;
+                                                    setLayers(newLayers);
+                                                }}
+                                                placeholder="Describe the product..."
+                                                className="w-full h-10 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
+                                            />
+                                        </div>
+
+                                        {/* Details Section */}
+                                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures</span>
+                                                <div className="relative group/tooltip">
+                                                    <Info className="w-2.5 h-2.5 text-zinc-600" />
+                                                    <div className="absolute bottom-full right-0 mb-2 w-40 bg-black/90 border border-white/10 p-2 rounded-sm opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-10">
+                                                        <p className="text-[9px] text-zinc-400">Add close-up images to help the AI understand materials, logos, or textures.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* List of Details */}
+                                            {layer.details && layer.details.map((detail, dIndex) => (
+                                                <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
+                                                    <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
+                                                        <img src={detail.url} className="w-full h-full object-cover" />
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const newDetails = layer.details.filter(d => d.id !== detail.id);
+                                                                setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
+                                                            }}
+                                                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
+                                                        >
+                                                            <X className="w-3 h-3 text-white" />
+                                                        </button>
+                                                    </div>
+                                                    <textarea
+                                                        placeholder="Describe placement or texture..."
+                                                        className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none resize-none h-8 py-0.5 leading-tight"
+                                                        value={detail.description}
+                                                        onChange={(e) => {
+                                                            const newDetails = [...layer.details];
+                                                            newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
+                                                            setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
+                                                        }}
+                                                    />
+                                                </div>
+                                            ))}
+
+                                            {/* Add Detail Button (File Input Wrapper) */}
+                                            <label
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setUploadType('detail');
+                                                    setDetailUploadTargetId(layer.id);
+                                                }}
+                                                className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors"
+                                            >
+                                                <Plus className="w-2.5 h-2.5 text-zinc-500" />
+                                                <span className="text-[9px] text-zinc-500">Add Detail Image</span>
+                                                <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
+                                            </label>
+                                        </div>
                                     </div>
                                 ))}
                                 {layers.length === 0 && <div className="text-[10px] text-zinc-600 italic px-1">No products added</div>}
                             </div>
+
+                            {/* Skip Mask Option */}
+                            <div className="mt-3 flex items-center gap-2 px-1">
+                                <button
+                                    onClick={() => setSkipMask(!skipMask)}
+                                    className={`w-3 h-3 rounded-[2px] border flex items-center justify-center transition-colors ${skipMask ? 'bg-purple-500 border-purple-500' : 'border-zinc-600 bg-transparent'}`}
+                                >
+                                    {skipMask && <Check className="w-2.5 h-2.5 text-black" />}
+                                </button>
+                                <span className="text-[10px] text-zinc-400">Skip Masking (Edit Full Frame)</span>
+                            </div>
                         </div>
 
-                        {/* 3. Prompt */}
+                        {/* 3. Editing Tools (Person Only) */}
+                        <div className="p-4 border-b border-white/5 space-y-4">
+                            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Tools</h3>
+
+                            {/* Person / Face Swap Tool */}
+                            <div className="space-y-2">
+                                <label className="flex items-center justify-between text-[11px] text-zinc-300">
+                                    <span className="flex items-center gap-2"><Wand2 className="w-3 h-3 text-pink-400" /> Change Person (Face Swap)</span>
+                                    {personImage && <button onClick={() => setPersonImage(null)} className="text-zinc-600 hover:text-red-400 text-[10px]">Remove</button>}
+                                </label>
+                                {!personImage ? (
+                                    <label onClick={() => setUploadType('person')} className="flex items-center justify-center w-full h-10 border border-dashed border-white/20 rounded-sm bg-white/5 hover:bg-white/10 cursor-pointer text-[10px] text-zinc-500 gap-2 transition-colors">
+                                        <Plus className="w-3 h-3" /> Upload Person
+                                        <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
+                                    </label>
+                                ) : (
+                                    <div className="relative w-full h-20 bg-black/50 rounded-sm overflow-hidden border border-white/10">
+                                        <img src={personImage} className="w-full h-full object-contain opacity-80" />
+                                        <div className="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-sm">Person</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 4. Prompt */}
                         <div className="p-4 space-y-3">
                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between">
                                 Prompt <span className="text-purple-500 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Auto-Generated</span>
@@ -889,6 +1123,26 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
                     )}
                 </div>
             </div>
+
+            <SavedMasksModal
+                isOpen={showSavedMasksModal}
+                onClose={() => setShowSavedMasksModal(false)}
+                onSelect={(url) => {
+                    const newLayer: ProductLayer = {
+                        id: crypto.randomUUID(),
+                        url: url,
+                        type: 'mask',
+                        name: 'Saved Mask',
+                        prompt: '',
+                        maskPoints: [],
+                        maskColor: LAYER_COLORS[layers.length % LAYER_COLORS.length],
+                        details: []
+                    };
+                    setLayers([...layers, newLayer]);
+                    setSelectedLayerId(newLayer.id);
+                    setShowSavedMasksModal(false);
+                }}
+            />
         </div>
     );
 };

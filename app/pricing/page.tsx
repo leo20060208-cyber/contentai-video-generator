@@ -69,7 +69,7 @@ const subscriptions = [
 ];
 
 function PricingContentInner() {
-    const { profile } = useAuth();
+    const { profile, session, isLoading: authLoading } = useAuth(); // Destructure session and isLoading
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isBusinessModalOpen, setIsBusinessModalOpen] = useState(false);
@@ -104,7 +104,9 @@ function PricingContentInner() {
     };
 
     const handlePurchase = async (plan: any) => {
-        if (!profile) {
+        if (authLoading) return; // Wait for auth
+
+        if (!session) {
             router.push(`/login?redirect=/pricing${returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`);
             return;
         }

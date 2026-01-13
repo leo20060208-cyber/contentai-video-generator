@@ -1,3 +1,4 @@
+// Force restart timestamp: 1768334812345
 const nextConfig = {
   // Performance optimizations
   compress: true,
@@ -40,40 +41,6 @@ const nextConfig = {
     formats: ['image/avif', 'image/webp'],
   },
 
-  // Webpack configuration to fix chunk loading errors
-  webpack: (config, { isServer }) => {
-    // Improve chunk loading reliability
-    config.optimization = {
-      ...config.optimization,
-      moduleIds: 'deterministic',
-      runtimeChunk: 'single',
-      splitChunks: {
-        chunks: 'all',
-        cacheGroups: {
-          default: false,
-          vendors: false,
-          // Vendor chunk
-          vendor: {
-            name: 'vendor',
-            chunks: 'all',
-            test: /node_modules/,
-            priority: 20,
-          },
-          // Common chunk
-          common: {
-            name: 'common',
-            minChunks: 2,
-            chunks: 'all',
-            priority: 10,
-            reuseExistingChunk: true,
-            enforce: true,
-          },
-        },
-      },
-    };
-
-    return config;
-  },
 
   // Disable static optimization to prevent chunk issues
   experimental: {

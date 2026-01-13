@@ -76,7 +76,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 hasResolved.current = true;
                 setIsLoading(false);
             }
-        }, 500); // Reduced to 500ms for snappier navigation
+        }, 4000); // Increased timeout to allow for PKCE exchange which can be slow
+
+        // Check if we are potentially in an auth callback flow (code or hash presence)
+        const isAuthFlow = window.location.search.includes('code=') || window.location.hash.includes('access_token');
+        if (isAuthFlow) {
+            console.log('Auth flow handling detected via URL parameters.');
+        }
 
         // Get initial session
         if (!isSupabaseConfigured) {
@@ -91,19 +97,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.auth.getSession()
             .then(({ data: { session } }) => {
                 if (!hasResolved.current) {
-                    hasResolved.current = true;
-                    // Keep timeout to avoid race conditions if onAuthStateChange fires same time
-                    clearTimeout(timeout);
+                    // If we have a session, great.
+                    // If not, BUT we suspect an auth flow (URL params), we should NOT resolve yet.
+                    // We waits for onAuthStateChange to fire the SIGNED_IN event.
 
-                    setSession(session);
-                    setUser(session?.user ?? null);
-
-                    if (session?.user) {
-                        // Non-blocking profile fetch
+                    if (session) {
+                        hasResolved.current = true;
+                        clearTimeout(timeout);
+                        setSession(session);
+                        setUser(session.user);
                         getProfile(session.user.id).then(setProfile);
+                        setIsLoading(false);
+                    } else if (!isAuthFlow) {
+                        // No session and no auth params - resolve as unauthenticated
+                        hasResolved.current = true;
+                        clearTimeout(timeout);
+                        setIsLoading(false);
+                    } else {
+                        // No session yet, but params exist. Let onAuthStateChange handle it.
+                        console.log('Session not found in getSession(), waiting for onAuthStateChange exchange...');
                     }
-
-                    setIsLoading(false);
                 }
             })
             .catch((error) => {

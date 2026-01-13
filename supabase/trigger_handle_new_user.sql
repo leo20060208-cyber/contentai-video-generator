@@ -2,14 +2,17 @@
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, name, plan, credits, created_at)
+  insert into public.profiles (id, email, name, avatar_url, plan, credits, created_at)
   values (
     new.id,
-    new.raw_user_meta_data->>'name', -- Extract name from metadata
+    new.email,
+    new.raw_user_meta_data->>'name',
+    new.raw_user_meta_data->>'avatar_url',
     'Free',
-    100,
+    0,
     now()
-  );
+  )
+  on conflict (id) do nothing;
   return new;
 end;
 $$ language plpgsql security definer;

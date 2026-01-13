@@ -23,7 +23,7 @@ export function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-transparent">
       <div className="w-full px-6">
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-between h-16">
           {/* Left Side: Logo + Nav Items */}
           <div className="flex items-center gap-3">
             {/* Logo */}

@@ -500,7 +500,7 @@ export default function ProfilePage() {
                                             {video.video_url ? (
                                                 <video
                                                     src={video.video_url}
-                                                    className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-500"
+                                                    className="w-full h-full object-contain bg-black pointer-events-none group-hover:scale-105 transition-transform duration-500"
                                                 />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center bg-zinc-800">

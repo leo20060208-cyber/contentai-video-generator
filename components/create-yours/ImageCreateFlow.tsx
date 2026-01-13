@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Wand2, Plus, Layers, Image as ImageIcon, MousePointer2, Eraser, Scissors, Coins, Brush, Eye, EyeOff, Search, User, Move, BookOpen } from 'lucide-react';
+import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Wand2, Plus, Layers, Image as ImageIcon, MousePointer2, Eraser, Scissors, Coins, Brush, Eye, EyeOff, Search, User, Move, BookOpen, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -22,8 +22,8 @@ interface ProductLayer {
     scale: number;
     rotation: number;
     zIndex: number;
-    detailText?: string;
-    detailImage?: string;
+    details: { id: string; url: string; description: string }[];
+    prompt: string;
     // Masking
     maskPoints: { points: number[][]; type: 'brush' | 'eraser'; width: number }[]; // Array of stroke objects
     maskColor: string;
@@ -62,6 +62,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
     const [isSegmentingRef, setIsSegmentingRef] = useState(false);
     const [maskOverlay, setMaskOverlay] = useState<string | null>(null);
+    const [skipMask, setSkipMask] = useState(false);
 
     const [layers, setLayers] = useState<ProductLayer[]>([]);
     const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -180,9 +181,11 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             if (layer.type === 'product') {
                 currentImageIndex++;
                 p += `- Image ${currentImageIndex}: PRODUCT ${i + 1} to be inserted.\n`;
-                if (layer.detailImage) {
-                    currentImageIndex++;
-                    p += `- Image ${currentImageIndex}: TEXTURE/DETAIL Reference for Product ${i + 1}.\n`;
+                if (layer.details) {
+                    layer.details.forEach(() => {
+                        currentImageIndex++;
+                        p += `- Image ${currentImageIndex}: TEXTURE/DETAIL Reference for Product ${i + 1}.\n`;
+                    });
                 }
             }
         });
@@ -202,13 +205,14 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                 const productImgIdx = currentImageIndex;
 
                 let detailTxt = "";
-                if (layer.detailText) detailTxt += ` Details: ${layer.detailText}.`;
-                if (layer.detailImage) {
-                    currentImageIndex++;
-                    detailTxt += ` (Use Image ${currentImageIndex} for close-up details).`;
+                if (layer.details && layer.details.length > 0) {
+                    layer.details.forEach(d => {
+                        currentImageIndex++;
+                        detailTxt += ` (Use Image ${currentImageIndex} for detail: "${d.description}").`;
+                    });
                 }
 
-                p += `• PRODUCT ${i + 1}: Look at the ${colorName} area in Image 2 (Mask Guide). REPLACE the object at that location with the PRODUCT from Image ${productImgIdx}. ${instruction || ''}${detailTxt}\n`;
+                p += `• PRODUCT ${i + 1}: Look at the ${colorName} area in Image 2 (Mask Guide). REPLACE the object at that location with the PRODUCT from Image ${productImgIdx}. ${instruction || ''} ${layer.prompt ? `Description: ${layer.prompt}` : ''} ${detailTxt}\n`;
             } else {
                 // Mask layer (just text instruction usually)
                 p += `• EDIT: Applies to the ${colorName} area shown in Image 2. ${instruction || 'Modify this area.'}\n`;
@@ -263,7 +267,9 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             rotation: 0,
             zIndex: layers.length + 1,
             maskPoints: [],
-            maskColor: MASK_COLORS[layers.length % MASK_COLORS.length]
+            maskColor: MASK_COLORS[layers.length % MASK_COLORS.length],
+            details: [],
+            prompt: ''
         };
         setLayers([...layers, newLayer]);
         setSelectedLayerId(newLayer.id);
@@ -293,7 +299,9 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             rotation: 0,
             zIndex: layers.length + 1,
             maskPoints: [],
-            maskColor: MASK_COLORS[layers.length % MASK_COLORS.length]
+            maskColor: MASK_COLORS[layers.length % MASK_COLORS.length],
+            details: [],
+            prompt: ''
         };
         setLayers([...layers, newLayer]);
         setSelectedLayerId(newLayer.id);
@@ -485,6 +493,38 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         }
     };
 
+    const uploadToSupabase = async (file: File | string, path: string): Promise<string | null> => {
+        try {
+            let body: File | Blob | Buffer;
+            let contentType: string;
+
+            if (file instanceof File) {
+                body = file; // Should not happen here as we deal with Base64 strs mostly
+                contentType = file.type;
+            } else if (typeof file === 'string' && file.startsWith('data:')) {
+                const res = await fetch(file);
+                const blob = await res.blob();
+                body = blob;
+                contentType = blob.type;
+            } else {
+                return file as string;
+            }
+
+            const fileName = `${path}/${Date.now()}-${Math.random().toString(36).substring(7)}.${contentType.split('/')[1]}`;
+            const { error: uploadError } = await supabase.storage.from('videos').upload(fileName, body, {
+                contentType,
+                upsert: true
+            });
+
+            if (uploadError) return null;
+            const { data: { publicUrl } } = supabase.storage.from('videos').getPublicUrl(fileName);
+            return publicUrl;
+        } catch (e) {
+            console.error(e);
+            return null;
+        }
+    };
+
     const handleGenerate = async () => {
         setIsGenerating(true);
         setSaveStatus(null);
@@ -538,38 +578,51 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             // 3. Build & Resize Payload [REF, MASK, PRODUCTS...]
             const imagesPayload: string[] = [];
 
-            // 1. Reference Image (First) - Keep Original
+            // 1. Reference Image (First)
             if (referenceImage) {
-                imagesPayload.push(referenceImage);
+                // Upload Ref
+                const refUrl = await uploadToSupabase(referenceImage, 'references');
+                if (refUrl) imagesPayload.push(refUrl);
+                else throw new Error("Failed to upload Reference Image");
             } else {
                 throw new Error("Reference Image is required");
             }
 
             // 2. Generate Mask (Ref + Overlay)
-            // Always generate mask if we have layers. If not, maybe just ref? But logic assumes mask 2nd.
-            // If no mask, we probably shouldn't be here in this flow, but let's handle it.
-            const maskDataUrl = await generateMaskImage(actualDimensions.width, actualDimensions.height);
+            let maskDataUrl = null;
+            if (!skipMask) {
+                maskDataUrl = await generateMaskImage(actualDimensions.width, actualDimensions.height);
+            }
 
             if (maskDataUrl) {
-                imagesPayload.push(maskDataUrl);
+                const mUrl = await uploadToSupabase(maskDataUrl, 'masks');
+                if (mUrl) imagesPayload.push(mUrl);
+                // Also assign to variable if needed for API param (separate from images array)
+                maskDataUrl = mUrl; // Update to URL
             } else {
-                // If no mask drawn, maybe push reference again as dummy mask? Or handle as error?
-                // Strategy: Push Reference as "Empty Mask" so index logic holds
-                imagesPayload.push(referenceImage);
+                // Determine what to push if no mask?
+                // Logic says: Push Reference as "Empty Mask"
+                // But we already pushed Ref as imagesPayload[0].
+                // If we send it again, we should upload it again? Or reuse URL?
+                // Re-using URL is fine.
+                imagesPayload.push(imagesPayload[0]);
             }
 
             // 3. Resize Layers (Products AND Saved Masks)
             for (const layer of layers) {
-                // Process both products AND saved masks
                 if (layer.type === 'product' || layer.type === 'mask') {
                     // Main Product/Mask Image
                     const resizedLayer = await resizeToExact(layer.url, actualDimensions.width, actualDimensions.height);
-                    imagesPayload.push(resizedLayer);
+                    const lUrl = await uploadToSupabase(resizedLayer, 'products');
+                    if (lUrl) imagesPayload.push(lUrl);
 
-                    // Detail Image (only for products, not masks)
-                    if (layer.type === 'product' && layer.detailImage) {
-                        const resizedDetail = await resizeToExact(layer.detailImage, actualDimensions.width, actualDimensions.height);
-                        imagesPayload.push(resizedDetail);
+                    // Detail Images
+                    if (layer.type === 'product' && layer.details) {
+                        for (const detail of layer.details) {
+                            const resizedDetail = await resizeToExact(detail.url, actualDimensions.width, actualDimensions.height);
+                            const dUrl = await uploadToSupabase(resizedDetail, 'details');
+                            if (dUrl) imagesPayload.push(dUrl);
+                        }
                     }
                 }
             }
@@ -577,39 +630,20 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             // 4. ADD Marked Outline Image (Guidance)
             if (initialProductOutlineImage) {
                 const resizedOutline = await resizeToExact(initialProductOutlineImage, actualDimensions.width, actualDimensions.height);
-                imagesPayload.push(resizedOutline);
+                const oUrl = await uploadToSupabase(resizedOutline, 'outlines');
+                if (oUrl) imagesPayload.push(oUrl);
             }
 
             // === DETAILED PAYLOAD LOG ===
             console.log('');
             console.log('╔═══════════════════════════════════════╗');
-            console.log('║     CREATE IMAGE PAYLOAD              ║');
-            console.log('╠═══════════════════════════════════════╣');
-            console.log('║ 1. Referència:      ', referenceImage ? '✅ YES' : '❌ NO');
-            console.log('║ 2. Màscara Pintada: ', maskDataUrl ? '✅ YES' : '❌ NO');
-
-            let productCount = 0;
-            let maskCount = 0;
-            layers.forEach((layer) => {
-                if (layer.type === 'product') {
-                    productCount++;
-                    console.log(`║    Producte ${productCount}:      ✅ ${layer.url.substring(0, 30)}...`);
-                } else if (layer.type === 'mask') {
-                    maskCount++;
-                    console.log(`║    Màscara ${maskCount}:       ✅ ${layer.url.substring(0, 30)}...`);
-                }
-            });
-
-            console.log('║ 3. Outline (Template):', initialProductOutlineImage ? '✅ YES' : '❌ NO');
-            console.log('║                                       ║');
-            console.log('║ TOTAL Imatges Payload:', imagesPayload.length.toString().padEnd(18), '║');
-            console.log('║ Dimensions:', `${actualDimensions.width}x${actualDimensions.height}`.padEnd(28), '║');
-            console.log('║ Tier:', (modelTier || 'normal').padEnd(33), '║');
+            console.log('║     CREATE IMAGE PAYLOAD (URLS)       ║');
+            console.log('║ Total Images: ' + imagesPayload.length);
             console.log('╚═══════════════════════════════════════╝');
             console.log('');
 
             // Optimistic Credit Deduction
-            const cost = modelTier === 'pro' ? 18 : 6; // Estimate or fetch from constant
+            const cost = modelTier === 'pro' ? 18 : 6;
             if (deductCreditsOptimistic) {
                 deductCreditsOptimistic(cost, 'Generate image');
             }
@@ -621,12 +655,12 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                     ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
                 },
                 body: JSON.stringify({
-                    images: imagesPayload,
+                    images: imagesPayload, // Now URLs
                     prompt: prompt,
-                    maskImage: maskDataUrl || undefined,
+                    maskImage: maskDataUrl || undefined, // Now URL
                     dimensions: actualDimensions.width > 0 ? actualDimensions : undefined,
                     userId: user?.id,
-                    tier: modelTier // Pass selected tier
+                    tier: modelTier
                 })
             });
 
@@ -638,8 +672,6 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             if (!res.ok) throw new Error('Generation failed');
             const data = await res.json();
 
-            // Revert back using the helper (just call it manually or copy logic if scope issue)
-            // But we can Reuse processGenerationResponse
             await processGenerationResponse(data, prompt);
             if (data.url || data.taskId) setViewMode('result');
 
@@ -722,9 +754,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
 
     return (
-        <div className="w-full max-w-[1600px] mx-auto h-[90vh] flex flex-col gap-4">
+
+        <div className="w-full max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col gap-2 md:gap-4 overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between shrink-0 px-4">
+            <div className="flex items-center justify-between shrink-0 px-4 py-2">
                 <h1 className="text-xl font-medium text-white flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-zinc-400" /> AI Image Studio
                 </h1>
@@ -749,10 +782,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 px-4 overflow-y-auto md:overflow-visible">
+            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 px-4 pb-4 overflow-hidden">
 
                 {/* LEFT COLUMN: Controls */}
-                <div className="w-full md:w-[340px] flex flex-col gap-0 shrink-0 h-auto md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm">
+                <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] flex flex-col gap-0 shrink-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                         {/* 1. Reference Image - Hidden if using Template (initialReferenceImage present) */}
@@ -816,6 +849,17 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                     </div>
                                 ))}
                                 {layers.length === 0 && <div className="text-[10px] text-zinc-600 italic px-1">No layers added</div>}
+                            </div>
+
+                            {/* Skip Mask Option */}
+                            <div className="mt-3 flex items-center gap-2 px-1">
+                                <button
+                                    onClick={() => setSkipMask(!skipMask)}
+                                    className={`w-3 h-3 rounded-[2px] border flex items-center justify-center transition-colors ${skipMask ? 'bg-purple-500 border-purple-500' : 'border-zinc-600 bg-transparent'}`}
+                                >
+                                    {skipMask && <Check className="w-2.5 h-2.5 text-black" />}
+                                </button>
+                                <span className="text-[10px] text-zinc-400">Skip Masking (Use Full Image)</span>
                             </div>
                         </div>
 
@@ -899,68 +943,89 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                                         placeholder={layer.type === 'product' ? `Replace [object] with ${i + 1}...` : "Describe change..."}
                                                         className="w-full bg-transparent border-b border-white/10 text-[10px] text-zinc-300 focus:border-white/40 focus:outline-none pb-1 placeholder:text-zinc-600"
                                                     />
+                                                    <div className="text-[10px] text-white truncate font-medium">{layer.type === 'mask' ? 'Mask Layer' : `Product ${i + 1}`}</div>
                                                 </div>
+                                                <button onClick={() => removeLayer(layer.id)}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
+                                            </div>
+
+                                            {/* Product Prompt */}
+                                            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                                                <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
+                                                <textarea
+                                                    value={layer.prompt}
+                                                    onChange={(e) => {
+                                                        const newLayers = [...layers];
+                                                        newLayers[i] = { ...newLayers[i], prompt: e.target.value };
+                                                        setLayers(newLayers);
+                                                    }}
+                                                    placeholder="Describe the product..."
+                                                    className="w-full h-10 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
+                                                />
                                             </div>
 
                                             {/* DETAIL ENHANCEMENT */}
                                             <div className="pl-10 space-y-2">
                                                 <div className="flex items-start gap-2">
-                                                    <Search className="w-3 h-3 text-zinc-600 mt-1" />
+                                                    <Layers className="w-3 h-3 text-zinc-600 mt-1" />
                                                     <div className="flex-1 space-y-2">
-                                                        <textarea
-                                                            value={layer.detailText || ''}
-                                                            onChange={(e) => {
-                                                                const newLayers = [...layers];
-                                                                newLayers[i] = { ...newLayers[i], detailText: e.target.value };
-                                                                setLayers(newLayers);
-                                                            }}
-                                                            placeholder="Add extra details (e.g. 'Gold embroidery on collar', 'Rough texture')..."
-                                                            className="w-full bg-white/5 border border-white/5 rounded-sm p-2 text-[10px] text-zinc-400 focus:text-zinc-200 resize-none outline-none min-h-[40px]"
-                                                        />
+                                                        <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures</span>
 
-                                                        {/* Detail Image Upload */}
-                                                        <div className="flex items-center gap-2">
-                                                            {layer.detailImage ? (
-                                                                <div className="relative group w-12 h-12 bg-black/40 border border-white/10 rounded-sm overflow-hidden">
-                                                                    <img src={layer.detailImage} className="w-full h-full object-contain" />
+                                                        {/* List of Details */}
+                                                        {(layer.details || []).map((detail, dIndex) => (
+                                                            <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
+                                                                <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
+                                                                    <img src={detail.url} className="w-full h-full object-cover" />
                                                                     <button
                                                                         onClick={() => {
+                                                                            const newDetails = layer.details.filter(d => d.id !== detail.id);
                                                                             const newLayers = [...layers];
-                                                                            newLayers[i] = { ...newLayers[i], detailImage: undefined };
+                                                                            newLayers[i] = { ...newLayers[i], details: newDetails };
                                                                             setLayers(newLayers);
                                                                         }}
-                                                                        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
                                                                     >
-                                                                        <X className="w-4 h-4 text-white" />
+                                                                        <X className="w-3 h-3 text-white" />
                                                                     </button>
                                                                 </div>
-                                                            ) : (
-                                                                <label className="w-12 h-12 flex flex-col items-center justify-center border border-dashed border-zinc-700 hover:border-zinc-500 rounded-sm cursor-pointer bg-black/20 text-[8px] text-zinc-500 gap-1 hover:text-zinc-300 transition-colors">
-                                                                    <ImageIcon className="w-3 h-3" />
-                                                                    <span>Detail</span>
-                                                                    <input
-                                                                        type="file"
-                                                                        accept="image/*"
-                                                                        className="hidden"
-                                                                        onChange={(e) => {
-                                                                            const file = e.target.files?.[0];
-                                                                            if (file) {
-                                                                                const reader = new FileReader();
-                                                                                reader.onload = (loadEv) => {
-                                                                                    const newLayers = [...layers];
-                                                                                    newLayers[i] = { ...newLayers[i], detailImage: loadEv.target?.result as string };
-                                                                                    setLayers(newLayers);
-                                                                                };
-                                                                                reader.readAsDataURL(file);
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                </label>
-                                                            )}
-                                                            <span className="text-[9px] text-zinc-600 italic">
-                                                                {layer.detailImage ? "Detail image added" : "Upload close-up photo (Optional)"}
-                                                            </span>
-                                                        </div>
+                                                                <textarea
+                                                                    placeholder="Describe placement or texture..."
+                                                                    className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none resize-none h-8 py-0.5 leading-tight"
+                                                                    value={detail.description}
+                                                                    onChange={(e) => {
+                                                                        const newDetails = [...layer.details];
+                                                                        newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
+                                                                        const newLayers = [...layers];
+                                                                        newLayers[i] = { ...newLayers[i], details: newDetails };
+                                                                        setLayers(newLayers);
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        ))}
+
+                                                        {/* Add Detail Button */}
+                                                        <label className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors">
+                                                            <Plus className="w-2.5 h-2.5 text-zinc-500" />
+                                                            <span className="text-[9px] text-zinc-500">Add Detail Image</span>
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) {
+                                                                        const reader = new FileReader();
+                                                                        reader.onload = (loadEv) => {
+                                                                            const processed = loadEv.target?.result as string;
+                                                                            const newDetails = [...(layer.details || []), { id: crypto.randomUUID(), url: processed, description: '' }];
+                                                                            const newLayers = [...layers];
+                                                                            newLayers[i] = { ...newLayers[i], details: newDetails };
+                                                                            setLayers(newLayers);
+                                                                        };
+                                                                        reader.readAsDataURL(file);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </label>
                                                     </div>
                                                 </div>
                                             </div>

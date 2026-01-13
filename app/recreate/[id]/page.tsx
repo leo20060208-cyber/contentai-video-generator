@@ -1,4 +1,5 @@
 'use client';
+// Force rebuild
 
 import { useState, useEffect, use, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
@@ -64,7 +65,9 @@ interface ProductLayer {
     id: string;
     url: string;
     name: string;
-    detailText?: string;
+    type: 'product' | 'mask';
+    prompt: string;
+    details: { id: string; url: string; description: string }[];
 }
 
 export default function RecreatePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ collectionId?: string }> }) {
@@ -90,6 +93,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
 
     // UI State
     const [showSavedMasksModal, setShowSavedMasksModal] = useState(false);
+    const [showAddOptions, setShowAddOptions] = useState(false);
 
     // Generation
     const [isGenerating, setIsGenerating] = useState(false);
@@ -227,14 +231,23 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
             layers.forEach((layer, i) => {
                 const sub = productSubstitutions[i] || layer.name;
                 p += `• Product ${i + 1} (${sub}): Integrate realistically.\n`;
-                if (layer.detailText) p += `  Detail: ${layer.detailText}\n`;
+                if (layer.prompt) {
+                    p += `  Description: ${layer.prompt}\n`;
+                }
+                if (layer.details && layer.details.length > 0) {
+                    layer.details.forEach(d => {
+                        p += `  Detail: ${d.description}\n`;
+                    });
+                }
             });
         }
 
         p += "\nSTRICT RECREATION REQUIREMENTS:\n";
+        p += `- EXACT DURATION: ${template.duration || 5} seconds. Do not change the speed.\n`;
         p += "- Camera movement: identical to original.\n";
         p += "- Lighting: match original atmosphere.\n";
         p += "- High fidelity, photorealistic.\n";
+        p += "- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE VIDEO.\n";
 
         setPrompt(p);
     }, [layers, productSubstitutions, template]);
@@ -323,8 +336,12 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                 id: crypto.randomUUID(),
                 url: processed,
                 name: file.name.replace(/\.[^/.]+$/, ''),
+                type: 'product',
+                prompt: '',
+                details: []
             };
             setLayers([...layers, newLayer]);
+            setShowAddOptions(false);
         };
         reader.readAsDataURL(file);
     };
@@ -348,8 +365,18 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         try {
             const { data: { session } } = await supabase.auth.getSession();
 
-            const productImages = layers.map(l => l.url);
-            // Add Marked/Outline Product Image if available in template
+            const productImages = [];
+            for (const layer of layers) {
+                productImages.push(layer.url);
+                if (layer.details) {
+                    for (const detail of layer.details) {
+                        // Assuming details are already processed/resized if necessary, or just sending raw url
+                        // In RecreatePage processImage runs on upload, so detail images need processing too if added via file input.
+                        // But for now valid URLs are expected.
+                        productImages.push(detail.url);
+                    }
+                }
+            }
             if (template.product_outline_image_url) {
                 productImages.push(template.product_outline_image_url);
             }
@@ -368,12 +395,13 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                     images: productImages,
                     prompt: prompt,
                     model: selectedModel,
-                    duration: 5,
+                    duration: template.duration || 5,
                     video_id: template.id,
                     audio_url: keepAudio ? template.before_video_url : undefined,
                     // Pass template video as base video if strictly needed by API, though 'video_id' usually suffices for templates logic
                     // If model matches video-edit, we might need to send video url explicitly if backend doesn't resolve from ID
-                    video: template.before_video_url
+                    video: template.before_video_url,
+                    target_mask: template.replaced_object_mask_url || undefined
                 })
             });
 
@@ -415,10 +443,10 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
 
     return (
         <ProtectedRoute>
-            <div className="w-full max-w-[1600px] mx-auto h-[90vh] flex flex-col gap-4 pt-24 px-4">
+            <div className="w-full max-w-[1600px] mx-auto h-[100vh] flex flex-col gap-2 md:gap-4 pt-[64px] pb-4 px-4 overflow-hidden">
 
                 {/* HEADER */}
-                <div className="flex items-center justify-between shrink-0">
+                <div className="flex items-center justify-between shrink-0 py-2">
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" onClick={() => router.back()} size="sm" className="text-zinc-400 hover:text-white pl-0">
                             <ArrowLeft className="w-4 h-4 mr-2" /> Back
@@ -433,10 +461,10 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                     )}
                 </div>
 
-                <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0 overflow-hidden">
+                <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 overflow-hidden">
 
                     {/* LEFT SIDEBAR (Inputs) */}
-                    <div className="w-full md:w-[340px] shrink-0 flex flex-col gap-0 h-[55%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm">
+                    <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] shrink-0 flex flex-col gap-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
 
@@ -476,35 +504,112 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                             <div className="p-4 border-b border-white/5">
                                 <div className="flex items-center justify-between mb-3">
                                     <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Product Layers</h3>
-                                    <button className="relative overflow-hidden">
-                                        <label className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer">
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowAddOptions(!showAddOptions)}
+                                            className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1"
+                                        >
                                             <Plus className="w-3 h-3" /> Add
-                                            <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
-                                        </label>
-                                    </button>
+                                        </button>
+                                        {showAddOptions && (
+                                            <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-white/10 rounded-sm shadow-xl z-20 flex flex-col p-1">
+                                                <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-sm cursor-pointer text-[10px] text-zinc-300">
+                                                    <ImageIcon className="w-3 h-3" /> Image
+                                                    <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
+                                                </label>
+                                                <button
+                                                    onClick={() => { setShowSavedMasksModal(true); setShowAddOptions(false); }}
+                                                    className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-sm cursor-pointer text-[10px] text-zinc-300 w-full text-left"
+                                                >
+                                                    <Layers className="w-3 h-3" /> Saved Mask
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="space-y-1">
                                     {layers.map((layer, i) => (
                                         <div key={layer.id} className="flex flex-col gap-1 bg-white/5 p-2 rounded-sm border border-white/5">
                                             <div className="flex items-center gap-2">
-                                                <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />
+                                                <div className="relative w-8 h-8 shrink-0">
+                                                    <img src={layer.url} className="w-full h-full object-contain bg-black/40 rounded-sm" />
+                                                    <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-bold border border-black ${layer.type === 'mask' ? 'bg-purple-500 text-white' : 'bg-blue-500 text-white'}`}>
+                                                        {layer.type === 'mask' ? 'M' : 'P'}
+                                                    </div>
+                                                </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-[10px] text-white truncate font-medium">{layer.name}</div>
-                                                    <div className="text-[9px] text-zinc-500 truncate">Product {i + 1}</div>
+                                                    <div className="text-[9px] text-zinc-500 truncate">{layer.type === 'mask' ? 'Mask Layer' : `Product ${i + 1}`}</div>
                                                 </div>
                                                 <button onClick={() => removeLayer(layer.id)}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
                                             </div>
-                                            <textarea
-                                                placeholder="Detail/Texture (e.g. 'Matte finish')..."
-                                                className="w-full bg-black/20 text-[9px] text-zinc-300 p-1 rounded-sm border border-white/5 focus:outline-none resize-none"
-                                                rows={1}
-                                                value={layer.detailText || ''}
-                                                onChange={(e) => {
-                                                    const newLayers = [...layers];
-                                                    newLayers[i].detailText = e.target.value;
-                                                    setLayers(newLayers);
-                                                }}
-                                            />
+
+                                            {/* Product Prompt */}
+                                            <div className="mt-2">
+                                                <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
+                                                <textarea
+                                                    value={layer.prompt}
+                                                    onChange={(e) => {
+                                                        const newLayers = [...layers];
+                                                        newLayers[i].prompt = e.target.value;
+                                                        setLayers(newLayers);
+                                                    }}
+                                                    placeholder="Describe the product/object..."
+                                                    className="w-full h-12 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
+                                                />
+                                            </div>
+                                            {/* Detail List */}
+                                            <div className="flex flex-col gap-2 mt-1">
+                                                {layer.details && layer.details.map((detail, dIndex) => (
+                                                    <div key={detail.id} className="flex gap-2 items-center bg-black/20 p-1 rounded-sm border border-white/5">
+                                                        <div className="relative w-6 h-6 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
+                                                            <img src={detail.url} className="w-full h-full object-cover" />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newDetails = layer.details.filter(d => d.id !== detail.id);
+                                                                    setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
+                                                                }}
+                                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="w-3 h-3 text-white" />
+                                                            </button>
+                                                        </div>
+                                                        <input
+                                                            placeholder="Detail description..."
+                                                            className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none h-6 px-1"
+                                                            value={detail.description}
+                                                            onChange={(e) => {
+                                                                const newDetails = [...layer.details];
+                                                                newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
+                                                                setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+
+                                                {/* Add Detail Button */}
+                                                <label className="flex items-center gap-1 text-[9px] text-zinc-500 hover:text-zinc-300 cursor-pointer w-fit">
+                                                    <Plus className="w-3 h-3" /> Add Detail
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) {
+                                                                const reader = new FileReader();
+                                                                reader.onload = async (ev) => {
+                                                                    // Process image to ensure size/format consistency
+                                                                    const processed = await processImage(ev.target?.result as string);
+                                                                    const newDetails = [...(layer.details || []), { id: crypto.randomUUID(), url: processed, description: '' }];
+                                                                    setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
+                                                                };
+                                                                reader.readAsDataURL(file);
+                                                            }
+                                                        }}
+                                                    />
+                                                </label>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -638,6 +743,9 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                             id: crypto.randomUUID(),
                             url: url,
                             name: 'Saved Mask',
+                            type: 'mask',
+                            prompt: '',
+                            details: []
                         };
                         setLayers([...layers, newLayer]);
                         setShowSavedMasksModal(false);

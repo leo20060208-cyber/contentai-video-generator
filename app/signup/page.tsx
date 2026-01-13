@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -26,7 +26,7 @@ const features = [
 
 export default function SignupPage() {
     const router = useRouter();
-    const { signup, loginWithGoogle } = useAuth();
+    const { signup, loginWithGoogle, user, isLoading: authLoading } = useAuth(); // Destructure user and authLoading
 
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -36,6 +36,13 @@ export default function SignupPage() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+
+    // Redirect if already logged in
+    useEffect(() => {
+        if (!authLoading && user) {
+            router.push('/profile');
+        }
+    }, [user, authLoading, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
