@@ -56,58 +56,36 @@ const getAdminClient = () => {
  * Deducts credits from a user.
  * Uses Service Role Key if available to bypass RLS.
  */
+/**
+ * Deducts credits from a user.
+ * Uses the atomic RPC function 'deduct_credits_v2' for safety and transaction logging.
+ */
 export async function deductCredits(userId: string, amount: number, description: string = 'Usage'): Promise<boolean> {
     if (!isSupabaseConfigured) return true;
 
-    // Use admin client for the transaction to ensure we can update the restricted 'credits' column
-    const adminSupabase = getAdminClient();
-
-    // 1. Get current credits
-    const { data: profile, error: fetchError } = await adminSupabase
-        .from('profiles')
-        .select('credits')
-        .eq('id', userId)
-        .single();
-
-    if (fetchError || !profile) {
-        console.error('Error fetching profile for deduction:', fetchError);
-        return false;
-    }
-
-    const currentCredits = profile.credits || 0;
-
-    if (currentCredits < amount) {
-        console.warn(`Insufficient credits via deduct for user ${userId}. Has ${currentCredits}, needs ${amount}.`);
-        return false;
-    }
-
-    // 2. Update credits
-    const newCredits = currentCredits - amount;
-    const { error: updateError } = await adminSupabase
-        .from('profiles')
-        .update({ credits: newCredits })
-        .eq('id', userId);
-
-    if (updateError) {
-        console.error('Error updating credits:', updateError);
-        return false;
-    }
-
-    // 3. Log Transaction
     try {
-        await adminSupabase.from('credit_transactions').insert({
-            user_id: userId,
-            amount: -amount,
-            type: 'deduct',
-            description: description,
-            balance_after: newCredits
+        const { data, error } = await supabase.rpc('deduct_credits_v2', {
+            p_user_id: userId,
+            p_amount: amount,
+            p_description: description
         });
-    } catch (logError) {
-        console.error('Error logging credit transaction (non-fatal):', logError);
-    }
 
-    console.log(`[Credits] Deducted ${amount} from user ${userId}. New balance: ${newCredits}. Reason: ${description}`);
-    return true;
+        if (error) {
+            console.error('Error deducting credits via RPC:', error);
+            return false;
+        }
+
+        if (data === true) {
+            console.log(`[Credits] Deducted ${amount} from user ${userId}. Reason: ${description}`);
+            return true;
+        } else {
+            console.warn(`Insufficient credits for user ${userId}. Needs ${amount}.`);
+            return false;
+        }
+    } catch (err) {
+        console.error('Unexpected error in deductCredits RPC:', err);
+        return false;
+    }
 }
 
 export const CREDIT_COSTS = {

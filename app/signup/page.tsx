@@ -36,6 +36,7 @@ export default function SignupPage() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
 
     // Redirect if already logged in
     useEffect(() => {
@@ -46,6 +47,10 @@ export default function SignupPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!acceptedTerms) {
+            setError('You must accept the Terms and Privacy Policy to create an account.');
+            return;
+        }
         setError('');
         setIsLoading(true);
 
@@ -236,11 +241,29 @@ export default function SignupPage() {
                             <p className="text-xs text-zinc-500 mt-1">Must be at least 8 characters</p>
                         </div>
 
+                        <div className="flex items-start gap-3 py-2">
+                            <input
+                                type="checkbox"
+                                id="terms"
+                                checked={acceptedTerms}
+                                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                                className="mt-1 w-4 h-4 rounded border-zinc-700 bg-zinc-800 text-orange-500 focus:ring-orange-500/50 transition-all cursor-pointer"
+                                required
+                            />
+                            <label htmlFor="terms" className="text-xs text-zinc-400 select-none cursor-pointer leading-relaxed">
+                                I have read and accept the{' '}
+                                <Link href="/terms" className="text-orange-500 hover:underline">Terms of Service</Link>
+                                {' '}and{' '}
+                                <Link href="/privacy" className="text-orange-500 hover:underline">Privacy Policy</Link>.
+                                I understand that I am responsible for the content I generate.
+                            </label>
+                        </div>
+
                         <Button
                             type="submit"
                             variant="primary"
-                            className="w-full !rounded-sm !bg-orange-500 hover:!bg-orange-600 border-none uppercase tracking-wide font-bold text-xs"
-                            disabled={isLoading}
+                            className="w-full !rounded-sm !bg-orange-500 hover:!bg-orange-600 border-none uppercase tracking-wide font-bold text-xs disabled:opacity-50 disabled:grayscale transition-all"
+                            disabled={isLoading || !acceptedTerms}
                         >
                             {isLoading ? (
                                 <span className="flex items-center gap-2">
@@ -255,11 +278,9 @@ export default function SignupPage() {
                             )}
                         </Button>
 
-                        <p className="text-xs text-zinc-500 text-center">
-                            By signing up, you agree to our{' '}
-                            <a href="#" className="text-orange-500 hover:underline">Terms</a>
-                            {' '}and{' '}
-                            <a href="#" className="text-orange-500 hover:underline">Privacy Policy</a>
+
+                        <p className="text-[10px] text-zinc-600 text-center uppercase tracking-widest font-bold mt-4">
+                            Secure 256-bit SSL Encrypted Connection
                         </p>
                     </form>
 

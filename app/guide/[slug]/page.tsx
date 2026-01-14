@@ -89,6 +89,64 @@ const defaultContent: Record<string, any> = {
                 </section>
             </div>
         `
+    },
+    "living-backgrounds": {
+        "title": "Living Backgrounds",
+        "description": "Transform static product photos into captivating animated content.",
+        "content": `
+            <div class="space-y-12">
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Upload Your Product Image</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Start with a <strong>high-resolution product photo</strong> (minimum 1080p). Ensure your product is well-lit with crisp edges. The AI analyzes the static image to understand depth, lighting, and composition before animating it.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">2</span> Paint the Background</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Use the <strong>brush tool</strong> to paint over areas you want to animate. Paint the background, atmosphere, or environmental elements—anything EXCEPT your product. The AI will keep your product perfectly still while bringing the painted areas to life with subtle, natural motion.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">3</span> Choose Duration & Generate</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Select between <strong>5s or 10s</strong> duration. Shorter videos work better for social feeds. Add optional context images to guide the animation style. Click Generate and watch as your static photo transforms into a premium, looping video perfect for ads and social media.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">💡</span> Pro Tips</h2>
+                    <ul class="text-zinc-400 leading-relaxed pl-11 space-y-2 list-disc list-inside">
+                        <li>Paint broadly for <strong>atmospheric effects</strong> (smoke, mist, light rays)</li>
+                        <li>Avoid painting on the product itself to maintain crisp focus</li>
+                        <li>Use the <strong>eraser</strong> to refine your mask precisely</li>
+                        <li>Works best with products that have distinct separation from background</li>
+                    </ul>
+                </section>
+            </div>
+        `
+    },
+    "directors-cut": {
+        "title": "Director's Cut",
+        "description": "Create cinematic transitions between multiple scenes.",
+        "content": `
+            <div class="space-y-12">
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Select Start & End Frames</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Upload your <strong>start image</strong> and <strong>end image</strong>. These define the beginning and end of your video. Choose images with similar lighting and perspective for smoother transitions. The AI will generate the motion between them.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">2</span> Add Middle Keyframes (Optional)</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">For complex transitions, add <strong>mid frames</strong> to guide the animation path. Each mid frame acts as a waypoint the AI must pass through. Perfect for showing product transformations, color changes, or multi-step reveals.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">3</span> Customize the Transition</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Write a custom prompt to describe how the transition should behave: "smooth morph," "explosive reveal," "dreamy dissolve," etc. Choose <strong>5s or 10s</strong> duration and aspect ratio. Then generate your cinematic sequence.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">💡</span> Best Use Cases</h2>
+                    <ul class="text-zinc-400 leading-relaxed pl-11 space-y-2 list-disc list-inside">
+                        <li><strong>Product transformations</strong>: Show before/after, color variants</li>
+                        <li><strong>Scene transitions</strong>: Move from one environment to another</li>
+                        <li><strong>Story sequences</strong>: Create multi-shot narratives</li>
+                        <li><strong>Brand reveals</strong>: Build anticipation with staged reveals</li>
+                    </ul>
+                </section>
+            </div>
+        `
     }
 };
 

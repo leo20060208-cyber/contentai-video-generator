@@ -19,7 +19,8 @@ const subscriptions = [
         icon: Zap,
         features: [
             '400 credits/month',
-            '~5 videos/month',
+            '~13 Magic Videos (5s)',
+            'OR ~5 Standard Videos',
             '~66 photos/month',
             'Library access',
             'HD export quality',
@@ -38,7 +39,8 @@ const subscriptions = [
         icon: Sparkles,
         features: [
             '875 credits/month',
-            '~12 videos/month',
+            '~29 Magic Videos (5s)',
+            'OR ~11 Standard Videos',
             '~145 photos/month',
             'Priority rendering',
             'HD & 4K export quality',
@@ -57,7 +59,8 @@ const subscriptions = [
         icon: Crown,
         features: [
             '1600 credits/month',
-            '~22 videos/month',
+            '~53 Magic Videos (5s)',
+            'OR ~21 Standard Videos',
             '~266 photos/month',
             'Top priority rendering',
             'Early access features',
@@ -457,7 +460,7 @@ function PricingContentInner() {
                         <Info className="w-4 h-4 text-zinc-500" />
                         <h4 className="text-sm font-bold text-white">Credit Usage Breakdown</h4>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                         {/* Image */}
                         <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-zinc-950 border border-white/5 gap-2 hover:bg-zinc-900/50 transition-colors h-full">
                             <div className="flex items-center gap-1.5 opacity-80">
@@ -482,11 +485,35 @@ function PricingContentInner() {
                             </div>
                         </div>
 
-                        {/* Short Video */}
+                        {/* Magic Video 5s */}
+                        <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-zinc-950 border border-white/5 gap-2 hover:bg-zinc-900/50 transition-colors h-full">
+                            <div className="flex items-center gap-1.5 opacity-80">
+                                <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Magic Video</span>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] text-zinc-600 mb-0.5">5 Seconds</p>
+                                <p className="text-sm font-bold text-white">30 Credits</p>
+                            </div>
+                        </div>
+
+                        {/* Magic Video 10s */}
+                        <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-zinc-950 border border-white/5 gap-2 hover:bg-zinc-900/50 transition-colors h-full">
+                            <div className="flex items-center gap-1.5 opacity-80">
+                                <Sparkles className="w-3.5 h-3.5 text-red-500" />
+                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Magic Video</span>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] text-zinc-600 mb-0.5">10 Seconds</p>
+                                <p className="text-sm font-bold text-white">50 Credits</p>
+                            </div>
+                        </div>
+
+                        {/* Short Video (Recreate/Edit) */}
                         <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-zinc-950 border border-white/5 gap-2 hover:bg-zinc-900/50 transition-colors h-full">
                             <div className="flex items-center gap-1.5 opacity-80">
                                 <Clock className="w-3.5 h-3.5 text-green-500" />
-                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Short</span>
+                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Short Edit</span>
                             </div>
                             <div className="text-center">
                                 <p className="text-[10px] text-zinc-600 mb-0.5">≤ 10 Sec</p>
@@ -497,8 +524,8 @@ function PricingContentInner() {
                         {/* Medium Video */}
                         <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-zinc-950 border border-white/5 gap-2 hover:bg-zinc-900/50 transition-colors h-full">
                             <div className="flex items-center gap-1.5 opacity-80">
-                                <Clock className="w-3.5 h-3.5 text-orange-500" />
-                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Medium</span>
+                                <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Medium Edit</span>
                             </div>
                             <div className="text-center">
                                 <p className="text-[10px] text-zinc-600 mb-0.5">≤ 15 Sec</p>
@@ -509,8 +536,8 @@ function PricingContentInner() {
                         {/* Long Video */}
                         <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-zinc-950 border border-white/5 gap-2 hover:bg-zinc-900/50 transition-colors h-full">
                             <div className="flex items-center gap-1.5 opacity-80">
-                                <Clock className="w-3.5 h-3.5 text-red-500" />
-                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Long</span>
+                                <Clock className="w-3.5 h-3.5 text-purple-500" />
+                                <span className="text-zinc-300 text-[10px] uppercase font-bold tracking-wider">Long Edit</span>
                             </div>
                             <div className="text-center">
                                 <p className="text-[10px] text-zinc-600 mb-0.5">≤ 20 Sec</p>

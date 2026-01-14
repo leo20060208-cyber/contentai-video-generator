@@ -44,12 +44,27 @@ export default function ImagesPage() {
             setConfigError(false);
 
             try {
-                // 1. Fetch Collections
-                const { data: colls } = await supabase
-                    .from('collections')
-                    .select('*, collection_items(count)')
-                    .eq('type', 'image')
-                    .order('created_at', { ascending: false });
+                // Check cache first
+                const { getCache, setCache } = await import('@/lib/cache');
+                const cachedImages = getCache<any[]>('images_page_data');
+                if (cachedImages) {
+                    setImages(cachedImages);
+                }
+
+                // Parallel Fetching
+                const [collsResponse, templatesResponse] = await Promise.all([
+                    supabase
+                        .from('collections')
+                        .select('*, collection_items(count)')
+                        .eq('type', 'image')
+                        .order('created_at', { ascending: false }),
+                    supabase
+                        .from('templates')
+                        .select('*')
+                        .order('id', { ascending: true })
+                ]);
+
+                const { data: colls } = collsResponse;
 
                 if (colls) {
                     setCollections(colls.map(c => ({
@@ -58,11 +73,7 @@ export default function ImagesPage() {
                     })));
                 }
 
-                // 2. Fetch Platform Image Templates (Now primary source)
-                const { data: templates, error: templatesError } = await supabase
-                    .from('templates')
-                    .select('*')
-                    .order('id', { ascending: true });
+                const { data: templates, error: templatesError } = templatesResponse;
 
                 if (templatesError) console.error('Error fetching templates:', templatesError);
 
@@ -113,11 +124,8 @@ export default function ImagesPage() {
                     isTemplate: true
                 }));
 
-                // 4. Map User Images - REMOVED FROM LIBRARY
-                // User images should ONLY appear in Profile > My Images, not in the Library
-                // The Library is for platform templates only
-
-                // Only set templates (no user images in Library)
+                // Update Cache and State
+                setCache('images_page_data', mappedTemplates);
                 setImages(mappedTemplates);
 
             } catch (err) {

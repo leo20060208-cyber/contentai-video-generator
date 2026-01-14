@@ -243,10 +243,11 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         }
 
         p += "\nSTRICT RECREATION REQUIREMENTS:\n";
-        p += `- EXACT DURATION: ${template.duration || 5} seconds. Do not change the speed.\n`;
+        p += `- EXACT DURATION: same as the reference video (${template.duration || 5} seconds). Do not change the speed.\n`;
         p += "- Camera movement: identical to original.\n";
-        p += "- Lighting: match original atmosphere.\n";
-        p += "- High fidelity, photorealistic.\n";
+        p += "- Lighting: identical direction, intensity, shadows.\n";
+        p += "- Physics: realistic material behavior.\n";
+        p += "- 8K resolution, high fidelity, photorealistic.\n";
         p += "- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE VIDEO.\n";
 
         setPrompt(p);
@@ -443,7 +444,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
 
     return (
         <ProtectedRoute>
-            <div className="w-full max-w-[1600px] mx-auto h-[100vh] flex flex-col gap-2 md:gap-4 pt-[64px] pb-4 px-4 overflow-hidden">
+            <div className="w-full max-w-[1600px] mx-auto h-screen flex flex-col gap-2 md:gap-4 pt-[64px] pb-10 px-4 overflow-hidden">
 
                 {/* HEADER */}
                 <div className="flex items-center justify-between shrink-0 py-2">

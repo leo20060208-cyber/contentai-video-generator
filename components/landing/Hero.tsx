@@ -16,9 +16,8 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
     const [businessRows, setBusinessRows] = useState<string[][]>([]);
     const [heroVideo, setHeroVideo] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
     const [heroImage, setHeroImage] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const [heroLibrary, setHeroLibrary] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-
     const [libraryContent, setLibraryContent] = useState<any>(null);
+    const [magicVideoConfig, setMagicVideoConfig] = useState<any>(null);
 
     useEffect(() => {
         async function loadHeroContent() {
@@ -26,17 +25,18 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
                 const { getHeroTemplate } = await import('@/lib/db/videos');
                 const { getSectionContent } = await import('@/lib/db/content');
 
-                const [vid, img, lib, libContent] = await Promise.all([
+                const [vid, img, lib, libContent, magicConfig] = await Promise.all([
                     getHeroTemplate('video'),
                     getHeroTemplate('image'),
                     getHeroTemplate('library'), // Fetch library card content
-                    getSectionContent('what_we_do_v2')
+                    getSectionContent('what_we_do_v2'),
+                    getSectionContent('magic_video_hub')
                 ]);
 
                 if (vid) setHeroVideo(vid);
                 if (img) setHeroImage(img);
-                if (lib) setHeroLibrary(lib);
                 if (libContent) setLibraryContent(libContent);
+                if (magicConfig) setMagicVideoConfig(magicConfig);
             } catch (e) {
                 console.error("Failed to load hero content", e);
             }
@@ -212,60 +212,100 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
 
                 </div>
 
-                {/* BOTTOM ROW: 3rd Library Card (Full Width) */}
-                <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 h-[80vh]">
-                    {/* Background Content */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                        {heroLibrary ? (
-                            heroLibrary.after_video_url ? (
-                                <video
-                                    src={heroLibrary.after_video_url}
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                                    autoPlay
-                                    loop
-                                    muted
-                                    playsInline
-                                />
-                            ) : (
-                                <img
-                                    src={heroLibrary.after_image_url || heroLibrary.url}
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                                    alt="Hero Library"
-                                />
-                            )
-                        ) : (
-                            <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=1000&auto=format&fit=crop')] bg-cover bg-center" />
-                        )}
-                    </div>
-
-                    {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-
-                    {/* Content / Controls */}
-                    <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="flex gap-4">
-                            {/* Image Library Button */}
-                            <Link href="/images" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                Image Library
-                            </Link>
-
-                            {/* Video Library Button */}
-                            <Link href="/videos" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                Video Library
-                            </Link>
+                {/* BOTTOM ROWS: Magic Video Generation Cards */}
+                {magicVideoConfig && (
+                    <div className="flex flex-col w-full gap-2">
+                        {/* 1. Living Backgrounds */}
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[21/9]">
+                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                                {magicVideoConfig.livingBackgrounds?.mediaUrl && (
+                                    magicVideoConfig.livingBackgrounds.mediaType === 'video' ? (
+                                        <video src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
+                                    ) : (
+                                        <img src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
+                                    )
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <Link href="/magic-video/living-backgrounds" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                    {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
+                                </Link>
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 z-20">
+                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
+                                        {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
+                                    </h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
+                                        {magicVideoConfig.livingBackgrounds?.description || 'Animate products with high-end motion'}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Bottom Tray - Library */}
-                    <div className="absolute bottom-4 left-4 right-4 z-20">
-                        <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <h3 className="text-white font-bold uppercase tracking-tight text-sm">Library</h3>
-                                <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">Recreate viral content in 1 step</p>
+                        {/* 2. Director's Cut */}
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[21/9]">
+                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                                {magicVideoConfig.directorsCut?.mediaUrl && (
+                                    magicVideoConfig.directorsCut.mediaType === 'video' ? (
+                                        <video src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
+                                    ) : (
+                                        <img src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
+                                    )
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <Link href="/magic-video/directors-cut" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                    {magicVideoConfig.directorsCut?.title || "Director's Cut"}
+                                </Link>
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 z-20">
+                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
+                                        {magicVideoConfig.directorsCut?.title || "Director's Cut"}
+                                    </h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
+                                        {magicVideoConfig.directorsCut?.description || 'Professional scene-to-scene transitions'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. Instant Product Clips (Locked/Coming Soon) */}
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[21/9] opacity-80">
+                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                                {magicVideoConfig.instantClips?.mediaUrl && (
+                                    magicVideoConfig.instantClips.mediaType === 'video' ? (
+                                        <video src={magicVideoConfig.instantClips.mediaUrl} className="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-500" autoPlay loop muted playsInline />
+                                    ) : (
+                                        <img src={magicVideoConfig.instantClips.mediaUrl} className="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-500" />
+                                    )
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center z-30 translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                <div className="bg-white text-black px-6 py-3 font-black text-[10px] tracking-[0.2em] uppercase shadow-2xl">
+                                    COMING SOON
+                                </div>
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 z-20">
+                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <h3 className="text-white/40 font-bold uppercase tracking-tight text-sm">
+                                            {magicVideoConfig.instantClips?.title || 'Instant Product Clips'}
+                                        </h3>
+                                        <p className="text-zinc-600 text-[10px] font-medium uppercase tracking-wider">
+                                            {magicVideoConfig.instantClips?.description || 'Magic is cooking...'}
+                                        </p>
+                                    </div>
+                                    <Sparkles className="w-4 h-4 text-zinc-700" />
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
 
             </div>
         </section>

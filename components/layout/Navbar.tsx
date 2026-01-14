@@ -49,14 +49,14 @@ export function Navbar() {
                   href="/create-yours"
                   className={`text-sm font-medium transition-all ${pathname === '/create-yours' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
-                  VIDEO EDITING
+                  Video Editing
                 </Link>
                 <div className="h-4 w-px bg-white/20" />
                 <Link
                   href="/videos"
                   className={`text-sm font-medium transition-all ${pathname === '/videos' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
-                  LIBRARY
+                  Library
                 </Link>
               </div>
 
@@ -71,14 +71,28 @@ export function Navbar() {
                   href="/create-image"
                   className={`text-sm font-medium transition-all ${pathname === '/create-image' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
-                  IMAGE EDITING
+                  Image Editing
                 </Link>
                 <div className="h-4 w-px bg-white/20" />
                 <Link
                   href="/images"
                   className={`text-sm font-medium transition-all ${pathname === '/images' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
-                  LIBRARY
+                  Library
+                </Link>
+              </div>
+
+              <div className="h-4 w-px bg-white/20" />
+
+              {/* MAGIC GROUP */}
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">MAGIC</span>
+                <div className="h-4 w-px bg-white/20" />
+                <Link
+                  href="/magic-video"
+                  className={`text-sm font-medium transition-all ${pathname.startsWith('/magic-video') ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Video Generation
                 </Link>
               </div>
             </div>
@@ -182,14 +196,14 @@ export function Navbar() {
                     onClick={() => setIsMenuOpen(false)}
                     className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
                   >
-                    VIDEO EDITING
+                    Video Editing
                   </Link>
                   <Link
                     href="/videos"
                     onClick={() => setIsMenuOpen(false)}
                     className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
                   >
-                    LIBRARY
+                    Library
                   </Link>
                 </div>
               </div>
@@ -203,14 +217,14 @@ export function Navbar() {
                     onClick={() => setIsMenuOpen(false)}
                     className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
                   >
-                    IMAGE EDITING
+                    Image Editing
                   </Link>
                   <Link
                     href="/images"
                     onClick={() => setIsMenuOpen(false)}
                     className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
                   >
-                    LIBRARY
+                    Library
                   </Link>
                 </div>
               </div>

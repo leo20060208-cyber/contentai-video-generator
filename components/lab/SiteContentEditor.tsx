@@ -23,7 +23,12 @@ interface WhatWeDoContent {
     createImageSteps: Step[];
     recreateImageTitle?: string;
     recreateImageSteps: Step[];
-    // New Library Sections
+    // Magic Video Generation
+    livingBackgroundsTitle?: string;
+    livingBackgroundsSteps: Step[];
+    directorsCutTitle?: string;
+    directorsCutSteps: Step[];
+    // Library Sections
     libraryVideoTitle?: string;
     libraryVideoSteps: Step[];
     libraryImageTitle?: string;
@@ -47,6 +52,10 @@ const defaultContent: WhatWeDoContent = {
     createImageSteps: [defaultStep],
     recreateImageTitle: 'Recreate Template Image',
     recreateImageSteps: [defaultStep],
+    livingBackgroundsTitle: 'LIVING BACKGROUNDS',
+    livingBackgroundsSteps: [defaultStep],
+    directorsCutTitle: "DIRECTOR'S CUT",
+    directorsCutSteps: [defaultStep],
     libraryVideoTitle: 'Visit Video Library',
     libraryVideoSteps: [defaultStep],
     libraryImageTitle: 'Visit Image Library',
@@ -81,7 +90,12 @@ export function SiteContentEditor() {
                     createImageSteps: data.createImageSteps || [defaultStep],
                     recreateImageTitle: data.recreateImageTitle || defaultContent.recreateImageTitle,
                     recreateImageSteps: data.recreateImageSteps || [defaultStep],
-                    // Merge new sections
+                    // Magic Video
+                    livingBackgroundsTitle: data.livingBackgroundsTitle || defaultContent.livingBackgroundsTitle,
+                    livingBackgroundsSteps: data.livingBackgroundsSteps || [defaultStep],
+                    directorsCutTitle: data.directorsCutTitle || defaultContent.directorsCutTitle,
+                    directorsCutSteps: data.directorsCutSteps || [defaultStep],
+                    // Library
                     libraryVideoTitle: data.libraryVideoTitle || defaultContent.libraryVideoTitle,
                     libraryVideoSteps: data.libraryVideoSteps || [defaultStep],
                     libraryImageTitle: data.libraryImageTitle || defaultContent.libraryImageTitle,
@@ -193,6 +207,8 @@ export function SiteContentEditor() {
         { key: 'recreateVideoSteps', label: 'Recreate Video Workflow' },
         { key: 'createImageSteps', label: 'Create Image Workflow' },
         { key: 'recreateImageSteps', label: 'Recreate Image Workflow' },
+        { key: 'livingBackgroundsSteps', label: 'Living Backgrounds' },
+        { key: 'directorsCutSteps', label: "Director's Cut" },
         { key: 'libraryVideoSteps', label: 'Library Video Card' },
         { key: 'libraryImageSteps', label: 'Library Image Card' },
     ];
@@ -202,6 +218,8 @@ export function SiteContentEditor() {
         if (sectionKey === 'recreateVideoSteps') return 'recreateVideoTitle';
         if (sectionKey === 'createImageSteps') return 'createImageTitle';
         if (sectionKey === 'recreateImageSteps') return 'recreateImageTitle';
+        if (sectionKey === 'livingBackgroundsSteps') return 'livingBackgroundsTitle';
+        if (sectionKey === 'directorsCutSteps') return 'directorsCutTitle';
         if (sectionKey === 'libraryVideoSteps') return 'libraryVideoTitle';
         if (sectionKey === 'libraryImageSteps') return 'libraryImageTitle';
         return null;

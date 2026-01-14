@@ -27,6 +27,11 @@ export function StepCard({ steps, title, className, onComplete, onSkip, showFoot
     const [currentStep, setCurrentStep] = useState(0);
     const router = useRouter();
 
+    // Early return if steps is undefined or empty
+    if (!steps || steps.length === 0) {
+        return null;
+    }
+
     const currentData = steps[currentStep];
 
     const handleNext = () => {
@@ -53,7 +58,7 @@ export function StepCard({ steps, title, className, onComplete, onSkip, showFoot
     };
 
     return (
-        <div className={cn("w-full max-w-[320px] mx-auto bg-[#1a1a1a] rounded-3xl overflow-hidden shadow-2xl border border-white/5 flex flex-col h-[480px] relative", className)}>
+        <div className={cn("w-full max-w-[280px] mx-auto bg-[#1a1a1a] rounded-3xl overflow-hidden shadow-2xl border border-white/5 flex flex-col h-[420px] relative", className)}>
             {/* Optional Workflow Title header inside the card */}
             {title && (
                 <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">

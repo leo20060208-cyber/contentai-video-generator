@@ -101,7 +101,6 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     }, [layers]);
 
     // Construct Prompt (Auto)
-    // Construct Prompt (Auto)
     useEffect(() => {
         let p = "Recreate the reference video EXACTLY, shot by shot, frame by frame. ";
         p += "The ONLY changes allowed are the instructions below. Maintain original camera movement, lighting, and physics.\n\n";
@@ -145,7 +144,7 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
         }
 
         p += "\nSTRICT RECREATION REQUIREMENTS:\n";
-        p += `- EXACT DURATION: ${Math.ceil(videoDuration)} seconds. Do not change the speed.\n`;
+        p += `- EXACT DURATION: same as the reference video (${Math.ceil(videoDuration) || 'X'} seconds). Do not change the speed.\n`;
         p += "- Camera movement: identical to original.\n";
         p += "- Lighting: identical direction, intensity, shadows.\n";
         p += "- Physics: realistic material behavior.\n";
@@ -154,7 +153,7 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
 
         // Only update if changed to avoid loop
         if (prompt !== p) setPrompt(p);
-    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask]);
+    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask, videoDuration, prompt]);
 
     // Timer Logic
     useEffect(() => {
@@ -254,7 +253,7 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             // If we just added a layer (layers changed), re-open prompt
             setShowFrameSelector(true);
         }
-    }, [layers.length]);
+    }, [layers.length, extractedFrameUrl]);
 
     const handleProductUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -647,7 +646,7 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     // --- RENDER ---
 
     return (
-        <div className="w-full max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col gap-2 md:gap-4 overflow-hidden">
+        <div className="w-full max-w-[1600px] mx-auto h-full flex flex-col gap-2 md:gap-4 overflow-hidden">
 
             {/* Header */}
             <div className="flex items-center justify-between shrink-0 px-4 py-2">
@@ -665,7 +664,7 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 px-4 pb-4 overflow-hidden">
+            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 px-4 pb-10 overflow-hidden">
 
                 {/* LEFT SIDEBAR (Inputs) */}
                 <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] flex flex-col gap-0 shrink-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">

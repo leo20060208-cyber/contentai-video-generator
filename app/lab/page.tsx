@@ -20,14 +20,15 @@ import {
     ImageIcon,
     LayoutGrid
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { CollectionsManager } from '@/components/lab/CollectionsManager';
+import { MagicVideoManager } from '@/components/lab/MagicVideoManager';
 
 export default function LabPage() {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides'>('templates');
+    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic'>('templates');
 
     // Auth State
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -244,6 +245,12 @@ export default function LabPage() {
                         >
                             + Info Guides
                         </button>
+                        <button
+                            onClick={() => setActiveTab('magic')}
+                            className={`pb-3 px-1 text-sm font-bold border-b-2 transition-colors ${activeTab === 'magic' ? 'border-orange-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}
+                        >
+                            ✨ Magic Video
+                        </button>
                     </div>
 
                     {activeTab === 'templates' && (
@@ -388,6 +395,12 @@ export default function LabPage() {
                 {activeTab === 'guides' && (
                     <div className="max-w-4xl mx-auto">
                         <PlusInfoEditor />
+                    </div>
+                )}
+
+                {activeTab === 'magic' && (
+                    <div className="max-w-4xl mx-auto">
+                        <MagicVideoManager />
                     </div>
                 )}
 

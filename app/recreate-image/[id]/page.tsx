@@ -92,7 +92,7 @@ export default function RecreateImagePage({ params, searchParams }: { params: Pr
 
     return (
         <ProtectedRoute>
-            <div className="h-screen overflow-hidden pt-20 pb-4 px-4 flex flex-col relative">
+            <div className="h-screen overflow-hidden pt-20 pb-10 px-4 flex flex-col relative">
                 <div className="flex-1 min-h-0">
                     <ImageCreateFlow
                         initialReferenceImage={template.before_image_url} // Template's before image (reference)

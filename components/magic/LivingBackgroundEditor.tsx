@@ -1,0 +1,566 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import {
+    X,
+    Upload,
+    Sparkles,
+    Brush,
+    Eraser,
+    RotateCcw,
+    Play,
+    Clock,
+    Layers,
+    Image as ImageIcon,
+    Loader2,
+    Check,
+    Type,
+    Zap,
+    Plus,
+    PlayCircle,
+    BookOpen,
+    Download
+} from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { supabase } from '@/lib/supabase';
+
+interface LivingBackgroundEditorProps {
+    image: string;
+    onBack: () => void;
+}
+
+interface MaskStroke {
+    points: number[][];
+    type: 'brush' | 'eraser';
+    width: number;
+}
+
+export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditorProps) {
+    const router = useRouter();
+    // Media State
+    const [maskStrokes, setMaskStrokes] = useState<MaskStroke[]>([]);
+    const [currentStroke, setCurrentStroke] = useState<number[][]>([]);
+    const [brushSize, setBrushSize] = useState(40);
+    const [activeTool, setActiveTool] = useState<'brush' | 'eraser'>('brush');
+
+    // Generation Params
+    const [prompt, setPrompt] = useState('');
+    const [duration, setDuration] = useState<5 | 10>(5);
+    const [quality, setQuality] = useState('HD');
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationProgress, setGenerationProgress] = useState(0);
+    const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+    const [contextImages, setContextImages] = useState<string[]>([]);
+
+    const { user, profile, deductCreditsOptimistic } = useAuth();
+
+    // Canvas Refs
+    const canvasContainerRef = useRef<HTMLDivElement>(null);
+    const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+    const isDrawingRef = useRef(false);
+
+    // Cursor Position
+    const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
+    const [isHoveringCanvas, setIsHoveringCanvas] = useState(false);
+
+    // Initial Prompt
+    const getBasePrompt = (d: number) => `Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural ${d}s video motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${d} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
+
+    useEffect(() => {
+        setPrompt(getBasePrompt(duration));
+    }, [duration]);
+
+    // Drawing Logic
+    const getPoint = (e: React.MouseEvent | React.TouchEvent) => {
+        if (!canvasContainerRef.current) return null;
+        const rect = canvasContainerRef.current.getBoundingClientRect();
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+        const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+
+        // Update cursor position
+        setCursorPos({ x: clientX, y: clientY });
+
+        return [x, y];
+    };
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        setCursorPos({ x: e.clientX, y: e.clientY });
+        if (isDrawingRef.current) {
+            draw(e);
+        }
+    };
+
+    const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+        isDrawingRef.current = true;
+        const p = getPoint(e);
+        if (p) {
+            setCurrentStroke([p]);
+        }
+    };
+
+    const draw = (e: React.MouseEvent | React.TouchEvent) => {
+        if (!isDrawingRef.current) return;
+        const p = getPoint(e);
+        if (p) {
+            setCurrentStroke(prev => [...prev, p]);
+        }
+    };
+
+    const stopDrawing = () => {
+        if (!isDrawingRef.current) return;
+        isDrawingRef.current = false;
+        if (currentStroke.length > 0) {
+            setMaskStrokes(prev => [...prev, {
+                points: currentStroke,
+                type: activeTool,
+                width: brushSize
+            }]);
+        }
+        setCurrentStroke([]);
+    };
+
+    // Render Overlay Canvas
+    useEffect(() => {
+        const canvas = overlayCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Sync canvas size with display size
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const drawStroke = (stroke: MaskStroke | { points: number[][], type: string, width: number }) => {
+            if (stroke.points.length < 2) return;
+            ctx.beginPath();
+            ctx.strokeStyle = stroke.type === 'brush' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.8)';
+            ctx.lineWidth = stroke.width;
+
+            // Composite operation for eraser
+            if (stroke.type === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+            } else {
+                ctx.globalCompositeOperation = 'source-over';
+            }
+
+            ctx.moveTo(stroke.points[0][0] * canvas.width, stroke.points[0][1] * canvas.height);
+            for (let i = 1; i < stroke.points.length; i++) {
+                ctx.lineTo(stroke.points[i][0] * canvas.width, stroke.points[i][1] * canvas.height);
+            }
+            ctx.stroke();
+        };
+
+        // Draw saved strokes
+        maskStrokes.forEach(drawStroke);
+
+        // Draw current stroke
+        if (currentStroke.length > 0) {
+            drawStroke({ points: currentStroke, type: activeTool, width: brushSize });
+        }
+    }, [maskStrokes, currentStroke, activeTool, brushSize]);
+
+    const handleAddContextImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            setContextImages(prev => [...prev, ev.target?.result as string]);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const generateMaskImage = (): Promise<string | null> => {
+        return new Promise((resolve) => {
+            if (maskStrokes.length === 0) { resolve(null); return; }
+            const canvas = document.createElement('canvas');
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) { resolve(null); return; }
+
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                maskStrokes.forEach(stroke => {
+                    ctx.beginPath();
+                    ctx.strokeStyle = stroke.type === 'brush' ? 'white' : 'black';
+                    ctx.lineWidth = stroke.width * (canvas.width / (overlayCanvasRef.current?.width || 1));
+                    ctx.moveTo(stroke.points[0][0] * canvas.width, stroke.points[0][1] * canvas.height);
+                    for (let i = 1; i < stroke.points.length; i++) {
+                        ctx.lineTo(stroke.points[i][0] * canvas.width, stroke.points[i][1] * canvas.height);
+                    }
+                    ctx.stroke();
+                });
+                resolve(canvas.toDataURL('image/png'));
+            };
+            img.src = image;
+        });
+    };
+
+    const handleGenerate = async () => {
+        if (isGenerating) return;
+        setIsGenerating(true);
+        setGenerationProgress(0);
+
+        try {
+            // 1. Generate Mask
+            const maskBase64 = await generateMaskImage();
+            if (!maskBase64) {
+                throw new Error('Failed to generate mask');
+            }
+
+            // 2. Upload mask to Supabase Storage
+            const maskBlob = await fetch(maskBase64).then(r => r.blob());
+            const maskFileName = `masks/${Date.now()}.png`;
+
+            const { data: maskUpload, error: maskError } = await supabase.storage
+                .from('videos')
+                .upload(maskFileName, maskBlob, {
+                    contentType: 'image/png'
+                });
+
+            if (maskError) {
+                throw new Error('Failed to upload mask: ' + maskError.message);
+            }
+
+            const { data: { publicUrl: maskUrl } } = supabase.storage
+                .from('videos')
+                .getPublicUrl(maskFileName);
+
+            // 3. Call Living Backgrounds API
+            setGenerationProgress(10);
+            const response = await fetch('/api/magic-video/living-backgrounds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    imageUrl: image,
+                    maskUrl: maskUrl,
+                    prompt: prompt,
+                    duration: duration,
+                    contextImages: contextImages
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Generation failed');
+            }
+
+            const data = await response.json();
+            setGenerationProgress(20);
+
+            // 4. Poll for status
+            if (data.taskId) {
+                let completed = false;
+                let attempts = 0;
+                const maxAttempts = 90; // 3 minutes max (2s intervals)
+
+                while (!completed && attempts < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 2000));
+
+                    const statusRes = await fetch(`/api/magic-video/status/${data.taskId}`);
+                    const statusData = await statusRes.json();
+
+                    if (statusData.status === 'completed' && statusData.videoUrl) {
+                        setGeneratedVideoUrl(statusData.videoUrl);
+                        completed = true;
+                        setGenerationProgress(100);
+                    } else if (statusData.status === 'failed') {
+                        throw new Error('Generation failed on server');
+                    } else {
+                        // Progress simulation while processing
+                        setGenerationProgress(prev => Math.min(95, prev + 1.5));
+                    }
+                    attempts++;
+                }
+
+                if (!completed) {
+                    throw new Error('Generation timed out after 3 minutes');
+                }
+            }
+        } catch (error: any) {
+            console.error('Generation error:', error);
+            alert(error.message || 'Generation failed. Please try again.');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 top-16 bg-transparent flex flex-col overflow-hidden">
+
+
+
+            {/* Main Content Area */}
+            <div className="flex-1 flex relative items-center justify-center px-20 pt-16 pb-12 min-h-0 overflow-hidden">
+
+                {/* Floating Left Toolbar */}
+                <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
+                    <div className="flex flex-col bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-1.5 shadow-2xl">
+                        <button
+                            onClick={() => setActiveTool('brush')}
+                            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${activeTool === 'brush' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                            title="Brush"
+                        >
+                            <Brush className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setActiveTool('eraser')}
+                            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${activeTool === 'eraser' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                            title="Eraser"
+                        >
+                            <Eraser className="w-5 h-5" />
+                        </button>
+                        <div className="h-px bg-white/5 my-1 mx-2" />
+                        <button
+                            onClick={() => setMaskStrokes([])}
+                            className="w-12 h-12 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all"
+                            title="Clear Mask"
+                        >
+                            <RotateCcw className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Scale Slider */}
+                    <div className="bg-transparent rounded-2xl p-3 flex flex-col items-center gap-3">
+                        <div className="w-1.5 h-24 bg-zinc-800 rounded-full relative overflow-hidden group">
+                            <input
+                                type="range"
+                                min="5"
+                                max="100"
+                                value={brushSize}
+                                onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                                className="absolute inset-0 opacity-0 cursor-pointer h-full -rotate-180"
+                                style={{ transformOrigin: 'center' }}
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 bg-orange-500" style={{ height: `${brushSize}%` }} />
+                        </div>
+                        <span className="text-[10px] font-black text-white/50">{brushSize}</span>
+                    </div>
+                </div>
+
+                {/* Center Canvas */}
+                <div
+                    ref={canvasContainerRef}
+                    className="relative max-w-full h-full flex items-center justify-center aspect-auto rounded-xl overflow-hidden bg-transparent group cursor-none"
+                    onMouseDown={startDrawing}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={stopDrawing}
+                    onMouseEnter={() => setIsHoveringCanvas(true)}
+                    onMouseLeave={() => {
+                        setIsHoveringCanvas(false);
+                        stopDrawing();
+                    }}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                >
+                    <img
+                        src={image}
+                        alt="Main Image"
+                        className="w-full h-full object-contain pointer-events-none select-none max-h-full"
+                        draggable={false}
+                    />
+
+                    <canvas
+                        ref={overlayCanvasRef}
+                        className="absolute inset-0 w-full h-full pointer-events-none"
+                    />
+
+                    {/* Custom Brush Cursor */}
+                    {!isGenerating && isHoveringCanvas && (
+                        <div
+                            className="pointer-events-none fixed z-[100] border border-white/50 rounded-full bg-white/10 ring-1 ring-black/50"
+                            style={{
+                                width: `${brushSize}px`,
+                                height: `${brushSize}px`,
+                                left: cursorPos.x,
+                                top: cursorPos.y,
+                                transform: 'translate(-50%, -50%)',
+                                backgroundColor: activeTool === 'brush' ? 'rgba(255,255,255,0.2)' : 'rgba(255,0,0,0.2)',
+                            }}
+                        />
+                    )}
+                </div>
+            </div>
+
+            {/* Generated Video Overlay */}
+            <AnimatePresence>
+                {generatedVideoUrl && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+                    >
+                        <button
+                            onClick={() => setGeneratedVideoUrl(null)}
+                            className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
+                        >
+                            <X className="w-6 h-6 text-white/50 group-hover:text-white" />
+                        </button>
+
+                        <div className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                            <video
+                                src={generatedVideoUrl}
+                                controls
+                                autoPlay
+                                loop
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+
+                        <div className="mt-8 flex items-center gap-4">
+                            <button
+                                onClick={() => {
+                                    const a = document.createElement('a');
+                                    a.href = generatedVideoUrl;
+                                    a.download = `magic-video-${Date.now()}.mp4`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                }}
+                                className="px-6 py-3 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                Download Video
+                            </button>
+                            <button
+                                onClick={() => onBack()}
+                                className="px-6 py-3 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-colors"
+                            >
+                                Back to Gallery
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Bottom Panel (Floating Prompt Bar) */}
+            <div className="p-3 md:pb-4 relative z-50 shrink-0">
+                <div className="max-w-3xl mx-auto">
+                    <div className="bg-zinc-900/60 backdrop-blur-md rounded-xl p-1 flex flex-col gap-1 border border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)]">
+                        <div className="flex gap-2">
+                            <div className="flex-1 bg-transparent rounded-lg p-2">
+                                <textarea
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    className="w-full bg-transparent border-none focus:ring-0 text-xs text-white placeholder-zinc-500 resize-none h-6 custom-scrollbar leading-tight focus:bg-transparent"
+                                    placeholder="Describe how to animate the background..."
+                                />
+                            </div>
+
+                            <button
+                                onClick={handleGenerate}
+                                disabled={isGenerating}
+                                className="w-40 bg-white/5 hover:bg-white/10 backdrop-blur-md disabled:bg-transparent disabled:text-zinc-700 text-orange-500 border border-orange-500/30 hover:border-orange-500/60 font-bold text-[10px] rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-orange-500/10"
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <span>{generationProgress}%</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="flex items-center gap-1">
+                                            GENERATE
+                                        </span>
+                                        <span className="text-[7px] opacity-40">COST: {duration === 10 ? 95 : 75} CR</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Control Badges */}
+                        <div className="flex items-center justify-between px-2 pb-1">
+                            <div className="flex items-center gap-2">
+                                <div className="flex bg-transparent p-1">
+                                    <button
+                                        onClick={() => setDuration(5)}
+                                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${duration === 5 ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
+                                    >
+                                        5s
+                                    </button>
+                                    <button
+                                        onClick={() => setDuration(10)}
+                                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${duration === 10 ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
+                                    >
+                                        10s
+                                    </button>
+                                </div>
+
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {/* GUIDE button moved here */}
+                                <button
+                                    onClick={() => router.push('/guide/living-backgrounds')}
+                                    className="text-[9px] font-black text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest flex items-center gap-1"
+                                    title="View Guide"
+                                >
+                                    <BookOpen className="w-3 h-3" />
+                                    GUIDE
+                                </button>
+
+                                {contextImages.map((img, i) => (
+                                    <div key={i} className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/20 group">
+                                        <img src={img} className="w-full h-full object-cover" />
+                                        <button
+                                            onClick={() => setContextImages(prev => prev.filter((_, idx) => idx !== i))}
+                                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-2 h-2 text-white" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <input
+                                    type="file"
+                                    id="context-image-upload"
+                                    className="hidden"
+                                    onChange={handleAddContextImage}
+                                    accept="image/*"
+                                />
+                                <button
+                                    onClick={() => document.getElementById('context-image-upload')?.click()}
+                                    className="text-[9px] font-black text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest flex items-center gap-2"
+                                >
+                                    <Plus className="w-3 h-3" />
+                                    ADD IMAGE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Generation Progress Bar */}
+                    <AnimatePresence>
+                        {isGenerating && (
+                            <motion.div
+                                initial={{ opacity: 0, scaleX: 0 }}
+                                animate={{ opacity: 1, scaleX: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="w-full h-1 bg-orange-500 mt-4 rounded-full origin-left shadow-[0_0_15px_rgba(249,115,22,0.5)]"
+                                style={{ scaleX: generationProgress / 100 }}
+                            />
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
+        </div >
+    );
+}

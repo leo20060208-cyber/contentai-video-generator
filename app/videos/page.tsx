@@ -252,18 +252,29 @@ export default function VideosPage() {
     useEffect(() => {
         async function loadData() {
             try {
+                // Check cache first
+                const { getCache, setCache } = await import('@/lib/cache');
+                const cachedVideos = getCache<any[]>('videos_page_data');
+
+                if (cachedVideos) {
+                    setTemplates(cachedVideos);
+                    // Fetch categories separately if needed, or rely on useCategories hook
+                }
+
                 const { getTemplates } = await import('@/lib/db/videos');
                 const { supabase } = await import('@/lib/supabase');
 
-                // Fetch Templates
-                const temps = await getTemplates();
+                // Parallel Fetching
+                const [temps, collsResponse] = await Promise.all([
+                    getTemplates(),
+                    supabase
+                        .from('collections')
+                        .select('*, collection_items(count)')
+                        .eq('type', 'video')
+                        .order('created_at', { ascending: false })
+                ]);
 
-                // Fetch Collections
-                const { data: colls } = await supabase
-                    .from('collections')
-                    .select('*, collection_items(count)')
-                    .eq('type', 'video')
-                    .order('created_at', { ascending: false });
+                const { data: colls } = collsResponse;
 
                 if (colls) {
                     setCollections(colls.map(c => ({
@@ -301,6 +312,8 @@ export default function VideosPage() {
                         productImage: t.product_image_url
                     }));
 
+                // Update Cache and State
+                setCache('videos_page_data', mappedTemplates);
                 setTemplates(mappedTemplates);
             } catch (error) {
                 console.error('Failed to load library data', error);

@@ -223,10 +223,13 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             p += `\nADDITIONAL NOTES: ${additionalDetails.trim()}\n`;
         }
 
-        p += "\nCRITICAL RULES:\n";
+        p += "\nSTRICT RECREATION REQUIREMENTS:\n";
         p += "1. PIXEL PERFECT: The unmasked areas must match Image 1 EXACTLY.\n";
         p += "2. MASK GUIDE: Do NOT render the colored markers from Image 2. They are invisible guides.\n";
-        p += "3. INTEGRATION: Match the lighting, shadows, and perspective of Image 1 when inserting Image 3+.\n";
+        p += "3. Lighting: identical direction, intensity, shadows.\n";
+        p += "4. Physics: realistic material behavior.\n";
+        p += "5. Photorealistic, high fidelity.\n";
+        p += "6. OUTPUT IMAGE MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.\n";
 
         setPrompt(p);
     }, [referenceImage, productSubstitutions, additionalDetails, layers]);
@@ -472,6 +475,13 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
             // Auto-Save using Supabase Client directly for consistency
             try {
+                console.log('[Create] Auto-saving image to DB...');
+                console.log('[Create] Save payload:', {
+                    user_id: user?.id,
+                    url: finalUrl,
+                    category: 'Create'
+                });
+
                 const { error } = await supabase.from('images').insert({
                     user_id: user?.id,
                     url: finalUrl,
@@ -480,11 +490,15 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                     category: 'Create'
                 });
 
-                if (error) throw error;
+                if (error) {
+                    console.error('[Create] DB Insert Error:', error);
+                    throw error;
+                }
+
                 setSaveStatus('saved');
-                console.log("Image auto-saved to library");
+                console.log("[Create] Image auto-saved successfully");
             } catch (err) {
-                console.error("Failed to auto-save image:", JSON.stringify(err, null, 2));
+                console.error("[Create] Failed to auto-save image:", err);
                 setSaveStatus('error');
             }
 
@@ -530,6 +544,9 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         setSaveStatus(null);
         try {
             console.log('[Create] Starting generation...');
+            console.log('[Create] User ID:', user?.id);
+            console.log('[Create] Session present:', !!session);
+            console.log('[Create] Model Tier:', modelTier);
 
             // 1. Resolve Strict Dimensions from Reference Image
             let actualDimensions = { ...dimensions };
@@ -644,10 +661,12 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
             // Optimistic Credit Deduction
             const cost = modelTier === 'pro' ? 18 : 6;
+            console.log('[Create] Deducting credits optimistically:', cost);
             if (deductCreditsOptimistic) {
                 deductCreditsOptimistic(cost, 'Generate image');
             }
 
+            console.log('[Create] Calling /api/image/refine...');
             const res = await fetch('/api/image/refine', {
                 method: 'POST',
                 headers: {
@@ -664,13 +683,21 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                 })
             });
 
+            console.log('[Create] API Response Status:', res.status);
+
             if (res.status === 402) {
                 router.push(`/pricing?returnUrl=${encodeURIComponent(pathname)}`);
                 return;
             }
 
-            if (!res.ok) throw new Error('Generation failed');
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                console.error('[Create] API Error Details:', errorData);
+                throw new Error(errorData.error || 'Generation failed');
+            }
+
             const data = await res.json();
+            console.log('[Create] API Response JSON received:', data.taskId ? 'Asynchronous (TaskId)' : 'Synchronous (URL)');
 
             await processGenerationResponse(data, prompt);
             if (data.url || data.taskId) setViewMode('result');
@@ -755,7 +782,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
     return (
 
-        <div className="w-full max-w-[1600px] mx-auto h-[calc(100vh-64px)] flex flex-col gap-2 md:gap-4 overflow-hidden">
+        <div className="w-full max-w-[1600px] mx-auto h-full flex flex-col gap-2 md:gap-4 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between shrink-0 px-4 py-2">
                 <h1 className="text-xl font-medium text-white flex items-center gap-2">
@@ -782,7 +809,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             </div>
 
             {/* Main Area */}
-            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 px-4 pb-4 overflow-hidden">
+            <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 px-4 pb-10 overflow-hidden">
 
                 {/* LEFT COLUMN: Controls */}
                 <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] flex flex-col gap-0 shrink-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
@@ -866,27 +893,6 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                         {/* 3. Editing Tools (Change BG, Remove Obj) */}
                         <div className="p-4 border-b border-white/5 space-y-4">
                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Tools</h3>
-
-                            {/* Background Tool */}
-                            {!disableTools.includes('background') && (
-                                <div className="space-y-2">
-                                    <label className="flex items-center justify-between text-[11px] text-zinc-300">
-                                        <span className="flex items-center gap-2"><ImageIcon className="w-3 h-3 text-blue-400" /> New Background</span>
-                                        {backgroundImage && <button onClick={() => setBackgroundImage(null)} className="text-zinc-600 hover:text-red-400 text-[10px]">Remove</button>}
-                                    </label>
-                                    {!backgroundImage ? (
-                                        <label className="flex items-center justify-center w-full h-10 border border-dashed border-white/20 rounded-sm bg-white/5 hover:bg-white/10 cursor-pointer text-[10px] text-zinc-500 gap-2 transition-colors">
-                                            <Plus className="w-3 h-3" /> Upload Background
-                                            <input type="file" onChange={(e) => handleUpload(e, setBackgroundImage)} className="hidden" accept="image/*" />
-                                        </label>
-                                    ) : (
-                                        <div className="relative w-full h-20 bg-black/50 rounded-sm overflow-hidden border border-white/10">
-                                            <img src={backgroundImage} className="w-full h-full object-contain opacity-80" />
-                                            <div className="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-sm">BG</div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {/* Person / Face Swap Tool */}
                             {!disableTools.includes('person') && (
@@ -1073,14 +1079,14 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                     onClick={() => setModelTier('normal')}
                                     className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-sm transition-all ${modelTier === 'normal' ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 >
-                                    <span className="text-[9px] font-bold uppercase tracking-wider">Normal</span>
+                                    <span className="text-[9px] font-bold uppercase tracking-wider">Normal 1K</span>
                                     <span className="text-[7px] font-medium opacity-60">6 Credits</span>
                                 </button>
                                 <button
                                     onClick={() => setModelTier('pro')}
                                     className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-sm transition-all ${modelTier === 'pro' ? 'bg-gradient-to-br from-purple-900/80 to-blue-900/80 text-white shadow-md border border-purple-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
                                 >
-                                    <span className="text-[9px] font-bold uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-400">Pro</span>
+                                    <span className="text-[9px] font-bold uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-400">Pro 2K</span>
                                     <span className="text-[7px] font-medium opacity-60">18 Credits</span>
                                 </button>
                             </div>
