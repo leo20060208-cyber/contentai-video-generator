@@ -1,5 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || '';
 
@@ -11,14 +9,17 @@ if (!isSupabaseConfigured) {
 }
 
 // Create a single supabase client for the browser
-export const supabase = createClient(
+// using createBrowserClient ensures cookies are used for auth persistence
+import { createBrowserClient } from '@supabase/ssr';
+
+export const supabase = createBrowserClient(
     supabaseUrl || 'https://placeholder.supabase.co',
     supabaseAnonKey || 'placeholder-key',
     {
         auth: {
+            detectSessionInUrl: true,
             autoRefreshToken: true,
             persistSession: true,
-            detectSessionInUrl: true,
         },
     }
 );

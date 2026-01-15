@@ -1,19 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { WavespeedClient } from '@/lib/wavespeed';
 
 export async function POST(request: NextRequest) {
+    const wavespeedClient = new WavespeedClient();
     try {
-        const supabase = createClient(
+        // === HYBRID AUTH STRATEGY ===
+        // 1. Try cookie-based auth first (Next.js App Router standard)
+        const supabase = await createServerClient();
+        let user = null;
+
+        const { data: { user: cookieUser }, error: cookieError } = await supabase.auth.getUser();
+
+        if (cookieUser && !cookieError) {
+            user = cookieUser;
+            console.log('[Directors Cut] Auth via cookies successful');
+        } else {
+            // 2. Fallback to Authorization header
+            const authHeader = request.headers.get('Authorization');
+            if (authHeader?.startsWith('Bearer ')) {
+                const token = authHeader.substring(7);
+                const anonSupabase = createClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                );
+                const { data: { user: headerUser }, error: headerError } = await anonSupabase.auth.getUser(token);
+                if (headerUser && !headerError) {
+                    user = headerUser;
+                    console.log('[Directors Cut] Auth via header successful');
+                }
+            }
+        }
+
+        if (!user) {
+            console.error('[Directors Cut] Authentication failed');
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Use admin client for database operations
+        const adminSupabase = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!,
             { auth: { persistSession: false } }
         );
-
-        // Get user
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         const body = await request.json();
         const {
@@ -33,13 +63,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Get user profile and check credits
-        const { data: profile } = await supabase
+        const { data: profile } = await adminSupabase
             .from('profiles')
             .select('credits')
             .eq('id', user.id)
             .single();
 
-        const creditCost = duration === 10 ? 50 : 30;
+        // Map duration to allowed model values [4, 8]
+        // User selects 5s -> Model uses 4s
+        // User selects 10s -> Model uses 8s
+        const mappedDuration = duration <= 5 ? 4 : 8;
+        const creditCost = duration >= 10 ? 55 : 30;
 
         if (!profile || profile.credits < creditCost) {
             return NextResponse.json({
@@ -79,7 +113,7 @@ Technical Requirement: The video MUST start exactly with the Start Frame, pass t
                 ],
                 prompt: baseAutoPrompt,
                 negative_prompt: 'abrupt cuts, flickering, distortion, artifacts, unnatural motion, low quality, choppy animation',
-                duration: duration,
+                duration: mappedDuration,
                 aspect_ratio: aspectRatio,
                 cfg_scale: 8.0
             };
@@ -90,7 +124,7 @@ Technical Requirement: The video MUST start exactly with the Start Frame, pass t
                 end_image: endImage,
                 prompt: baseAutoPrompt,
                 negative_prompt: 'abrupt cuts, flickering, distortion, artifacts, unnatural motion, low quality, choppy animation',
-                duration: duration,
+                duration: mappedDuration,
                 aspect_ratio: aspectRatio,
                 cfg_scale: 8.0,
                 frames_per_second: 24,
@@ -98,38 +132,35 @@ Technical Requirement: The video MUST start exactly with the Start Frame, pass t
             };
         }
 
-        // Call Wavespeed Sora-2 API
-        const wavespeedResponse = await fetch('https://api.wavespeed.ai/v1/generate', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.WAVESPEED_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'openai/sora-2/image-to-video',
-                input: apiInput
-            })
+        // Call Wavespeed Sora-2 API via Client
+        // We pass the prompt merely for logging, but the real work is in customPayload.
+        // Assuming V3 API uses flat structure for parameters like other models.
+
+        const result = await wavespeedClient.generateVideo({
+            model: 'openai/sora-2/image-to-video',
+            prompt: prompt,
+            customPayload: {
+                // V3 API typically accepts flat parameters for the model
+                ...apiInput
+            }
         });
 
-        if (!wavespeedResponse.ok) {
-            const errorData = await wavespeedResponse.json().catch(() => ({}));
-            console.error('Wavespeed API error:', errorData);
-            return NextResponse.json({
-                error: 'Video generation failed',
-                details: errorData
-            }, { status: 500 });
-        }
-
-        const wavespeedData = await wavespeedResponse.json();
+        // The client throws error if failed, so if we are here, it worked.
+        // Normalize response data structure
+        const wavespeedData = {
+            task_id: result.taskId,
+            status: result.status,
+            estimated_time: 180
+        };
 
         // Deduct credits
-        await supabase
+        await adminSupabase
             .from('profiles')
             .update({ credits: profile.credits - creditCost })
             .eq('id', user.id);
 
         // Store generation task
-        const { data: task, error: taskError } = await supabase
+        const { data: task, error: taskError } = await adminSupabase
             .from('magic_video_tasks')
             .insert({
                 user_id: user.id,
@@ -164,8 +195,8 @@ Technical Requirement: The video MUST start exactly with the Start Frame, pass t
     } catch (error: any) {
         console.error('Directors Cut API error:', error);
         return NextResponse.json({
-            error: 'Internal server error',
-            message: error.message
+            error: `Generation failed: ${error.message}`,
+            details: error.message
         }, { status: 500 });
     }
 }

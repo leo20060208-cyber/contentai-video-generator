@@ -104,84 +104,79 @@ export class WavespeedClient {
      */
     async generateVideo(params: {
         prompt: string;
-        image_url?: string; // For Standard I2V
-        images?: string[];  // For Reference-to-Video
-        video_url?: string; // For Video-Edit
-        target_mask?: string; // For Masking
+        image_url?: string;
+        images?: string[];
+        video_url?: string;
+        target_mask?: string;
         model?: string;
         duration?: number;
         aspect_ratio?: string;
         negative_prompt?: string;
+        customPayload?: any; // Allow full control for complex models like Sora
     }) {
-        // Determine the correct model endpoint
+        // Determine correct endpoint
         let modelPath = 'kwaivgi/kling-v1.6-i2v-standard';
 
-        // Check for Specific Models
-        if (params.model === 'kwaivgi/kling-video-o1/reference-to-video') {
-            modelPath = 'kwaivgi/kling-video-o1/reference-to-video';
-        } else if (params.model === 'kwaivgi/kling-video-o1/video-edit') {
-            modelPath = 'kwaivgi/kling-video-o1/video-edit';
+        if (params.model) {
+            // Trust the model path passed if it looks like a valid path or known alias
+            if (params.model.includes('/') || params.model === 'kling-pro') {
+                modelPath = params.model;
+            }
+
+            // Map known aliases
+            if (params.model === 'kling-pro') modelPath = 'kwaivgi/kling-v1.6-i2v-pro';
+        }
+
+        let endpoint = `${this.baseUrl}/${modelPath}`;
+
+        // Build Payload
+        let body: Record<string, unknown> = {};
+
+        // If custom payload provided (e.g. for Sora), use it primarily
+        if (params.customPayload) {
+            body = { ...params.customPayload };
+            // Ensure prompt is set if not in custom payload
+            if (!body.prompt && params.prompt) body.prompt = params.prompt;
         } else {
-            // Default / Aliases
-            if (params.model === 'kling-pro' || params.model === 'kling-v1-pro') {
-                modelPath = 'kwaivgi/kling-v1.6-i2v-pro';
-            }
-        }
+            // Standard/Kling Logic construction
+            body.prompt = params.prompt;
 
-        const endpoint = `${this.baseUrl}/${modelPath}`;
+            // 1. Reference to Video
+            if (modelPath === 'kwaivgi/kling-video-o1/reference-to-video') {
+                // ... (existing logic) ...
+                body.duration = params.duration || 5;
+                body.aspect_ratio = params.aspect_ratio || '16:9';
+                body.keep_original_sound = false;
 
-        // Build Request Body based on Model Type
-        const body: Record<string, unknown> = {
-            prompt: params.prompt,
-        };
+                if (params.images && params.images.length > 0) {
+                    body.images = params.images.map(url => this.cleanUrl(url));
+                } else if (params.image_url) {
+                    body.images = [this.cleanUrl(params.image_url)];
+                } else {
+                    body.images = [];
+                }
+                body.video = "";
+            }
+            // 2. Video Edit
+            else if (modelPath === 'kwaivgi/kling-video-o1/video-edit') {
+                // ... (existing logic) ...
+                body.keep_original_sound = true;
+                if (params.video_url) body.video = this.cleanUrl(params.video_url);
+                if (params.images) body.images = params.images.map(url => this.cleanUrl(url));
+                else if (params.image_url) body.images = [this.cleanUrl(params.image_url)];
+                else body.images = [];
 
-        // 1. Reference to Video
-        if (modelPath === 'kwaivgi/kling-video-o1/reference-to-video') {
-            body.duration = params.duration || 5;
-            body.aspect_ratio = params.aspect_ratio || '16:9';
-            body.keep_original_sound = false;
-
-            // Prefer 'images' array, fallback to 'image_url' wrapped in array
-            if (params.images && params.images.length > 0) {
-                body.images = params.images.map(url => this.cleanUrl(url));
-            } else if (params.image_url) {
-                body.images = [this.cleanUrl(params.image_url)];
-            } else {
-                body.images = []; // Empty array might fail but it's what we have
+                if (params.target_mask) body.target_mask = this.cleanUrl(params.target_mask);
             }
-            body.video = ""; // API docs example shows empty string video sometimes? Or omit? Docs say: "video": "" in example. Leaving it empty or omitted should be fine, but example included it.
-        }
-        // 2. Video Edit
-        else if (modelPath === 'kwaivgi/kling-video-o1/video-edit') {
-            body.keep_original_sound = true;
-            if (params.video_url) {
-                body.video = this.cleanUrl(params.video_url);
-            }
-            if (params.images && params.images.length > 0) {
-                body.images = params.images.map(url => this.cleanUrl(url));
-            } else if (params.image_url) {
-                body.images = [this.cleanUrl(params.image_url)];
-            } else {
-                body.images = [];
-            }
-
-            // Add target mask if provided
-            if (params.target_mask) {
-                body.target_mask = this.cleanUrl(params.target_mask);
-            }
-            // Note: Duration for Video Edit is usually derived from input or limited to 3-10s.
-        }
-        // 3. Standard I2V (kling-v1.6)
-        else {
-            body.duration = params.duration || 5;
-            body.aspect_ratio = params.aspect_ratio || '16:9';
-            body.guidance_scale = 0.5;
-
-            if (params.image_url) {
-                body.image = this.cleanUrl(params.image_url);
-            }
-            if (params.negative_prompt) {
-                body.negative_prompt = params.negative_prompt;
+            // 3. Standard I2V
+            else {
+                // ... (existing logic) ...
+                body.duration = params.duration || 5;
+                body.aspect_ratio = params.aspect_ratio || '16:9';
+                body.guidance_scale = 0.5;
+                if (params.image_url) body.image = this.cleanUrl(params.image_url);
+                if (params.target_mask) body.target_mask = this.cleanUrl(params.target_mask);
+                if (params.negative_prompt) body.negative_prompt = params.negative_prompt;
             }
         }
 
@@ -200,12 +195,11 @@ export class WavespeedClient {
                 body: JSON.stringify(body)
             });
 
+            // ... (rest of error handling is same) ...
             if (!response.ok) {
                 const errorText = await response.text();
-                // Attempt to parse JSON error if possible
                 try {
-                    const jsonError = JSON.parse(errorText);
-                    console.error(`🛑 [Wavespeed] API Error (${response.status}):`, jsonError);
+                    console.error(`🛑 [Wavespeed] API Error (${response.status}):`, JSON.parse(errorText));
                 } catch {
                     console.error(`🛑 [Wavespeed] API Error (${response.status}):`, errorText);
                 }
@@ -215,12 +209,10 @@ export class WavespeedClient {
             const result = await response.json();
             console.log(`✅ [Wavespeed] Response:`, result);
 
-            // V3 API returns request_id instead of data.id
             const taskId = result.data?.id || result.request_id || result.id;
             if (taskId) {
                 return { taskId: taskId, status: 'processing' };
             } else {
-                console.error('🛑 [Wavespeed] Full response:', JSON.stringify(result, null, 2));
                 throw new Error('Wavespeed API response missing Task ID');
             }
 

@@ -1,128 +1,148 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
+import { WavespeedClient } from '@/lib/wavespeed';
+
+const wavespeedClient = new WavespeedClient();
 
 export async function GET(
     request: NextRequest,
     { params }: { params: { taskId: string } }
 ) {
     try {
-        const supabase = createClient(
+        // === HYBRID AUTH STRATEGY ===
+        const supabase = await createServerClient();
+        let user = null;
+
+        const { data: { user: cookieUser }, error: cookieError } = await supabase.auth.getUser();
+
+        if (cookieUser && !cookieError) {
+            user = cookieUser;
+        } else {
+            const authHeader = request.headers.get('Authorization');
+            if (authHeader?.startsWith('Bearer ')) {
+                const token = authHeader.substring(7);
+                const anonSupabase = createClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                );
+                const { data: { user: headerUser }, error: headerError } = await anonSupabase.auth.getUser(token);
+                if (headerUser && !headerError) {
+                    user = headerUser;
+                }
+            }
+        }
+
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Use admin client for database operations
+        const adminSupabase = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!,
             { auth: { persistSession: false } }
         );
 
-        // Get user
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
         const { taskId } = params;
 
-        // Check Wavespeed API for task status
-        const wavespeedResponse = await fetch(`https://api.wavespeed.ai/v1/task/${taskId}`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${process.env.WAVESPEED_API_KEY}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        // Check Wavespeed API using Client (Handlers V3 logic)
+        const statusResult = await wavespeedClient.getTaskStatus(taskId);
 
-        if (!wavespeedResponse.ok) {
-            const errorData = await wavespeedResponse.json().catch(() => ({}));
-            return NextResponse.json({
-                error: 'Failed to fetch task status',
-                details: errorData
-            }, { status: 500 });
-        }
-
-        const wavespeedData = await wavespeedResponse.json();
-
-        // Update our database
-        await supabase
+        // Update database with current status
+        await adminSupabase
             .from('magic_video_tasks')
             .update({
-                status: wavespeedData.status,
+                status: statusResult.status,
                 updated_at: new Date().toISOString()
             })
             .eq('task_id', taskId)
             .eq('user_id', user.id);
 
-        // If completed, download and store video
-        if (wavespeedData.status === 'completed' && wavespeedData.result?.video_url) {
-            const videoUrl = wavespeedData.result.video_url;
+        if (statusResult.status === 'completed' && statusResult.url) {
+            const videoUrl = statusResult.url;
 
-            // Download video
-            const videoResponse = await fetch(videoUrl);
-            if (!videoResponse.ok) {
-                throw new Error('Failed to download video');
-            }
+            // Check if we already have the result saved to avoid duplications/re-downloads
+            const { data: existingTask } = await adminSupabase
+                .from('magic_video_tasks')
+                .select('result_video_url, type, input_data')
+                .eq('task_id', taskId)
+                .single();
 
-            const videoBlob = await videoResponse.blob();
-            const videoBuffer = await videoBlob.arrayBuffer();
+            let publicUrl = existingTask?.result_video_url;
 
-            // Upload to Supabase Storage
-            const fileName = `magic-video/${user.id}/${taskId}.mp4`;
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('videos')
-                .upload(fileName, videoBuffer, {
-                    contentType: 'video/mp4',
-                    upsert: true
-                });
+            if (!publicUrl) {
+                // Download video
+                const videoResponse = await fetch(videoUrl);
+                if (!videoResponse.ok) {
+                    throw new Error('Failed to download video from provider');
+                }
 
-            if (uploadError) {
-                console.error('Failed to upload video:', uploadError);
-            } else {
-                // Get public URL
-                const { data: { publicUrl } } = supabase.storage
+                const videoBlob = await videoResponse.blob();
+                const videoBuffer = await videoBlob.arrayBuffer();
+
+                // Upload to Supabase Storage
+                const fileName = `magic-video/${user.id}/${taskId}.mp4`;
+                const { error: uploadError } = await adminSupabase.storage
                     .from('videos')
-                    .getPublicUrl(fileName);
+                    .upload(fileName, videoBuffer, {
+                        contentType: 'video/mp4',
+                        upsert: true
+                    });
 
-                // Get task info to determine type
-                const { data: taskInfo } = await supabase
-                    .from('magic_video_tasks')
-                    .select('type, input_data')
-                    .eq('task_id', taskId)
-                    .eq('user_id', user.id)
-                    .single();
+                if (uploadError) {
+                    console.error('Failed to upload video:', uploadError);
+                    // Fallback to original URL if upload fails
+                    publicUrl = videoUrl;
+                } else {
+                    const { data: { publicUrl: storageUrl } } = adminSupabase.storage
+                        .from('videos')
+                        .getPublicUrl(fileName);
+                    publicUrl = storageUrl;
+                }
 
-                // Save to user_videos table
-                await supabase
-                    .from('user_videos')
+                // Save to main videos table (unified with other generators)
+                await adminSupabase
+                    .from('videos')
                     .insert({
                         user_id: user.id,
                         video_url: publicUrl,
-                        prompt: taskInfo?.input_data?.prompt || 'Magic video generation',
-                        reference_image: taskInfo?.input_data?.imageUrl || taskInfo?.input_data?.startImage,
-                        generation_type: taskInfo?.type || 'magic-video',
-                        duration: wavespeedData.result.duration || 5
+                        prompt: existingTask?.input_data?.prompt || 'Magic video generation',
+                        title: (existingTask?.input_data?.prompt || 'Magic Video').slice(0, 50),
+                        model: existingTask?.type || 'magic-video',
+                        thumbnail_url: existingTask?.input_data?.imageUrl || existingTask?.input_data?.startImage,
+                        duration: String(existingTask?.input_data?.duration || 5),
+                        status: 'completed',
+                        views: 0
                     });
 
-                // Update task with final video URL
-                await supabase
+                // Update task
+                await adminSupabase
                     .from('magic_video_tasks')
                     .update({
                         result_video_url: publicUrl,
                         status: 'completed'
                     })
-                    .eq('task_id', taskId)
-                    .eq('user_id', user.id);
-
-                return NextResponse.json({
-                    status: 'completed',
-                    videoUrl: publicUrl,
-                    duration: wavespeedData.result.duration,
-                    taskId
-                });
+                    .eq('task_id', taskId);
             }
+
+            return NextResponse.json({
+                status: 'completed',
+                videoUrl: publicUrl,
+                taskId
+            });
+        } else if (statusResult.status === 'failed') {
+            return NextResponse.json({
+                status: 'failed',
+                taskId,
+                message: 'Generation failed at provider'
+            });
         }
 
-        // Return current status
+        // Return processing status
         return NextResponse.json({
-            status: wavespeedData.status,
-            taskId,
-            estimatedTime: wavespeedData.estimated_time
+            status: statusResult.status,
+            taskId
         });
 
     } catch (error: any) {

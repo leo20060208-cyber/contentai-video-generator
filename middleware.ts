@@ -54,9 +54,41 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    await supabase.auth.getUser()
 
-    return response
+    try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        // Handle refresh token errors by clearing cookies
+        if (error) {
+            console.warn('[Middleware] Auth error:', error.message)
+
+            // Clear all Supabase auth cookies to force re-login
+            request.cookies.getAll().forEach(cookie => {
+                if (cookie.name.includes('sb-') && cookie.name.includes('-auth-token')) {
+                    response.cookies.delete(cookie.name)
+                }
+            })
+            response.cookies.delete('sb-access-token')
+            response.cookies.delete('sb-refresh-token')
+        }
+
+        return response
+    } catch (error) {
+        // If there is an auth error (e.g. invalid refresh token), clear the cookies
+        // so the user is forced to re-login instead of getting stuck in a loop.
+        console.error('Middleware auth error:', error)
+        response.cookies.delete('sb-access-token')
+        response.cookies.delete('sb-refresh-token')
+        // Also clear the combined cookie if it exists (Supabase v2 default)
+        // We iterate over potential supabase cookies to be safe
+        request.cookies.getAll().forEach(cookie => {
+            if (cookie.name.includes('sb-') && cookie.name.includes('-auth-token')) {
+                response.cookies.delete(cookie.name)
+            }
+        })
+        return response
+    }
+
 }
 
 export const config = {

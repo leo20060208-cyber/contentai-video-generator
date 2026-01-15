@@ -20,7 +20,7 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
     const [selectedFrame, setSelectedFrame] = useState<{ type: 'start' | 'mid' | 'end', index?: number }>({ type: 'start' });
 
     const [prompt, setPrompt] = useState('Create a smooth, cinematic transition between these frames.');
-    const [duration, setDuration] = useState<5 | 10>(5);
+    const [duration, setDuration] = useState<4 | 8>(4);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -104,7 +104,7 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
             setGenerationProgress(15);
 
             // Credits check (Optimistic)
-            const cost = duration === 10 ? 50 : 30;
+            const cost = duration === 8 ? 55 : 30;
             if (deductCreditsOptimistic) {
                 deductCreditsOptimistic(cost, "Director's Cut Generation");
             }
@@ -362,7 +362,7 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                             GENERATE CUT
                                             <span className="bg-orange-500/20 text-orange-200 px-1 rounded text-[8px] border border-orange-500/30">AUTO</span>
                                         </span>
-                                        <span className="text-[7px] opacity-40">COST: {duration === 10 ? 95 : 75} CR</span>
+                                        <span className="text-[7px] opacity-40">COST: {duration === 8 ? 55 : 30} CR</span>
                                     </>
                                 )}
                             </button>
@@ -372,13 +372,13 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                         <div className="flex items-center justify-between px-2 pb-1">
                             <div className="flex items-center gap-2">
                                 <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
-                                    {[5, 10].map((d) => (
+                                    {[4, 8].map((d) => (
                                         <button
                                             key={d}
                                             onClick={() => {
                                                 const oldVal = `${duration}s duration`;
                                                 const newVal = `${d}s duration`;
-                                                setDuration(d as 5 | 10);
+                                                setDuration(d as 4 | 8);
                                                 setPrompt(prev => {
                                                     if (!prev) return newVal;
                                                     if (prev.includes(oldVal)) return prev.replace(oldVal, newVal);

@@ -1,0 +1,8 @@
+﻿C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\api\categories\[id]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\api\templates\[id]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\collections\[id]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\guide\[id]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\guide\[slug]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\recreate\[id]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\recreate-image\[id]
+C:\Users\Leonard\Desktop\pROJECTES LEONARD\CONTENT AI\contentai-video-generator\app\templates\[id]

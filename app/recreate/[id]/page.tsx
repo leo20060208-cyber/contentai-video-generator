@@ -107,6 +107,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
     const [activeComparison, setActiveComparison] = useState<'reference' | 'result'>('result');
     const [activeBase, setActiveBase] = useState<'reference' | 'product'>('reference');
     const [timer, setTimer] = useState(0);
+    const [actualVideoDuration, setActualVideoDuration] = useState<number>(0);
 
     // Collection Navigation State
     const [prevId, setPrevId] = useState<string | null>(null);
@@ -366,6 +367,12 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         try {
             const { data: { session } } = await supabase.auth.getSession();
 
+            console.log('[Recreate] Session check before generate:', {
+                hasSession: !!session,
+                hasToken: !!session?.access_token,
+                user: session?.user?.id
+            });
+
             const productImages = [];
             for (const layer of layers) {
                 productImages.push(layer.url);
@@ -383,7 +390,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
             }
 
             // API Call
-            const cost = 75;
+            const cost = getCreditsCost();
             deductCreditsOptimistic?.(cost, 'Recreate Video');
 
             const res = await fetch('/api/video/generate', {
@@ -430,16 +437,14 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
     );
 
     const getCreditsCost = () => {
-        // Get duration from template or default to 5s
-        const duration = template?.duration || 5;
+        // Use actual video duration if available, otherwise fall back to template duration
+        const duration = actualVideoDuration > 0 ? actualVideoDuration : (template?.duration || 5);
 
-        if (duration <= 15) return 75;
-        if (duration <= 20) return 130;
-
-        // +30 credits per each additional 5 seconds after 20s
-        const extraSeconds = duration - 20;
-        const extraBlocks = Math.ceil(extraSeconds / 5);
-        return 130 + (extraBlocks * 30);
+        if (duration <= 9) return 75;
+        if (duration <= 14) return 95;
+        if (duration <= 19) return 130;
+        if (duration <= 25) return 150;
+        return 150;
     };
 
     return (
@@ -477,7 +482,12 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                                 <div className="space-y-2">
                                     <div className="relative aspect-video bg-black rounded-sm overflow-hidden border border-white/10 group">
                                         {template.before_video_url ? (
-                                            <video src={template.before_video_url} className="w-full h-full object-contain" controls />
+                                            <video
+                                                src={template.before_video_url}
+                                                className="w-full h-full object-contain"
+                                                controls
+                                                onLoadedMetadata={(e) => setActualVideoDuration(e.currentTarget.duration)}
+                                            />
                                         ) : (
                                             <div className="flex items-center justify-center h-full text-zinc-600">
                                                 <Video className="w-8 h-8 opacity-20" />

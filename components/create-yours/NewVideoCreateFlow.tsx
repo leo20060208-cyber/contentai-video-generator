@@ -420,13 +420,11 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     // --- GENERATION ---
 
     const getCreditsCost = () => {
-        if (videoDuration <= 15) return 75;
-        if (videoDuration <= 20) return 130;
-
-        // +30 credits per each additional 5 seconds after 20s
-        const extraSeconds = videoDuration - 20;
-        const extraBlocks = Math.ceil(extraSeconds / 5);
-        return 130 + (extraBlocks * 30);
+        if (videoDuration <= 9) return 75;
+        if (videoDuration <= 14) return 95;
+        if (videoDuration <= 19) return 130;
+        if (videoDuration <= 25) return 150;
+        return 150; // Should be blocked, but fallback
     };
 
     const uploadToSupabase = async (file: File | string, path: string): Promise<string | null> => {
@@ -469,6 +467,11 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
     const handleGenerate = async () => {
         if (!videoFile || layers.length === 0) {
             alert("Please upload a video and at least one product layer.");
+            return;
+        }
+
+        if (videoDuration > 25) {
+            alert("Video duration exceeds the maximum limit of 25 seconds.");
             return;
         }
 
@@ -574,6 +577,14 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
             console.log('║ Cost:', `${getCreditsCost()} crèdits`.padEnd(34), '║');
             console.log('╚═══════════════════════════════════════╝');
             console.log('');
+
+
+            console.log('[Create] Submitting generation request...');
+            console.log('[Create] Auth Session:', !!session);
+            console.log('[Create] Auth Token present:', !!session?.access_token);
+            if (!session?.access_token) {
+                console.warn('[Create] ⚠️ NO AUTH TOKEN! Request might fail if cookies are missing.');
+            }
 
             const response = await fetch('/api/video/generate', {
                 method: 'POST',
@@ -914,8 +925,8 @@ export const NewVideoCreateFlow = ({ onCancel }: NewVideoCreateFlowProps) => {
 
 
                     {viewMode === 'result' && generatedVideo ? (
-                        <div className="flex-1 flex items-center justify-center bg-black">
-                            <video src={generatedVideo} controls autoPlay loop className="max-w-full max-h-full" />
+                        <div className="flex-1 w-full h-full flex items-center justify-center bg-black overflow-hidden relative">
+                            <video src={generatedVideo} controls autoPlay loop className="w-full h-full object-contain" />
                         </div>
                     ) : (
                         <div className="flex-1 relative bg-zinc-950/50 flex items-center justify-center overflow-hidden">

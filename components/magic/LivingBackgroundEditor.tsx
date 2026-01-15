@@ -55,7 +55,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
     const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
     const [contextImages, setContextImages] = useState<string[]>([]);
 
-    const { user, profile, deductCreditsOptimistic } = useAuth();
+    const { user, profile, deductCreditsOptimistic, session } = useAuth();
 
     // Canvas Refs
     const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -243,11 +243,19 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                 .from('videos')
                 .getPublicUrl(maskFileName);
 
-            // 3. Call Living Backgrounds API
+            // 3. Get session for Auth
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('[Living Background] Session status:', !!session);
+            console.log('[Living Background] Access token present:', !!session?.access_token);
+
+            // 4. Call Living Backgrounds API
             setGenerationProgress(10);
             const response = await fetch('/api/magic-video/living-backgrounds', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+                },
                 body: JSON.stringify({
                     imageUrl: image,
                     maskUrl: maskUrl,
@@ -258,8 +266,10 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Generation failed');
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                console.error('[Living Background] API Error:', errorData);
+                console.error('[Living Background] Status:', response.status);
+                throw new Error(errorData.error || errorData.message || `Generation failed (${response.status})`);
             }
 
             const data = await response.json();
@@ -271,7 +281,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                 let attempts = 0;
                 const maxAttempts = 90; // 3 minutes max (2s intervals)
 
-                while (!completed && attempts < maxAttempts) {
+                while (!completed) {
                     await new Promise(r => setTimeout(r, 2000));
 
                     const statusRes = await fetch(`/api/magic-video/status/${data.taskId}`);
@@ -290,8 +300,10 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                     attempts++;
                 }
 
+                // Removed timeout check to allow infinite waiting
                 if (!completed) {
-                    throw new Error('Generation timed out after 3 minutes');
+                    // This block is technically unreachable now unless we break the loop differently
+                    console.warn('Loop exited without completion');
                 }
             }
         } catch (error: any) {
@@ -311,49 +323,117 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
             <div className="flex-1 flex relative items-center justify-center px-20 pt-16 pb-12 min-h-0 overflow-hidden">
 
                 {/* Floating Left Toolbar */}
-                <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50">
-                    <div className="flex flex-col bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-2xl p-1.5 shadow-2xl">
+                {/* Floating Left Toolbar */}
+                <div className="absolute left-6 top-1/2 -translate-y-1/2 flex gap-4 z-50 items-center">
+                    {/* Tool Buttons */}
+                    <div className="flex flex-col gap-2">
                         <button
                             onClick={() => setActiveTool('brush')}
-                            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${activeTool === 'brush' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all backdrop-blur-md border ${activeTool === 'brush' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] border-orange-500' : 'bg-zinc-900/60 text-zinc-500 hover:text-white hover:bg-white/5 border-white/10'}`}
                             title="Brush"
                         >
                             <Brush className="w-5 h-5" />
                         </button>
                         <button
                             onClick={() => setActiveTool('eraser')}
-                            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all ${activeTool === 'eraser' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+                            className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all backdrop-blur-md border ${activeTool === 'eraser' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] border-orange-500' : 'bg-zinc-900/60 text-zinc-500 hover:text-white hover:bg-white/5 border-white/10'}`}
                             title="Eraser"
                         >
                             <Eraser className="w-5 h-5" />
                         </button>
-                        <div className="h-px bg-white/5 my-1 mx-2" />
                         <button
                             onClick={() => setMaskStrokes([])}
-                            className="w-12 h-12 flex items-center justify-center rounded-xl text-zinc-500 hover:text-white hover:bg-white/5 transition-all"
+                            className="w-12 h-12 flex items-center justify-center rounded-xl bg-zinc-900/60 backdrop-blur-md border border-white/10 text-zinc-500 hover:text-white hover:bg-white/5 transition-all"
                             title="Clear Mask"
                         >
                             <RotateCcw className="w-5 h-5" />
                         </button>
                     </div>
 
-                    {/* Scale Slider */}
-                    <div className="bg-transparent rounded-2xl p-3 flex flex-col items-center gap-3">
-                        <div className="w-1.5 h-24 bg-zinc-800 rounded-full relative overflow-hidden group">
+                    {/* Vertical Slider Container */}
+                    <div className="h-[160px] w-10 flex flex-col items-center justify-between py-3 bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-full">
+                        {/* Icono pequeño arriba para indicar tamaño */}
+                        <div className="w-1.5 h-1.5 rounded-full bg-white/20 mb-1"></div>
+
+                        <div className="relative flex-1 w-full flex items-center justify-center">
                             <input
                                 type="range"
                                 min="5"
                                 max="100"
                                 value={brushSize}
                                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                                className="absolute inset-0 opacity-0 cursor-pointer h-full -rotate-180"
-                                style={{ transformOrigin: 'center' }}
+                                className="slider-vertical absolute"
+                                style={{
+                                    width: '120px',
+                                    transform: 'rotate(-90deg)',
+                                    background: `linear-gradient(to right, #f97316 ${((brushSize - 5) / (100 - 5)) * 100}%, rgba(255,255,255,0.1) ${((brushSize - 5) / (100 - 5)) * 100}%)`
+                                }}
                             />
-                            <div className="absolute bottom-0 left-0 right-0 bg-orange-500" style={{ height: `${brushSize}%` }} />
                         </div>
-                        <span className="text-[10px] font-black text-white/50">{brushSize}</span>
+
+                        <span className="text-[10px] font-bold text-white/70 mt-1">{brushSize}</span>
                     </div>
                 </div>
+
+                <style jsx global>{`
+                    .slider-vertical {
+                        -webkit-appearance: none;
+                        appearance: none;
+                        /* Background is set inline for dynamic progress */
+                        height: 2px; /* Very thin track */
+                        border-radius: 2px;
+                        outline: none;
+                        cursor: pointer;
+                    }
+                    
+                    /* Track Styles - Webkit */
+                    .slider-vertical::-webkit-slider-runnable-track {
+                        width: 100%;
+                        height: 2px;
+                        background: transparent; /* Handled by input background */
+                        border-radius: 2px;
+                        border: none;
+                    }
+
+                    /* Track Styles - Firefox */
+                    .slider-vertical::-moz-range-track {
+                        width: 100%;
+                        height: 2px;
+                        background: transparent;
+                        border-radius: 2px;
+                        border: none;
+                    }
+                    
+                    /* Thumb Styles - Webkit */
+                    .slider-vertical::-webkit-slider-thumb {
+                        -webkit-appearance: none;
+                        appearance: none;
+                        width: 16px; /* Slightly larger thumb for contrast */
+                        height: 16px;
+                        border-radius: 50%;
+                        background: white;
+                        border: 2px solid #f97316;
+                        box-shadow: 0 0 5px rgba(0,0,0,0.5);
+                        margin-top: -7px; /* Center on 2px track */
+                        transition: transform 0.1s;
+                        z-index: 10;
+                    }
+                    
+                    /* Thumb Styles - Firefox */
+                    .slider-vertical::-moz-range-thumb {
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 50%;
+                        background: white;
+                        border: 2px solid #f97316;
+                        transition: transform 0.1s;
+                    }
+                    
+                    .slider-vertical::-webkit-slider-thumb:hover {
+                        transform: scale(1.1);
+                        box-shadow: 0 0 8px rgba(249, 115, 22, 0.6);
+                    }
+                `}</style>
 
                 {/* Center Canvas */}
                 <div
@@ -416,7 +496,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                             <X className="w-6 h-6 text-white/50 group-hover:text-white" />
                         </button>
 
-                        <div className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                        <div className="relative w-full max-w-5xl max-h-[85vh] aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex items-center justify-center">
                             <video
                                 src={generatedVideoUrl}
                                 controls
@@ -426,7 +506,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                             />
                         </div>
 
-                        <div className="mt-8 flex items-center gap-4">
+                        <div className="mt-6 flex items-center gap-4">
                             <button
                                 onClick={() => {
                                     const a = document.createElement('a');
@@ -436,14 +516,14 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                                     a.click();
                                     document.body.removeChild(a);
                                 }}
-                                className="px-6 py-3 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                                className="px-6 py-3 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2 shadow-lg shadow-white/10"
                             >
                                 <Download className="w-5 h-5" />
                                 Download Video
                             </button>
                             <button
                                 onClick={() => onBack()}
-                                className="px-6 py-3 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-colors"
+                                className="px-6 py-3 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-colors border border-white/10"
                             >
                                 Back to Gallery
                             </button>
@@ -481,7 +561,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                                         <span className="flex items-center gap-1">
                                             GENERATE
                                         </span>
-                                        <span className="text-[7px] opacity-40">COST: {duration === 10 ? 95 : 75} CR</span>
+                                        <span className="text-[7px] opacity-40">COST: {duration === 10 ? 55 : 30} CR</span>
                                     </>
                                 )}
                             </button>

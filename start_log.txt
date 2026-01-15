@@ -1,0 +1,12 @@
+
+> videoai-saas@0.1.0 dev
+> next dev -p 3002
+
+   ▲ Next.js 15.5.9
+   - Local:        http://localhost:3002
+   - Network:      http://172.27.144.1:3002
+   - Environments: .env.local
+
+ ✓ Starting...
+[Error: You cannot use different slug names for the same dynamic path ('id' !== 'slug').]
+[?25h

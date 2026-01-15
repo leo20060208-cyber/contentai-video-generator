@@ -1,6 +1,6 @@
-
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { KlingClient } from '@/lib/kling';
 import { createReplicatePrediction, ReplicateModel } from '@/lib/replicate';
 import { FreepikClient } from '@/lib/freepik';
@@ -27,22 +27,35 @@ export async function POST(request: Request) {
     try {
         console.log('[API] Video generation request received');
 
-        // Initialize Supabase
+        // Initialize Supabase (Cookie-based client)
+        const supabase = await createClient();
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
 
-        // Get User
-        let userId: string | null = null;
+        // 1. Try getting user from Cookies
+        let { data: { user } } = await supabase.auth.getUser();
+        let userId = user?.id || null;
         let token: string | undefined;
-        const authHeader = request.headers.get('authorization');
-        if (authHeader) {
-            token = authHeader.replace('Bearer ', '');
-            const { data: { user } } = await supabase.auth.getUser(token);
-            if (user) userId = user.id;
+
+        // 2. Fallback: Check for Authorization Header (Bearer Token)
+        // This is crucial if the client is sending a token manually but cookies aren't being sent/read
+        if (!userId) {
+            const authHeader = request.headers.get('authorization');
+            if (authHeader) {
+                token = authHeader.replace('Bearer ', '');
+                console.log('[API] Cookies failed, trying Bearer token...');
+                const { data: { user: headerUser }, error: headerError } = await supabase.auth.getUser(token);
+
+                if (headerUser) {
+                    userId = headerUser.id;
+                    console.log('[API] Authenticated via Bearer token');
+                } else {
+                    console.warn('[API] Bearer token validation failed:', headerError?.message);
+                }
+            }
         }
 
         if (!userId) {
+            console.warn('[API] Auth failed: No user found in cookies or header');
             return NextResponse.json({ error: 'Unauthorized: Login required for video generation' }, { status: 401 });
         }
 
@@ -124,11 +137,16 @@ export async function POST(request: Request) {
 
                 // Priority 1: Service Role (Admin)
                 if (serviceRoleKey) {
-                    dbClient = createClient(supabaseUrl, serviceRoleKey);
+                    dbClient = createAdminClient(supabaseUrl, serviceRoleKey);
                 }
                 // Priority 2: User Context (if token exists)
                 else if (token && anonKey) {
-                    dbClient = createClient(supabaseUrl, anonKey, {
+                    // We have a token either from header or we should extract it from session
+                    // If we authenticated via cookies, we might not have 'token' variable set from header.
+                    // But for RLS, we prefer Service Role anyway.
+                    // If we only have cookies, we can't easily pass a token to createClient unless we extract it.
+                    // However, we are saving using admin privileges (Service Role) typically.
+                    dbClient = createAdminClient(supabaseUrl, anonKey, {
                         global: { headers: { Authorization: `Bearer ${token}` } }
                     });
                 }
