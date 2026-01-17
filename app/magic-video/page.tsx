@@ -17,6 +17,7 @@ interface MagicVideoConfig {
     livingBackgrounds: MagicCard;
     directorsCut: MagicCard;
     instantClips: MagicCard;
+    videoEditing: MagicCard;
 }
 
 const defaultConfig: MagicVideoConfig = {
@@ -40,6 +41,13 @@ const defaultConfig: MagicVideoConfig = {
         link: '/magic-video/instant-clips',
         title: 'Instant Product Clips',
         description: 'Magic is cooking...'
+    },
+    videoEditing: {
+        mediaType: 'image',
+        mediaUrl: '', // Will be fetched
+        link: '/create-yours', // Links to Video Editing
+        title: 'Video Editing',
+        description: 'Transform your footage with AI'
     }
 };
 
@@ -50,12 +58,40 @@ export default function MagicVideoPage() {
     useEffect(() => {
         async function fetchContent() {
             try {
-                const data = await getSectionContent('magic_video_hub');
-                if (data && data.livingBackgrounds) {
-                    setConfig(prev => ({ ...prev, ...data }));
+                // Fetch Magic Video Hub content
+                const magicData = await getSectionContent('magic_video_hub');
+
+                // Fetch Video Editing content (from what_we_do_v2 or similar, where the onboarding popup gets it)
+                const whatWeDoData = await getSectionContent('what_we_do_v2');
+                let videoEditingMedia = '';
+                let videoEditingType: 'image' | 'video' = 'image';
+
+                // Attempt to grab the preview used in the Onboarding Popup/PrePage for Video Editing
+                if (whatWeDoData && whatWeDoData.createVideoSteps && whatWeDoData.createVideoSteps[0]) {
+                    const step = whatWeDoData.createVideoSteps[0];
+                    if (step.image) {
+                        videoEditingMedia = step.image;
+                        // Simple heuristic check for video type if not explicitly provided
+                        if (videoEditingMedia.match(/\.(mp4|webm|mov)$/i)) {
+                            videoEditingType = 'video';
+                        }
+                    }
                 }
+
+                setConfig(prev => ({
+                    ...prev,
+                    ...(magicData || {}),
+                    videoEditing: {
+                        ...prev.videoEditing,
+                        mediaUrl: videoEditingMedia,
+                        mediaType: videoEditingType,
+                        // If specific title/desc exists in what_we_do_v2 for video editing, usage:
+                        // title: whatWeDoData.videoEditingTitle || prev.videoEditing.title
+                    }
+                }));
+
             } catch (e) {
-                console.error("Failed to load magic video content", e);
+                console.error("Failed to load content", e);
             } finally {
                 setLoading(false);
             }
@@ -90,7 +126,7 @@ export default function MagicVideoPage() {
     const renderCard = (card: MagicCard) => (
         <Link
             href={card.link}
-            className="relative w-full aspect-[21/9] rounded-3xl border border-zinc-800 bg-zinc-900/30 hover:bg-zinc-900/50 hover:border-zinc-700 transition-all duration-300 overflow-hidden group"
+            className="relative w-full aspect-[16/9] rounded-2xl border border-white/10 bg-zinc-900/30 hover:bg-zinc-900/50 hover:border-white/20 transition-all duration-300 overflow-hidden group"
         >
             {renderCardContent(card)}
 
@@ -98,12 +134,12 @@ export default function MagicVideoPage() {
             <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500" />
 
             {/* Content Bottom */}
-            <div className="absolute inset-x-0 bottom-0 p-8 flex justify-between items-end z-10">
+            <div className="absolute inset-x-0 bottom-0 p-6 flex justify-between items-end z-10">
                 <div className="space-y-1">
-                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">
+                    <h3 className="text-lg font-black text-white uppercase tracking-tighter">
                         {card.title}
                     </h3>
-                    <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-widest opacity-60">
+                    <p className="text-[10px] text-zinc-300 uppercase font-bold tracking-widest opacity-80">
                         {card.description}
                     </p>
                 </div>
@@ -111,7 +147,7 @@ export default function MagicVideoPage() {
 
             {/* Central Button */}
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-                <div className="px-8 py-3 bg-white text-black font-black text-xs uppercase tracking-[0.2em] rounded-none hover:scale-105 transition-transform shadow-2xl">
+                <div className="px-6 py-2.5 bg-white text-black font-black text-[10px] uppercase tracking-[0.2em] rounded-none hover:scale-105 transition-transform shadow-2xl">
                     {card.title}
                 </div>
             </div>
@@ -120,18 +156,27 @@ export default function MagicVideoPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen pt-24 pb-12 flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
             </div>
         );
     }
 
+    // Grid Layout: 2 columns, 2 rows. Full height container to fit screen without scroll if possible.
     return (
-        <div className="min-h-screen pt-24 pb-10 px-4 md:px-8 w-full max-w-[1200px] mx-auto flex flex-col justify-center">
-            <div className="flex flex-col gap-6 py-8">
+        <div className="h-screen w-full pt-20 pb-4 px-4 md:px-8 flex flex-col justify-center max-w-[1400px] mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[85vh]">
+                {/* 1. Living Backgrounds */}
                 {renderCard(config.livingBackgrounds)}
+
+                {/* 2. Director's Cut */}
                 {renderCard(config.directorsCut)}
+
+                {/* 3. Instant Clips */}
                 {renderCard(config.instantClips)}
+
+                {/* 4. Video Editing (New) */}
+                {renderCard(config.videoEditing)}
             </div>
         </div>
     );

@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { getSectionContent, updateSectionContent } from '@/lib/db/content';
 import { Button } from '@/components/ui/Button';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Upload, X } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface GuideData {
     title: string;
     description: string;
     content: string;
+    videoUrl?: string;
 }
 
 interface GuidesContent {
@@ -22,26 +24,31 @@ const defaultContent: GuidesContent = {
         'video-editing': {
             title: 'Video Editing Guide',
             description: 'Guide for Video Editing',
+            videoUrl: '',
             content: '<h2>Video Editing Guide</h2><p>Learn how to use our professional video editing tools.</p>'
         },
         'videos-library': {
             title: 'Using the Video Library',
             description: 'Guide for Video Library',
+            videoUrl: '',
             content: '<h2>Video Library Guide</h2><p>How to organize and manage your generated videos.</p>'
         },
         'image-editing': {
             title: 'Image Editing Guide',
             description: 'Guide for Image Editing',
+            videoUrl: '',
             content: '<h2>Image Editing Guide</h2><p>Master the art of AI image substitution and masking.</p>'
         },
         'images-library': {
             title: 'Using the Image Library',
             description: 'Guide for Image Library',
+            videoUrl: '',
             content: '<h2>Image Library Guide</h2><p>Everything you need to know about your image assets.</p>'
         },
         'living-backgrounds': {
             title: 'Living Backgrounds Guide',
             description: 'Transform static product photos into captivating animated content',
+            videoUrl: '',
             content: `<div class="space-y-12">
                 <section>
                     <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Upload Your Product Image</h2>
@@ -69,6 +76,7 @@ const defaultContent: GuidesContent = {
         'directors-cut': {
             title: "Director's Cut Guide",
             description: 'Create cinematic transitions between multiple scenes',
+            videoUrl: '',
             content: `<div class="space-y-12">
                 <section>
                     <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Select Start & End Frames</h2>
@@ -96,16 +104,19 @@ const defaultContent: GuidesContent = {
         'instant-clips': {
             title: 'Instant Clips Guide',
             description: 'One-click product videos',
+            videoUrl: '',
             content: '<h2>Instant Clips</h2><p>Generate high-converting ads from a single photo.</p>'
         },
         'terms': {
             title: 'Terms of Service',
             description: 'Policies and Legal',
+            videoUrl: '',
             content: '<h2>Terms of Service</h2><p>User agreement and AI rights.</p>'
         },
         'privacy': {
             title: 'Privacy Policy',
             description: 'Data and Privacy',
+            videoUrl: '',
             content: '<h2>Privacy Policy</h2><p>How we handle your data.</p>'
         }
     }
@@ -115,6 +126,7 @@ export function PlusInfoEditor() {
     const [content, setContent] = useState<GuidesContent>(defaultContent);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('video-editing');
 
     useEffect(() => {
@@ -159,6 +171,32 @@ export function PlusInfoEditor() {
                 }
             }
         }));
+    };
+
+    const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const fileName = `guides/${activeTab}/${Date.now()}-${file.name}`;
+            const { error: uploadError } = await supabase.storage
+                .from('videos')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('videos')
+                .getPublicUrl(fileName);
+
+            updateGuide(activeTab, 'videoUrl', publicUrl);
+        } catch (error) {
+            console.error('Error uploading video:', error);
+            alert('Error uploading video. Please try again.');
+        } finally {
+            setUploading(false);
+        }
     };
 
     if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>;
@@ -225,6 +263,47 @@ export function PlusInfoEditor() {
                         onChange={(e) => updateGuide(activeTab, 'description', e.target.value)}
                         className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-300 focus:border-orange-500 outline-none"
                     />
+                </div>
+
+                <div>
+                    <label className="block text-[10px] font-bold text-zinc-600 mb-1 uppercase">Video Tutorial URL (Upload or Paste)</label>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="https://example.com/video.mp4"
+                            value={currentGuide?.videoUrl || ''}
+                            onChange={(e) => updateGuide(activeTab, 'videoUrl', e.target.value)}
+                            className="flex-1 bg-zinc-950 border border-zinc-800 rounded p-2 text-sm text-zinc-300 focus:border-orange-500 outline-none font-mono"
+                        />
+                        <div className="relative">
+                            <input
+                                type="file"
+                                id="video-upload"
+                                className="hidden"
+                                accept="video/mp4,video/webm"
+                                onChange={handleVideoUpload}
+                                disabled={uploading}
+                            />
+                            <label
+                                htmlFor="video-upload"
+                                className={`flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded cursor-pointer transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                {uploading ? 'Uploading...' : 'Upload'}
+                            </label>
+                        </div>
+                    </div>
+                    {currentGuide?.videoUrl && (
+                        <div className="mt-2 relative aspect-video w-48 rounded overflow-hidden border border-white/10 group">
+                            <video src={currentGuide.videoUrl} className="w-full h-full object-cover" />
+                            <button
+                                onClick={() => updateGuide(activeTab, 'videoUrl', '')}
+                                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div>

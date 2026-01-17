@@ -248,6 +248,18 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                 <input type="file" className="hidden" id="end-upload" onChange={(e) => handleUpload(e, 'end')} />
                             </div>
                         </div>
+
+                        {/* Recreate Image Button (Tools) */}
+                        <div className="flex flex-col gap-1.5 pt-4 border-t border-white/5">
+                            <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">Tools</span>
+                            <button
+                                onClick={() => router.push('/create-image')}
+                                className="relative w-16 h-16 rounded-xl border border-dashed border-white/10 hover:border-orange-500/50 hover:bg-orange-500/10 transition-all cursor-pointer flex flex-col items-center justify-center gap-1 group/tool"
+                            >
+                                <Sparkles className="w-5 h-5 text-zinc-600 group-hover/tool:text-orange-500 transition-colors" />
+                                <span className="text-[8px] font-bold text-zinc-600 group-hover/tool:text-orange-500 text-center leading-tight px-1 uppercase">Recreate Image</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
