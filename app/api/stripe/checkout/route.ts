@@ -9,7 +9,13 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' as any }) : null;
 
 // Mock Mode support
-const IS_MOCK_MODE = !stripeSecretKey;
+// Only use Mock mode in development if key is missing.
+// In production, we should probably fail loudly if the key is missing so the admin knows.
+const IS_MOCK_MODE = !stripeSecretKey && process.env.NODE_ENV !== 'production';
+
+if (!stripeSecretKey && process.env.NODE_ENV === 'production') {
+    console.error("CRITICAL: STRIPE_SECRET_KEY is missing in production environment variables. Checkout will fail.");
+}
 
 export async function POST(request: Request) {
     try {

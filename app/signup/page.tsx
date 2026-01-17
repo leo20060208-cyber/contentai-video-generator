@@ -48,7 +48,7 @@ export default function SignupPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!acceptedTerms) {
-            setError('You must accept the Terms and Privacy Policy to create an account.');
+            setError("Has d'acceptar els Termes i la Política de Privacitat per crear un compte.");
             return;
         }
         setError('');
@@ -81,17 +81,17 @@ export default function SignupPage() {
                     <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
                         <Mail className="w-10 h-10 text-green-500" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Check your email</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">Comprova el teu correu</h2>
                     <p className="text-zinc-400 mb-6">
-                        We&apos;ve sent a confirmation link to <span className="text-white">{email}</span>.
-                        Please verify your account to continue.
+                        Hem enviat un enllaç de confirmació a <span className="text-white">{email}</span>.
+                        Si us plau, verifica el teu compte per continuar.
                     </p>
                     <Button
                         variant="secondary"
                         onClick={() => router.push('/login')}
                         className="min-w-[200px]"
                     >
-                        Back to Login
+                        Tornar a Inicia Sessió
                     </Button>
                 </motion.div>
             </div>
@@ -108,13 +108,13 @@ export default function SignupPage() {
                     className="hidden md:block"
                 >
                     <h2 className="text-4xl font-black text-white mb-12">
-                        Start recreating <span className="text-orange-500">viral videos</span> today
+                        Comença a recrear <span className="text-orange-500">vídeos virals</span> avui mateix
                     </h2>
 
                     <div className="space-y-8">
                         {/* Powered By Section */}
                         <div className="space-y-4">
-                            <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest pl-1">Powered by</p>
+                            <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest pl-1">Impulsat per</p>
                             <div className="grid gap-6">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 relative flex-shrink-0">
@@ -132,7 +132,7 @@ export default function SignupPage() {
                                     </div>
                                     <div>
                                         <span className="block font-bold text-white text-lg leading-none mb-1">Kling AI</span>
-                                        <span className="text-xs text-zinc-500">Video Generation Model</span>
+                                        <span className="text-xs text-zinc-500">Model de Generació de Vídeo</span>
                                     </div>
                                 </div>
                             </div>
@@ -150,8 +150,8 @@ export default function SignupPage() {
                 >
 
                     <div className="text-center mb-8">
-                        <h1 className="text-2xl font-bold text-white mb-2">Create your account</h1>
-                        <p className="text-zinc-400">Start your free trial, no credit card required</p>
+                        <h1 className="text-2xl font-bold text-white mb-2">Crea el teu compte</h1>
+                        <p className="text-zinc-400">Comença la teva prova gratuïta, sense targeta de crèdit requerida</p>
                     </div>
 
                     {/* Google Signup */}
@@ -170,12 +170,12 @@ export default function SignupPage() {
                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                             </svg>
                         )}
-                        Continue with Google
+                        Continua amb Google
                     </button>
 
                     <div className="relative mb-6">
                         <div className="relative flex justify-center">
-                            <span className="px-4 text-xs text-zinc-500">or continue with email</span>
+                            <span className="px-4 text-xs text-zinc-500">o continua amb el correu</span>
                         </div>
                     </div>
 
@@ -188,7 +188,7 @@ export default function SignupPage() {
                         )}
 
                         <div>
-                            <label className="block text-xs text-zinc-400 mb-2">Full Name</label>
+                            <label className="block text-xs text-zinc-400 mb-2">Nom Complet</label>
                             <div className="relative">
                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
                                 <input
@@ -203,7 +203,7 @@ export default function SignupPage() {
                         </div>
 
                         <div>
-                            <label className="block text-xs text-zinc-400 mb-2">Email</label>
+                            <label className="block text-xs text-zinc-400 mb-2">Correu electrònic</label>
                             <div className="relative">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
                                 <input
@@ -218,7 +218,7 @@ export default function SignupPage() {
                         </div>
 
                         <div>
-                            <label className="block text-xs text-zinc-400 mb-2">Password</label>
+                            <label className="block text-xs text-zinc-400 mb-2">Contrasenya</label>
                             <div className="relative">
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
                                 <input
@@ -238,7 +238,7 @@ export default function SignupPage() {
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
-                            <p className="text-xs text-zinc-500 mt-1">Must be at least 8 characters</p>
+                            <p className="text-xs text-zinc-500 mt-1">Ha de tenir almenys 8 caràcters</p>
                         </div>
 
                         <div className="flex items-start gap-3 py-2">
@@ -251,11 +251,11 @@ export default function SignupPage() {
                                 required
                             />
                             <label htmlFor="terms" className="text-xs text-zinc-400 select-none cursor-pointer leading-relaxed">
-                                I have read and accept the{' '}
-                                <Link href="/terms" className="text-orange-500 hover:underline">Terms of Service</Link>
-                                {' '}and{' '}
-                                <Link href="/privacy" className="text-orange-500 hover:underline">Privacy Policy</Link>.
-                                I understand that I am responsible for the content I generate.
+                                He llegit i accepto els{' '}
+                                <Link href="/terms" className="text-orange-500 hover:underline">Termes de Servei</Link>
+                                {' '}i{' '}
+                                <Link href="/privacy" className="text-orange-500 hover:underline">Política de Privacitat</Link>.
+                                Entenc que sóc responsable del contingut que genero.
                             </label>
                         </div>
 
@@ -268,11 +268,11 @@ export default function SignupPage() {
                             {isLoading ? (
                                 <span className="flex items-center gap-2">
                                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Creating account...
+                                    Creant compte...
                                 </span>
                             ) : (
                                 <span className="flex items-center gap-2">
-                                    Create Account
+                                    Crear Compte
                                     <ArrowRight className="w-4 h-4" />
                                 </span>
                             )}
@@ -280,14 +280,14 @@ export default function SignupPage() {
 
 
                         <p className="text-[10px] text-zinc-600 text-center uppercase tracking-widest font-bold mt-4">
-                            Secure 256-bit SSL Encrypted Connection
+                            Connexió xifrada SSL de 256 bits segura
                         </p>
                     </form>
 
                     <p className="text-center text-zinc-400 text-sm mt-6">
-                        Already have an account?{' '}
+                        Ja tens un compte?{' '}
                         <Link href="/login" className="text-orange-500 hover:underline font-medium">
-                            Sign in
+                            Inicia sessió
                         </Link>
                     </p>
                 </motion.div >
