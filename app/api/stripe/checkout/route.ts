@@ -96,6 +96,21 @@ export async function POST(req: Request) {
             }
         }
 
+        // --- EMERGENCY BROAD SCAN ---
+        if (!existingSubscription && profile?.plan !== 'free') {
+            try {
+                const broad = await stripe.subscriptions.list({ status: 'active', limit: 80, expand: ['data.customer'] });
+                const found = broad.data.find((s: any) =>
+                    (s.customer && s.customer.email === email) ||
+                    (s.customer && s.customer.metadata?.userId === userId)
+                );
+                if (found) {
+                    existingSubscription = found;
+                    customerId = typeof found.customer === 'string' ? found.customer : found.customer.id;
+                }
+            } catch (e) { console.error('[API] Broad scan failed', e); }
+        }
+
         // Sync customer ID if found/different
         if (customerId && customerId !== profile?.stripe_customer_id) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
