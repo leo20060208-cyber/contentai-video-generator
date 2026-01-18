@@ -351,14 +351,16 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
 
 
             {/* Main Content Area */}
-            <div className="flex-1 flex relative items-center justify-center px-20 pt-16 pb-12 min-h-0 overflow-hidden">
+            <div className="flex-1 flex flex-col md:flex-row relative items-center justify-center px-4 md:px-20 pt-4 md:pt-16 pb-12 min-h-0 overflow-hidden">
+
 
                 {/* Floating Left Toolbar */}
                 {/* Floating Left Toolbar */}
                 {/* Floating Left Toolbar */}
-                <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col md:flex-row gap-4 z-50 items-center">
+                {/* Floating Left Toolbar - Mobile: Relative Top, Desktop: Absolute Left */}
+                <div className="relative md:absolute z-50 flex gap-4 transition-all duration-300 flex-col md:flex-row md:left-6 md:top-1/2 md:-translate-y-1/2 md:translate-x-0 items-center mb-4 md:mb-0">
                     {/* Tool Buttons */}
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-row md:flex-col gap-2">
                         <button
                             onClick={() => setActiveTool('brush')}
                             className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all backdrop-blur-md border ${activeTool === 'brush' ? 'bg-orange-500 text-white shadow-[0_0_20px_rgba(249,115,22,0.3)] border-orange-500' : 'bg-zinc-900/60 text-zinc-500 hover:text-white hover:bg-white/5 border-white/10'}`}
@@ -383,9 +385,9 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                     </div>
 
                     {/* Vertical Slider Container */}
-                    <div className="h-[160px] w-10 flex flex-col items-center justify-between py-3 bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-full">
+                    <div className="h-10 w-[160px] md:h-[160px] md:w-10 flex flex-row md:flex-col items-center justify-between px-3 md:px-0 md:py-3 bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-full">
                         {/* Icono pequeño arriba para indicar tamaño */}
-                        <div className="w-1.5 h-1.5 rounded-full bg-white/20 mb-1"></div>
+                        <div className="w-1.5 h-1.5 rounded-full bg-white/20 mr-1 md:mr-0 md:mb-1"></div>
 
                         <div className="relative flex-1 w-full flex items-center justify-center">
                             <input
@@ -394,16 +396,15 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                                 max="100"
                                 value={brushSize}
                                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                                className="slider-vertical absolute"
+                                className="slider-vertical absolute md:rotate-[-90deg] origin-center"
                                 style={{
                                     width: '120px',
-                                    transform: 'rotate(-90deg)',
                                     background: `linear-gradient(to right, #f97316 ${((brushSize - 5) / (100 - 5)) * 100}%, rgba(255,255,255,0.1) ${((brushSize - 5) / (100 - 5)) * 100}%)`
                                 }}
                             />
                         </div>
 
-                        <span className="text-[10px] font-bold text-white/70 mt-1">{brushSize}</span>
+                        <span className="text-[10px] font-bold text-white/70 ml-1 md:ml-0 md:mt-1">{brushSize}</span>
                     </div>
                 </div>
 
@@ -613,32 +614,27 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                                 />
                             </div>
 
-                            <button
-                                onClick={() => setShowFullPrompt(true)}
-                                className="text-[9px] font-black text-zinc-500 hover:text-white transition-colors whitespace-nowrap px-2"
-                            >
-                                VIEW FULL PROMPT
-                            </button>
-
-                            <button
-                                onClick={handleGenerate}
-                                disabled={isGenerating}
-                                className="w-40 bg-white/5 hover:bg-white/10 backdrop-blur-md disabled:bg-transparent disabled:text-zinc-700 text-orange-500 border border-orange-500/30 hover:border-orange-500/60 font-bold text-[10px] rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-orange-500/10"
-                            >
-                                {isGenerating ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        <span>{generationProgress}%</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="flex items-center gap-1">
-                                            GENERATE
-                                        </span>
-                                        <span className="text-[7px] opacity-40">COST: {duration === 10 ? 55 : 30} CR</span>
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex flex-col items-start gap-1">
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={isGenerating}
+                                    className="w-40 bg-white/5 hover:bg-white/10 backdrop-blur-md disabled:bg-transparent disabled:text-zinc-700 text-orange-500 border border-orange-500/30 hover:border-orange-500/60 font-bold text-[10px] rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-orange-500/10 h-9"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>{generationProgress}%</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="flex items-center gap-1">
+                                                GENERATE
+                                            </span>
+                                            <span className="text-[7px] opacity-40">COST: {duration === 10 ? 55 : 30} CR</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Control Badges */}
@@ -662,6 +658,13 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                             </div>
 
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowFullPrompt(true)}
+                                    className="text-[9px] font-black text-zinc-500 hover:text-white transition-colors whitespace-nowrap uppercase tracking-widest mr-2"
+                                >
+                                    VIEW FULL PROMPT
+                                </button>
+
                                 {/* GUIDE button moved here */}
                                 <button
                                     onClick={() => router.push('/guide/living-backgrounds')}

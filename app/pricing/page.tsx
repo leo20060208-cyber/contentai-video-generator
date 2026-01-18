@@ -12,7 +12,7 @@ const subscriptions = [
     {
         name: 'Starter',
         price: '€19',
-        priceId: 'prod_TkNpabBzx8A1Wk', // Starter
+        priceId: 'price_1Smt3w3pHdaDhch3uYpZJJ4g',
         period: '/month',
         credits: 400,
         description: 'Perfect for getting started',
@@ -32,7 +32,7 @@ const subscriptions = [
     {
         name: 'Pro',
         price: '€34',
-        priceId: 'prod_TkNph8L18ppFLG', // Pro
+        priceId: 'price_1Smt4A3pHdaDhch3FI9DCmnU',
         period: '/month',
         credits: 875,
         description: 'Best value for creators',
@@ -52,7 +52,7 @@ const subscriptions = [
     {
         name: 'Elite',
         price: '€59',
-        priceId: 'prod_TkNqf4iNeNW4jt', // Elite
+        priceId: 'price_1Smt4S3pHdaDhch3JQZ2Sd99',
         period: '/month',
         credits: 1600,
         description: 'For high-volume generation',
@@ -91,11 +91,11 @@ function PricingContentInner() {
         if (isSuccess) {
             const timer = setTimeout(() => {
                 if (returnUrl) {
-                    router.push(decodedReturnUrl(returnUrl));
+                    window.location.href = decodedReturnUrl(returnUrl);
                 } else {
                     // No return URL - go to profile to see updated subscription
-                    setShowSuccessToast(false);
-                    router.push('/profile');
+                    // Use window.location.href to force a full reload and fetch fresh data from DB
+                    window.location.href = '/profile';
                 }
             }, 2500); // 2.5s delay to show success
             return () => clearTimeout(timer);
@@ -310,7 +310,7 @@ function PricingContentInner() {
                                 variant="outline"
                                 size="sm"
                                 className="min-w-[140px] border-blue-500/20 hover:bg-blue-500/10 hover:text-blue-400 text-xs h-9"
-                                onClick={() => handlePurchase({ name: 'Single Video', price: '€5', credits: 75, period: 'one-time', priceId: 'prod_Tk30lOr3dqkJsT' })} // Single video
+                                onClick={() => handlePurchase({ name: 'Single Video', price: '€5', credits: 75, period: 'one-time', priceId: 'price_XXXXXXXXXXXXX' })} // TODO: Replace with actual Single Video price ID
                                 disabled={!!isLoading}
                             >
                                 {isLoading === 'Single Video' ? (

@@ -19,6 +19,7 @@
     "@remotion/lottie": "^4.0.381",
     "@remotion/player": "^4.0.381",
     "@remotion/renderer": "^4.0.381",
+    "@stripe/stripe-js": "^8.6.1",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "clsx": "^2.1.0",

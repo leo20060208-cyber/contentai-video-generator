@@ -166,6 +166,9 @@ export default function ProfilePage() {
     const [masks, setMasks] = useState<UserMask[]>([]);
     const [savedTemplates, setSavedTemplates] = useState<Template[]>([]);
 
+    // Subscription Details State
+    const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
+
     // Change Password State
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -329,6 +332,22 @@ export default function ProfilePage() {
                 setVideos(videosData);
                 setMasks(masksData);
                 setSavedTemplates(savedData);
+
+                // Fetch Stripe Subscription Details
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session) {
+                        const subRes = await fetch('/api/stripe/subscription-details', {
+                            headers: { 'Authorization': `Bearer ${session.access_token}` }
+                        });
+                        if (subRes.ok) {
+                            const subData = await subRes.json();
+                            if (subData.hasSubscription) {
+                                setSubscriptionDetails(subData);
+                            }
+                        }
+                    }
+                } catch (e) { console.error('Sub details error', e); }
             } catch (error) {
                 console.error("Failed to load profile data", error);
             } finally {
@@ -723,6 +742,28 @@ export default function ProfilePage() {
                                                 </span>
                                             </div>
                                         </div>
+
+                                        {/* Detailed Status (Upcoming info from Stripe) */}
+                                        {subscriptionDetails?.nextInvoice && (
+                                            <div className="mt-4 pt-4 border-t border-white/5">
+                                                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20">
+                                                    <h4 className="flex items-center gap-2 text-blue-400 font-bold text-sm mb-2">
+                                                        <Calendar className="w-3.5 h-3.5" />
+                                                        Next Invoice
+                                                    </h4>
+                                                    <p className="text-zinc-300 text-xs leading-relaxed">
+                                                        Amount: <span className="text-white font-bold text-base">{subscriptionDetails.nextInvoice.amount.toFixed(2)} {subscriptionDetails.nextInvoice.currency?.toUpperCase()}</span>
+                                                        <br />
+                                                        Date: <span className="text-white">{new Date(subscriptionDetails.nextInvoice.date).toLocaleDateString()}</span>
+                                                    </p>
+                                                    {subscriptionDetails.amount > subscriptionDetails.nextInvoice.amount && (
+                                                        <p className="text-[10px] text-green-400 mt-2 font-medium">
+                                                            * Includes credit/discount from recent plan change.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

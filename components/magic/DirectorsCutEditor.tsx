@@ -203,8 +203,8 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
             {/* Main Content Area */}
             <div className="flex-1 flex relative items-center justify-center px-20 pt-16 min-h-0 overflow-hidden">
                 {/* Left Sidebar - Frame Slots */}
-                <div className="absolute left-8 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-50">
-                    <div className="flex flex-col gap-4 p-2 bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-2xl max-h-[70vh] overflow-y-auto custom-scrollbar pr-2 shadow-2xl">
+                <div className="absolute z-50 flex gap-4 transition-all duration-300 left-1/2 -translate-x-1/2 top-4 flex-row md:left-8 md:top-1/2 md:-translate-y-1/2 md:translate-x-0 md:flex-col">
+                    <div className="flex gap-4 p-2 bg-zinc-900/60 backdrop-blur-md border border-white/10 rounded-2xl md:max-h-[70vh] max-w-[90vw] md:max-w-none overflow-x-auto md:overflow-x-visible overflow-y-hidden md:overflow-y-auto custom-scrollbar pr-2 shadow-2xl flex-row md:flex-col">
                         {/* Start Frame Slot */}
                         <div className="flex flex-col gap-1.5">
                             <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">Start</span>
@@ -243,15 +243,13 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                         ))}
 
                         {/* Add Mid Button */}
-                        <div className="flex flex-col gap-1.5">
-                            <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">Add Mid</span>
-                            <label className="relative w-16 h-16 rounded-xl border border-dashed border-white/10 hover:border-white/20 transition-all cursor-pointer flex items-center justify-center group/add">
+                        <div className="flex flex-col gap-1.5 min-w-[64px] shrink-0">
+                            <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1 text-center">&nbsp;</span>
+                            <label className="relative w-16 h-16 rounded-xl border border-dashed border-white/10 hover:border-white/20 transition-all cursor-pointer flex items-center justify-center group/add bg-white/5 md:bg-transparent">
                                 <Plus className="w-5 h-5 text-zinc-700 group-hover:text-zinc-500 transition-colors" />
                                 <input type="file" className="hidden" onChange={(e) => handleUpload(e, 'mid')} />
                             </label>
-                        </div>
-
-                        {/* End Frame Slot */}
+                        </div>                        {/* End Frame Slot */}
                         <div className="flex flex-col gap-1.5">
                             <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">End</span>
                             <div
@@ -413,32 +411,27 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                 />
                             </div>
 
-                            <button
-                                onClick={() => setShowFullPrompt(true)}
-                                className="text-[9px] font-black text-zinc-500 hover:text-white transition-colors whitespace-nowrap px-2"
-                            >
-                                VIEW FULL PROMPT
-                            </button>
-
-                            <button
-                                onClick={handleGenerate}
-                                disabled={isGenerating || !startImage || !endImage}
-                                className="w-40 bg-white/5 hover:bg-white/10 backdrop-blur-md disabled:bg-transparent disabled:text-zinc-700 text-orange-500 border border-orange-500/30 hover:border-orange-500/60 font-bold text-[10px] rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-orange-500/10"
-                            >
-                                {isGenerating ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        <span>{generationProgress}%</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="flex items-center gap-1 text-[10px]">
-                                            GENERATE CUT
-                                        </span>
-                                        <span className="text-[7px] opacity-40">COST: {duration === 8 ? 55 : 30} CR</span>
-                                    </>
-                                )}
-                            </button>
+                            <div className="flex flex-col items-start gap-1">
+                                <button
+                                    onClick={handleGenerate}
+                                    disabled={isGenerating || !startImage || !endImage}
+                                    className="w-40 bg-white/5 hover:bg-white/10 backdrop-blur-md disabled:bg-transparent disabled:text-zinc-700 text-orange-500 border border-orange-500/30 hover:border-orange-500/60 font-bold text-[10px] rounded-lg transition-all flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-orange-500/10 h-9"
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>{generationProgress}%</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="flex items-center gap-1 text-[10px]">
+                                                GENERATE CUT
+                                            </span>
+                                            <span className="text-[7px] opacity-40">COST: {duration === 8 ? 55 : 30} CR</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Control Badges */}
@@ -458,6 +451,13 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                             </div>
 
                             <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setShowFullPrompt(true)}
+                                    className="text-[9px] font-black text-zinc-500 hover:text-white transition-colors whitespace-nowrap uppercase tracking-widest mr-2"
+                                >
+                                    VIEW FULL PROMPT
+                                </button>
+
                                 {/* GUIDE button */}
                                 <button
                                     onClick={() => router.push('/guide/directors-cut')}
@@ -465,16 +465,16 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                     title="View Guide"
                                 >
                                     <BookOpen className="w-3 h-3" />
+
+
                                     GUIDE
                                 </button>
 
-                                <label className="text-[9px] font-black text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest flex items-center gap-2 cursor-pointer">
-                                    <Plus className="w-3 h-3" />
-                                    ADD MID FRAME
-                                    <input type="file" className="hidden" onChange={(e) => handleUpload(e, 'mid')} />
-                                </label>
                             </div>
                         </div>
+
+                        {/* Add Mid Button (Desktop Only / Bottom Bar for easy access if needed, but requested to remove from here earlier? User asked for lack of mid frame in top bar. Keeping bottom bar clean or re-adding?) */}
+                        {/* User said 'falta add mid frame' referring to 'lo de arriba'. So above in the list is sufficient. I will not add it back to the bottom bar unless explicitly asked again, to avoid crowding the Guide/Prompt area. */}
                     </div>
 
                     {/* Generation Progress Bar */}
