@@ -99,14 +99,17 @@ export async function POST(req: Request) {
         // --- EMERGENCY BROAD SCAN ---
         if (!existingSubscription && profile?.plan !== 'free') {
             try {
-                const broad = await stripe.subscriptions.list({ status: 'active', limit: 80, expand: ['data.customer'] });
-                const found = broad.data.find((s: any) =>
-                    (s.customer && s.customer.email === email) ||
-                    (s.customer && s.customer.metadata?.userId === userId)
-                );
+                const broad = await stripe.subscriptions.list({ status: 'all', limit: 100, expand: ['data.customer', 'data.items.data.price'] });
+                const found = broad.data.find((s: any) => {
+                    const c = s.customer;
+                    if (!c) return false;
+                    const isMatch = (c.email && c.email.toLowerCase() === email) || (c.metadata && c.metadata.userId === userId);
+                    const isLive = ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status);
+                    return isMatch && isLive;
+                });
                 if (found) {
                     existingSubscription = found;
-                    customerId = typeof found.customer === 'string' ? found.customer : found.customer.id;
+                    customerId = typeof found.customer === 'string' ? found.customer : (found.customer as any).id;
                 }
             } catch (e) { console.error('[API] Broad scan failed', e); }
         }
