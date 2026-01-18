@@ -28,8 +28,8 @@ export async function POST(req: Request) {
             userEmail
         } = body;
 
-        const successUrl = success_url_underscore || successUrlCamel || returnUrl;
-        const cancelUrlFinal = cancel_url || cancelUrl || successUrl;
+        const successUrl = success_url_underscore || successUrlCamel || returnUrl || `${req.headers.get('origin')}/profile`;
+        const cancelUrlFinal = cancel_url || cancelUrl || successUrl || `${req.headers.get('origin')}/pricing`;
 
         // --- AUTHENTICATION & USER RETRIEVAL ---
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
