@@ -116,10 +116,6 @@ function PricingContentInner() {
             // Get Session Token
             const { data: { session } } = await (await import('@/lib/supabase')).supabase.auth.getSession();
 
-            // FOR ACTIVE SUBSCRIBERS: Force 'manage' portal instead of checkout
-            const isSubscribed = profile?.subscription_status === 'active' || (profile?.plan && profile.plan !== 'free');
-            const targetPriceId = isSubscribed ? 'manage' : plan.priceId;
-
             const res = await fetch('/api/stripe/checkout', {
                 method: 'POST',
                 headers: {
@@ -128,7 +124,7 @@ function PricingContentInner() {
                 },
                 body: JSON.stringify({
                     planName: plan.name,
-                    priceId: targetPriceId, // Use 'manage' if already subscribed
+                    priceId: plan.priceId,
                     credits: plan.credits,
                     amount: plan.price.includes('€') ? parseFloat(plan.price.replace('€', '')) : parseFloat(plan.price),
                     currency: plan.price.includes('€') ? 'eur' : 'usd',
