@@ -85,7 +85,36 @@ export async function POST(req: Request) {
         // Get plan config for credits
         const planConfig = getPlanByPriceId(priceId);
 
-        // 4. CREATE CHECKOUT SESSION
+        // 4. CHECK FOR EXISTING SUBSCRIPTION (Critical for plan changes)
+        let existingSubscription = null;
+        try {
+            const subs = await stripe.subscriptions.list({
+                customer: customerId,
+                status: 'active',
+                limit: 5,
+                expand: ['data.items.data.price']
+            });
+            existingSubscription = subs.data[0] || null;
+
+            if (existingSubscription) {
+                console.log(`[Checkout] User has active subscription: ${existingSubscription.id}`);
+            }
+        } catch (e) {
+            console.error('[Checkout] Error checking subscriptions:', e);
+        }
+
+        // 5. IF SUBSCRIBED: Route to Billing Portal (NOT Checkout!)
+        if (existingSubscription) {
+            console.log(`[Checkout] Redirecting subscribed user to Billing Portal for plan change`);
+            const portalSession = await stripe.billingPortal.sessions.create({
+                customer: customerId,
+                return_url: successUrl,
+            });
+            return NextResponse.json({ url: portalSession.url });
+        }
+
+        // 6. NEW USER: Create Checkout Session
+        console.log(`[Checkout] Creating new checkout for unsubscribed user`);
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{ price: priceId, quantity: 1 }],
@@ -100,9 +129,13 @@ export async function POST(req: Request) {
                 credits: planConfig?.credits?.toString() || credits?.toString() || '0',
             },
             allow_promotion_codes: true,
+            subscription_data: {
+                metadata: { userId: userId }
+            }
         });
 
         return NextResponse.json({ url: session.url, sessionId: session.id });
+
 
     } catch (error: any) {
         console.error('[Checkout] Error:', error);
