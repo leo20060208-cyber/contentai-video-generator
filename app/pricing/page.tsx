@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/AuthContext';
 import { useState, useEffect, Suspense } from 'react';
 import { BusinessContactModal } from '@/components/BusinessContactModal';
 
+// Subscription plans configuration
 const subscriptions = [
     {
         name: 'Starter',
