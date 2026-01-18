@@ -595,52 +595,6 @@ export default function ProfilePage() {
                         </div>
                     )}
 
-                    {/* CREATE MASK MODAL */}
-                    <AnimatePresence>
-                        {showCreateMaskModal && tempMaskFile && (
-                            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-                                <motion.div
-                                    initial={{ scale: 0.95, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    exit={{ scale: 0.95, opacity: 0 }}
-                                    className="bg-zinc-900 border border-white/10 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl"
-                                >
-                                    <div className="p-4 border-b border-white/5 flex justify-between items-center">
-                                        <h3 className="font-bold text-white">Create Mask</h3>
-                                        <button onClick={() => { setShowCreateMaskModal(false); setTempMaskFile(null); }}><X className="w-4 h-4 text-zinc-500" /></button>
-                                    </div>
-
-                                    <div className="p-6 flex flex-col items-center gap-6">
-                                        <div className="w-32 h-32 rounded-lg bg-zinc-800 border border-white/10 overflow-hidden relative">
-                                            <img src={tempMaskFile.preview} className="w-full h-full object-contain" />
-                                        </div>
-
-                                        <p className="text-sm text-zinc-400 text-center">
-                                            Is this image already transparent, or do you need to remove the background?
-                                        </p>
-
-                                        <div className="grid grid-cols-2 gap-3 w-full">
-                                            <button
-                                                onClick={() => handleProcessMask('skip')}
-                                                disabled={isProcessingMask}
-                                                className="py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-sm transition-colors"
-                                            >
-                                                Skip Masking
-                                            </button>
-                                            <button
-                                                onClick={() => handleProcessMask('process')}
-                                                disabled={isProcessingMask}
-                                                className="py-3 rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                {isProcessingMask ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Wand2 className="w-4 h-4" /> Remove BG</>}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            </div>
-                        )}
-                    </AnimatePresence>
-
                     {/* MASKS TAB */}
                     {activeTab === 'masks' && (
                         <div>
@@ -909,6 +863,52 @@ export default function ProfilePage() {
                         onClose={closeLightbox}
                         onDelete={handleDeleteItem}
                     />
+                )}
+            </AnimatePresence>
+
+            {/* CREATE MASK MODAL */}
+            <AnimatePresence>
+                {showCreateMaskModal && tempMaskFile && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-zinc-900 border border-white/10 rounded-xl w-full max-w-sm overflow-hidden shadow-2xl"
+                        >
+                            <div className="p-4 border-b border-white/5 flex justify-between items-center">
+                                <h3 className="font-bold text-white">Create Mask</h3>
+                                <button onClick={() => { setShowCreateMaskModal(false); setTempMaskFile(null); }}><X className="w-4 h-4 text-zinc-500" /></button>
+                            </div>
+
+                            <div className="p-6 flex flex-col items-center gap-6">
+                                <div className="w-32 h-32 rounded-lg bg-zinc-800 border border-white/10 overflow-hidden relative">
+                                    <img src={tempMaskFile.preview} className="w-full h-full object-contain" />
+                                </div>
+
+                                <p className="text-sm text-zinc-400 text-center">
+                                    Is this image already transparent, or do you need to remove the background?
+                                </p>
+
+                                <div className="grid grid-cols-2 gap-3 w-full">
+                                    <button
+                                        onClick={() => handleProcessMask('skip')}
+                                        disabled={isProcessingMask}
+                                        className="py-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-medium text-sm transition-colors"
+                                    >
+                                        Skip Masking
+                                    </button>
+                                    <button
+                                        onClick={() => handleProcessMask('process')}
+                                        disabled={isProcessingMask}
+                                        className="py-3 rounded-lg bg-white text-black hover:bg-zinc-200 font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {isProcessingMask ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Wand2 className="w-4 h-4" /> Remove BG</>}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
         </div>
