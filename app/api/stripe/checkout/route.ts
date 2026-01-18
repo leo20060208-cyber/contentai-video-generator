@@ -105,23 +105,30 @@ export async function POST(req: Request) {
             return NextResponse.json({ url: portalSession.url });
         }
 
-        // 2. Check for Existing Active Subscription
-        // Use expanded data to ensure we have item IDs for updates
-        const activeSubscriptions = await stripe.subscriptions.list({
+        // 2. Check for Existing Active/Trialing/Past Due Subscription
+        const subscriptionsList = await stripe.subscriptions.list({
             customer: customerId,
-            status: 'active',
-            expand: ['data.default_payment_method'],
+            limit: 5,
+            expand: ['data.default_payment_method', 'data.items.data.price'],
         });
 
-        const existingSubscription = activeSubscriptions.data[0];
+        // Find the first subscription that isn't canceled
+        const existingSubscription = subscriptionsList.data.find(sub =>
+            ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status)
+        );
+
         const targetPriceId = priceId;
+
+        console.log(`[API] Customer: ${customerId}, Found Sub: ${existingSubscription?.id}, Status: ${existingSubscription?.status}`);
 
         // 3. Flow Routing
         if (existingSubscription && targetPriceId !== 'manage') {
             // --- UPDATING EXISTING SUBSCRIPTION ---
             // If they are trying to buy the SAME plan they already have, just send to portal
             const currentPriceId = existingSubscription.items.data[0].price.id;
+
             if (currentPriceId === targetPriceId) {
+                console.log(`[API] Same plan selected (${currentPriceId}). Redirecting to billing portal.`);
                 const portalSession = await stripe.billingPortal.sessions.create({
                     customer: customerId,
                     return_url: successUrl,
@@ -130,10 +137,10 @@ export async function POST(req: Request) {
             }
 
             // For any other change (upgrade or downgrade), use the Portal Update flow
-            // This ensures Stripe handles proration, period ends, and "Plan Change" UI correctly
-            console.log(`[API] Redirecting active subscriber (${existingSubscription.id}) to Update Portal for price: ${targetPriceId}`);
+            console.log(`[API] Plan change: ${currentPriceId} -> ${targetPriceId}. Redirecting to Portal Update Flow.`);
 
             try {
+                // IMPORTANT: We use subscription_update flow to show the Stripe hosted plan change UI
                 const portalSession = await stripe.billingPortal.sessions.create({
                     customer: customerId,
                     return_url: successUrl,
@@ -161,6 +168,7 @@ export async function POST(req: Request) {
 
         } else {
             // --- NEW SUBSCRIPTION / ONE TIME PAYMENT ---
+            console.log(`[API] No existing subscription for customer ${customerId}. Creating new checkout session for ${targetPriceId}.`);
             const mode = body.mode || 'subscription';
 
             const session = await stripe.checkout.sessions.create({
