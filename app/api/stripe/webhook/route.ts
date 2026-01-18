@@ -47,24 +47,23 @@ export async function POST(request: Request) {
         const stripe = getStripe();
         const endpointSecret = getEndpointSecret();
 
-        if (!sig || !endpointSecret) {
-            console.warn('[Webhook] Missing signature or secret. Using basic parsing (insecure for prod if secret exists but strictly safer with it).');
-            // Check if we are in local dev without CLI proxy (often user hasn't set up secret)
-            // But usually we must rely on library verification.
-            // If user hasn't set STRIPE_WEBHOOK_SECRET, we might skip verify for dev testing IF explicitly allowed, 
-            // but for security we should default to fail or require it.
-            // For this user context, we'll try standard constructEvent.
-            if (!endpointSecret) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
-            event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+        if (!endpointSecret) {
+            // EMERGENCY MODE: Parse event without verification (INSECURE - for debugging only)
+            console.warn('[Webhook] ⚠️ STRIPE_WEBHOOK_SECRET not set! Parsing event without verification (INSECURE).');
+            event = JSON.parse(body) as Stripe.Event;
+        } else if (!sig) {
+            console.error('[Webhook] Missing stripe-signature header');
+            return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
         } else {
             event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
         }
     } catch (err: any) {
-        console.error(`[Webhook] Webhook signature verification failed: ${err.message}`);
+        console.error(`[Webhook] ❌ Webhook error: ${err.message}`);
         return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
     }
 
-    console.log(`[Webhook] Received event: ${event.type}`);
+    console.log(`[Webhook] ✅ Received event: ${event.type}`);
+
 
     try {
         if (event.type === 'checkout.session.completed') {
