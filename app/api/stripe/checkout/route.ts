@@ -163,31 +163,26 @@ export async function POST(req: Request) {
             }
         }
 
-        // --- SYNC CUSTOMER ID IF VALID AND DIFFERENT ---
-        if (customerId && customerId !== profile?.stripe_customer_id) {
-            await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
-        }
+        // --- 🛡️ ABSOLUTE GUARD FOR SUBSCRIBED USERS ---
+        // If the database says they are active or have a paid plan, NO CHECKOUT ALLOWED.
+        const dbPlan = (profile?.plan || 'free').toLowerCase();
+        const dbStatus = (profile?.subscription_status || 'inactive').toLowerCase();
+        const isLikelySubscribed = dbPlan !== 'free' || dbStatus === 'active' || dbStatus === 'trialing';
 
-        // --- GUARD FOR PAID USERS (PREVENT DUPLICATE CHECKOUT) ---
-        // If user is already on a paid plan in our DB, we SHOULD NOT show them a new Checkout screen.
-        // We either found a sub (existingSubscription) or we send them to the portal to manage it.
-        const isCurrentlyPaid = profile?.plan && profile.plan.toLowerCase() !== 'free';
-        if (!existingSubscription && isCurrentlyPaid && priceId !== 'manage') {
-            console.log(`[API] 🛡️ GUARD TRIGGERED: User is ${profile.plan} in DB but no sub found in Stripe. Redirecting to Portal instead of Checkout.`);
+        if (priceId !== 'manage' && isLikelySubscribed && !existingSubscription) {
+            console.log(`[API] 🛡️ GUARD: User is ${dbPlan}/${dbStatus} in DB. Forcing Portal instead of Checkout.`);
             try {
                 const portal = await stripe.billingPortal.sessions.create({ customer: customerId as string, return_url: successUrl });
                 return NextResponse.json({ url: portal.url });
             } catch (e: any) {
-                console.error('[API] Guard Portal Session Error:', e);
-                // If portal fails too, we still refuse checkout and return error
-                return NextResponse.json({ error: 'Your account is already on a paid plan. Please use the Billing Portal to change plans.' }, { status: 400 });
+                console.error('[API] Guard Portal Error:', e);
             }
         }
 
         // 4. ACTION ROUTING
         if (priceId === 'manage') {
             try {
-                const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+                const session = await stripe.billingPortal.sessions.create({ customer: customerId as string, return_url: successUrl });
                 return NextResponse.json({ url: session.url });
             } catch (e: any) {
                 console.error('[API] Manage Portal Error:', e);
@@ -195,25 +190,31 @@ export async function POST(req: Request) {
             }
         }
 
-        // FOR SUBSCRIBERS: Handle Plan Changes via Portal
+        // FOR SUBSCRIBERS: Handle Plan Changes via Portal (Specific Flow)
         if (existingSubscription) {
             const currentPrice = existingSubscription.items.data[0].price.id;
 
             if (currentPrice === priceId) {
-                const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+                const session = await stripe.billingPortal.sessions.create({ customer: customerId as string, return_url: successUrl });
                 return NextResponse.json({ url: session.url });
             }
 
             console.log(`[API] TRIGGERING PORTAL SWITCH: ${currentPrice} -> ${priceId}`);
-            const portalSession = await stripe.billingPortal.sessions.create({
-                customer: customerId,
-                return_url: successUrl,
-                flow_data: {
-                    type: 'subscription_update',
-                    subscription_update: { subscription: existingSubscription.id },
-                },
-            } as any);
-            return NextResponse.json({ url: portalSession.url });
+            try {
+                const portalSession = await stripe.billingPortal.sessions.create({
+                    customer: customerId as string,
+                    return_url: successUrl,
+                    flow_data: {
+                        type: 'subscription_update',
+                        subscription_update: { subscription: existingSubscription.id },
+                    },
+                } as any);
+                return NextResponse.json({ url: portalSession.url });
+            } catch (e: any) {
+                console.error('[API] Specialized Portal Error, fallback to general:', e);
+                const session = await stripe.billingPortal.sessions.create({ customer: customerId as string, return_url: successUrl });
+                return NextResponse.json({ url: session.url });
+            }
         }
 
         // FOR NEW USERS: Handle Checkout Flow
