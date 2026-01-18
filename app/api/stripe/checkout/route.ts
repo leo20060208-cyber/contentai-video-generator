@@ -114,30 +114,59 @@ export async function POST(req: Request) {
             } catch (e) { console.error('[API] Broad scan error:', e); }
         }
 
-        // Sync customer ID if found or known
+        // --- VERIFY CUSTOMER EXISTENCE ---
+        if (customerId) {
+            try {
+                await stripe.customers.retrieve(customerId);
+            } catch (e: any) {
+                if (e.message?.includes('No such customer')) {
+                    console.log(`[API] Customer ${customerId} not found in Stripe. Resetting.`);
+                    // If the invalid ID was the one in the profile, clear it in DB
+                    if (customerId === profile?.stripe_customer_id) {
+                        await adminSupabase.from('profiles').update({ stripe_customer_id: null }).eq('id', userId);
+                    }
+                    customerId = null;
+                }
+            }
+        }
+
+        // --- SYNC CUSTOMER ID IF VALID ---
         if (customerId && customerId !== profile?.stripe_customer_id) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
-        // If STILL no sub found but user is already on a PAID plan in DB, they might be in a sync mismatch.
-        // We will REFUSE to create a new checkout and instead send them to the 'manage' portal to fix it.
+        // --- GUARD FOR PAID USERS (PREVENT DUPLICATE CHECKOUT) ---
         const isCurrentlyPaid = profile?.plan && profile.plan.toLowerCase() !== 'free';
         if (!existingSubscription && isCurrentlyPaid && priceId !== 'manage') {
-            console.log(`[API] GUARD: User is ${profile.plan} in DB but no sub found in Stripe. Redirecting to billing portal.`);
-            const portal = await stripe.billingPortal.sessions.create({ customer: customerId || '', return_url: successUrl });
-            return NextResponse.json({ url: portal.url });
+            // We only do this if we have a customerId (which might have been reset above if invalid)
+            if (customerId) {
+                console.log(`[API] GUARD: User is ${profile.plan} but no sub found. Redirecting to billing portal.`);
+                try {
+                    const portal = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+                    return NextResponse.json({ url: portal.url });
+                } catch (e) {
+                    console.error('[API] Guard Portal Error:', e);
+                }
+            }
         }
 
-        // Create customer if absolutely none found
+        // Create customer if absolutely none found or invalid
         if (!customerId) {
+            console.log(`[API] No valid customer found. Creating new one for ${authEmail}`);
             const newCust = await stripe.customers.create({ email: authEmail, metadata: { userId: userId } });
             customerId = newCust.id;
+            await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
         // 4. ACTION ROUTING
         if (priceId === 'manage') {
-            const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
-            return NextResponse.json({ url: session.url });
+            try {
+                const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+                return NextResponse.json({ url: session.url });
+            } catch (e: any) {
+                console.error('[API] Manage Portal Error:', e);
+                return NextResponse.json({ error: 'Could not open billing portal. Please try again.' }, { status: 400 });
+            }
         }
 
         // FOR SUBSCRIBERS: Handle Plan Changes via Portal
