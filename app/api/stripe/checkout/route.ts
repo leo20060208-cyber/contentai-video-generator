@@ -62,22 +62,27 @@ export async function POST(req: Request) {
         if (customerId) customersToSearch.add(customerId);
         if (bodyCustomerId) customersToSearch.add(bodyCustomerId);
 
-        // Search by both emails to find records
-        for (const e of [authEmail, profileEmail]) {
-            if (e && e.length > 3) {
-                const byEmail = await stripe.customers.list({ email: e, limit: 10 });
-                console.log(`[STRIKE_SEARCH] Customers found for email ${e}: ${byEmail.data.length}`);
-                byEmail.data.forEach(c => customersToSearch.add(c.id));
+        const searchQueries = [];
+        if (authEmail) searchQueries.push(`email:'${authEmail}'`);
+        if (profileEmail && profileEmail !== authEmail) searchQueries.push(`email:'${profileEmail}'`);
+        searchQueries.push(`metadata['userId']:'${userId}'`);
+
+        try {
+            const searchResults = await stripe.customers.search({
+                query: searchQueries.join(' OR '),
+                limit: 20
+            });
+            console.log(`[STRIKE_SEARCH] Search results: ${searchResults.data.length}`);
+            searchResults.data.forEach(c => customersToSearch.add(c.id));
+        } catch (e) {
+            console.error('[STRIKE_SEARCH] Search API failed, falling back to list:', e);
+            for (const e of [authEmail, profileEmail]) {
+                if (e && e.length > 3) {
+                    const byEmail = await stripe.customers.list({ email: e, limit: 10 });
+                    byEmail.data.forEach(c => customersToSearch.add(c.id));
+                }
             }
         }
-
-        // Search by metadata userId
-        const byMeta = await stripe.customers.search({
-            query: `metadata['userId']:'${userId}'`,
-            limit: 5
-        });
-        console.log(`[STRIKE_SEARCH] Customers found by metadata userId: ${byMeta.data.length}`);
-        byMeta.data.forEach(c => customersToSearch.add(c.id));
 
         console.log(`[STRIKE_SEARCH] Deep scanning ${customersToSearch.size} unique customers: ${Array.from(customersToSearch).join(', ')}`);
 
@@ -91,13 +96,14 @@ export async function POST(req: Request) {
                     expand: ['data.items.data.price'],
                 });
 
-                console.log(`[STRIKE_SEARCH] Subscriptions for ${cId}: ${subs.data.length}`);
+                console.log(`[STRIKE_SEARCH] Customer ${cId} has ${subs.data.length} subs.`);
                 const active = subs.data.find(s => ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
 
                 if (active) {
                     existingSubscription = active;
                     customerId = cId as string;
                     console.log(`[STRIKE_SEARCH] ✅ MATCH FOUND: Sub ${active.id} (Status: ${active.status}) on CUST ${cId}`);
+                    // We keep looking if we want the "best" one, but usually the first active is right.
                     break;
                 }
             } catch (e) { console.error(`[STRIKE_SEARCH] Error scanning customer ${cId}:`, e); }
@@ -107,7 +113,7 @@ export async function POST(req: Request) {
         if (!existingSubscription && currentDBPlan !== 'free') {
             console.log(`[STRIKE_SEARCH] ⚠️ ALERT: User is ${currentDBPlan} in DB but no sub found yet. STARTING NUCLEAR SCAN.`);
             try {
-                // Fetch the 100 most recent active/trialing/past_due subs in the whole account
+                // Fetch the 100 most recent subs of ALL types in the whole account
                 const allSubs = await stripe.subscriptions.list({
                     status: 'all',
                     limit: 100,
