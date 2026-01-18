@@ -743,7 +743,7 @@ export default function ProfilePage() {
                                             {profile?.plan === 'free' ? 'Upgrade Plan' : 'Change or Upgrade Plan'}
                                         </Link>
 
-                                        {profile?.stripe_customer_id && (
+                                        {(profile?.stripe_customer_id || (profile?.plan && profile.plan !== 'free')) && (
                                             <button
                                                 onClick={async () => {
                                                     try {
