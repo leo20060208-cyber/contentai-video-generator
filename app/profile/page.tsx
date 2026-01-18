@@ -786,34 +786,35 @@ export default function ProfilePage() {
 
                                     <div className="space-y-3">
                                         <Link href="/pricing" className="block w-full py-3 rounded-lg bg-white text-black font-bold text-sm hover:bg-zinc-200 transition-colors text-center">
-                                            {profile?.plan === 'free' ? 'Upgrade Plan' : 'Change Plan'}
+                                            {profile?.plan === 'free' ? 'Upgrade Plan' : 'Change or Upgrade Plan'}
                                         </Link>
 
-                                        {profile?.subscription_status === 'active' && (
+                                        {profile?.stripe_customer_id && (
                                             <button
                                                 onClick={async () => {
-                                                    if (!confirm('Are you sure you want to request a cancellation? This will send a request to our support team.')) return;
-
                                                     try {
-                                                        const res = await fetch('/api/subscription/cancel', {
+                                                        const { data: { session } } = await supabase.auth.getSession();
+                                                        const res = await fetch('/api/stripe/checkout', {
                                                             method: 'POST',
-                                                            headers: { 'Content-Type': 'application/json' },
-                                                            body: JSON.stringify({ reason: 'User requested via profile' })
+                                                            headers: {
+                                                                'Content-Type': 'application/json',
+                                                                'Authorization': `Bearer ${session?.access_token}`
+                                                            },
+                                                            body: JSON.stringify({
+                                                                priceId: 'manage',
+                                                                success_url: window.location.href
+                                                            })
                                                         });
-
-                                                        if (res.ok) {
-                                                            alert('Cancellation request sent. You will receive an email confirmation shortly.');
-                                                        } else {
-                                                            alert('Failed to send request. Please contact support.');
-                                                        }
+                                                        const data = await res.json();
+                                                        if (data.url) window.location.href = data.url;
                                                     } catch (e) {
                                                         console.error(e);
-                                                        alert('Error sending request.');
+                                                        alert('Failed to open billing portal');
                                                     }
                                                 }}
-                                                className="w-full py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 font-bold text-sm hover:bg-red-500/20 transition-colors"
+                                                className="block w-full py-3 rounded-lg bg-zinc-800 text-white font-medium text-sm hover:bg-zinc-700 transition-colors text-center"
                                             >
-                                                Cancel Subscription
+                                                Manage Billing & Subscription
                                             </button>
                                         )}
                                     </div>
@@ -897,16 +898,19 @@ export default function ProfilePage() {
                         </div>
                     )}
                 </motion.div>
-            </div >
+            </div>
 
-            {/* Lightbox Portal */}
+            {/* Lightbox */}
             <AnimatePresence>
-                {
-                    selectedItem && (
-                        <MediaLightbox item={selectedItem} type={selectedType!} onClose={closeLightbox} onDelete={handleDeleteItem} />
-                    )
-                }
-            </AnimatePresence >
-        </div >
+                {selectedItem && (
+                    <MediaLightbox
+                        item={selectedItem}
+                        type={selectedType!}
+                        onClose={closeLightbox}
+                        onDelete={handleDeleteItem}
+                    />
+                )}
+            </AnimatePresence>
+        </div>
     );
 }

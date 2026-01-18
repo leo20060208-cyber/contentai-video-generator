@@ -7,15 +7,14 @@ import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useState, useEffect, Suspense } from 'react';
 import { BusinessContactModal } from '@/components/BusinessContactModal';
+import { STRIPE_PLANS } from '@/lib/stripe/config';
 
-// Subscription plans configuration
+// Subscription plans configuration mapping from centralized config
 const subscriptions = [
     {
-        name: 'Starter',
+        ...STRIPE_PLANS.STARTER,
         price: '€19',
-        priceId: 'price_1Smt3w3pHdaDhch3uYpZJJ4g',
         period: '/month',
-        credits: 400,
         description: 'Perfect for getting started',
         icon: Zap,
         features: [
@@ -31,11 +30,9 @@ const subscriptions = [
         highlight: 'bg-zinc-800'
     },
     {
-        name: 'Pro',
+        ...STRIPE_PLANS.PRO,
         price: '€34',
-        priceId: 'price_1Smt4A3pHdaDhch3FI9DCmnU',
         period: '/month',
-        credits: 875,
         description: 'Best value for creators',
         icon: Sparkles,
         features: [
@@ -51,11 +48,9 @@ const subscriptions = [
         highlight: 'bg-orange-500/10 border-orange-500'
     },
     {
-        name: 'Elite',
+        ...STRIPE_PLANS.ELITE,
         price: '€59',
-        priceId: 'price_1Smt4S3pHdaDhch3JQZ2Sd99',
         period: '/month',
-        credits: 1600,
         description: 'For high-volume generation',
         icon: Crown,
         features: [

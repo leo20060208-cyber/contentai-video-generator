@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
+import { STRIPE_PLANS } from '@/lib/stripe/config';
 
 export const runtime = 'nodejs';
 
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
                                 }],
                             },
                         },
-                    } as any); // Cast as any because flow_data types might be behind in some SDK versions
+                    } as any);
                     return NextResponse.json({ url: portalSession.url });
                 } catch (e: any) {
                     console.error('[API] Portal Upgrade Error, falling back to standard portal:', e);
@@ -129,63 +130,14 @@ export async function POST(req: Request) {
                 }
 
             } else {
-                // --- DOWNGRADE: Schedule at period end (NO REFUND) ---
-                console.log('[API] Downgrade: Scheduling change for end of period');
-
-                let scheduleId = existingSubscription.schedule as string | null;
-                let schedule;
-
-                // Create or Retrieve Schedule
-                if (!scheduleId) {
-                    try {
-                        schedule = await stripe.subscriptionSchedules.create({
-                            from_subscription: existingSubscription.id,
-                        });
-                        scheduleId = schedule.id;
-                    } catch (e: any) {
-                        // If race condition where schedule exists but not in sub object yet
-                        console.warn('[API] Schedule creation warning, trying to submit update anyway', e);
-                        // Try to find schedule via list if needed, or assume sub has it now.
-                        // Simplification: Fail gracefully or try update on existing.
-                        if (existingSubscription.schedule) {
-                            scheduleId = existingSubscription.schedule as string;
-                            schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
-                        } else {
-                            throw e;
-                        }
-                    }
-                } else {
-                    schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
-                }
-
-                if (!schedule) throw new Error('Could not resolve subscription schedule');
-
-                const currentPhase = schedule.phases[0];
-
-                // Update Schedule: Phase 1 (Current) + Phase 2 (New Plan at End)
-                await stripe.subscriptionSchedules.update(scheduleId!, {
-                    end_behavior: 'release',
-                    phases: [
-                        {
-                            start_date: currentPhase.start_date,
-                            end_date: (existingSubscription as any).current_period_end,
-                            items: [{
-                                price: currentPriceObj.id,
-                                quantity: 1,
-                            }],
-                        },
-                        {
-                            start_date: (existingSubscription as any).current_period_end,
-                            items: [{
-                                price: targetPriceId,
-                                quantity: 1,
-                            }],
-                            proration_behavior: 'none',
-                        },
-                    ],
+                // --- DOWNGRADE: Solo redirigimos al portal normal para que Stripe lo gestione ---
+                // Stripe Customer Portal maneja los downgrades al final del periodo automáticamente si está configurado.
+                console.log('[API] Downgrade/Same: Redirecting to Portal');
+                const portalSession = await stripe.billingPortal.sessions.create({
+                    customer: customerId,
+                    return_url: successUrl,
                 });
-
-                return NextResponse.json({ url: successUrl });
+                return NextResponse.json({ url: portalSession.url });
             }
 
         } else {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
+import { getPlanByPriceId, STRIPE_PLANS } from '@/lib/stripe/config';
 
 export const runtime = 'nodejs';
 
@@ -69,9 +70,19 @@ export async function POST(request: Request) {
         if (event.type === 'checkout.session.completed') {
             const session = event.data.object as Stripe.Checkout.Session;
             await handleCheckoutSessionCompleted(session);
+        } else if (event.type === 'invoice.paid') {
+            const invoice = event.data.object as Stripe.Invoice;
+            await handleInvoicePaid(invoice);
+        } else if (event.type === 'customer.subscription.updated') {
+            const subscription = event.data.object as Stripe.Subscription;
+            await handleSubscriptionUpdated(subscription);
+        } else if (event.type === 'customer.subscription.deleted') {
+            const subscription = event.data.object as Stripe.Subscription;
+            await handleSubscriptionDeleted(subscription);
+        } else if (event.type === 'invoice.payment_failed') {
+            const invoice = event.data.object as Stripe.Invoice;
+            await handleInvoicePaymentFailed(invoice);
         }
-
-        // Handle other event types if needed (e.g., subscription lifecycle)
 
         return NextResponse.json({ received: true });
     } catch (error: any) {
@@ -98,7 +109,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     }
 
     // 1. Log Transaction
-    const { error: txError } = await supabase.from('transactions').insert({
+    const { error: txError } = await (supabase.from('transactions') as any).insert({
         user_id: userId,
         amount: session.amount_total ? session.amount_total / 100 : 0,
         currency: session.currency,
@@ -116,8 +127,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     }
 
     // 2. Fetch User Profile
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
+    const { data: profile, error: profileError } = await (supabase
+        .from('profiles') as any)
         .select('credits, subscription_status')
         .eq('id', userId)
         .single();
@@ -154,7 +165,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         if (session.subscription) {
             try {
                 const stripe = getStripe();
-                const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+                const subscription = await stripe.subscriptions.retrieve(session.subscription as string) as any;
                 updates.subscription_period_end = new Date(subscription.current_period_end * 1000).toISOString();
                 console.log(`[Webhook] Subscription period end: ${updates.subscription_period_end}`);
             } catch (e) {
@@ -163,8 +174,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         }
     }
 
-    const { error: updateError } = await supabase
-        .from('profiles')
+    const { error: updateError } = await (supabase
+        .from('profiles') as any)
         .update(updates)
         .eq('id', userId);
 
@@ -193,9 +204,155 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     console.log(`[Webhook] Successfully added ${creditsToAdd} credits to User ${userId}. New Balance: ${newCredits}`);
 }
 
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+    const supabase = getSupabaseAdmin();
+    const stripe = getStripe();
+
+    const subscriptionId = (invoice as any).subscription as string;
+    if (!subscriptionId) return;
+
+    try {
+        // Retrieve subscription to get priceId and userId
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId) as Stripe.Subscription;
+        const priceId = subscription.items.data[0].price.id;
+        const userId = subscription.metadata?.userId;
+
+        if (!userId) {
+            console.error('[Webhook] No userId in subscription metadata for invoice:', invoice.id);
+            return;
+        }
+
+        const planConfig = getPlanByPriceId(priceId);
+        if (!planConfig) {
+            console.warn(`[Webhook] No plan config found for Price ID: ${priceId}`);
+            return;
+        }
+
+        console.log(`[Webhook] Processing invoice.paid for User ${userId}. Plan: ${planConfig.name}. Resetting credits to: ${planConfig.credits}`);
+
+        // Update profile: Reset credits to plan max and update period end
+        const { error } = await (supabase
+            .from('profiles') as any)
+            .update({
+                credits: planConfig.credits, // Reset mensual
+                subscription_status: 'active',
+                plan: planConfig.name,
+                subscription_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+                stripe_customer_id: invoice.customer as string
+            })
+            .eq('id', userId);
+
+        if (error) {
+            console.error('[Webhook] Error updating profile on invoice.paid:', error);
+            await logError(supabase, userId, 'invoice_paid_update', error.message, error.code, error, invoice.id, 'invoice.paid');
+        } else {
+            await createUserNotification(supabase, userId,
+                '🔄 Créditos renovados',
+                `Tu suscripción ${planConfig.name} se ha renovado. Tus créditos se han reseteado a ${planConfig.credits}.`,
+                'info',
+                '/profile'
+            );
+        }
+    } catch (e: any) {
+        console.error('[Webhook] Error in handleInvoicePaid:', e);
+    }
+}
+
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+    const supabase = getSupabaseAdmin();
+    const userId = subscription.metadata?.userId;
+
+    if (!userId) return;
+
+    const priceId = subscription.items.data[0].price.id;
+    const planConfig = getPlanByPriceId(priceId);
+
+    const updates: any = {
+        subscription_status: subscription.status === 'active' ? 'active' : 'past_due',
+        subscription_period_end: new Date((subscription as any).current_period_end * 1000).toISOString()
+    };
+
+    if (planConfig) {
+        updates.plan = planConfig.name;
+    }
+
+    console.log(`[Webhook] Subscription updated for User ${userId}. Status: ${subscription.status}`);
+
+    const { error } = await (supabase
+        .from('profiles') as any)
+        .update(updates)
+        .eq('id', userId);
+
+    if (error) {
+        console.error('[Webhook] Error updating profile on subscription.updated:', error);
+    }
+}
+
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+    const supabase = getSupabaseAdmin();
+    const userId = subscription.metadata?.userId;
+
+    if (!userId) return;
+
+    console.log(`[Webhook] Subscription deleted for User ${userId}`);
+
+    const { error } = await (supabase
+        .from('profiles') as any)
+        .update({
+            subscription_status: 'inactive',
+        })
+        .eq('id', userId);
+
+    if (error) {
+        console.error('[Webhook] Error updating profile on subscription.deleted:', error);
+    } else {
+        await createUserNotification(supabase, userId,
+            '🚫 Suscripción finalizada',
+            'Tu suscripción ha terminado. Tus funciones premium han sido desactivadas.',
+            'warning',
+            '/pricing'
+        );
+    }
+}
+
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+    const supabase = getSupabaseAdmin();
+    // Use any casting for nested properties that might be missed by the current SDK version types
+    const userId = (invoice as any).subscription_details?.metadata?.userId || (invoice as any).metadata?.userId;
+
+    // Si no está en metadatos, intentamos buscar el cliente en Stripe para obtener el userId
+    let finalUserId = userId;
+    if (!finalUserId) {
+        const stripe = getStripe();
+        const customer = await stripe.customers.retrieve(invoice.customer as string);
+        finalUserId = (customer as any).metadata?.userId;
+    }
+
+    if (!finalUserId) {
+        console.error('[Webhook] Could not find userId for failed invoice:', invoice.id);
+        return;
+    }
+
+    console.log(`[Webhook] Payment failed for User ${finalUserId}. Invoice: ${invoice.id}`);
+
+    // Marcamos estado en la DB como past_due si queremos ser estrictos
+    await (supabase.from('profiles') as any)
+        .update({ subscription_status: 'past_due' })
+        .eq('id', finalUserId);
+
+    await createUserNotification(supabase, finalUserId,
+        '⚠️ Problema con tu pago',
+        'No hemos podido procesar el cargo de tu suscripción. Por favor, revisa tu método de pago para evitar perder el acceso premium.',
+        'error',
+        '/profile'
+    );
+
+    await logError(supabase, finalUserId, 'payment_failed', 'Invoice payment failed', null, { invoiceId: invoice.id }, null, 'invoice.payment_failed');
+}
+
 // Helper function to log errors to database
 async function logError(
-    supabase: ReturnType<typeof createClient>,
+    supabase: any,
     userId: string | null,
     errorType: string,
     errorMessage: string,
@@ -205,7 +362,7 @@ async function logError(
     stripeEventType: string
 ) {
     try {
-        await supabase.from('error_logs').insert({
+        await (supabase.from('error_logs') as any).insert({
             user_id: userId,
             error_type: errorType,
             error_message: errorMessage,
@@ -221,7 +378,7 @@ async function logError(
 
 // Helper function to create user notifications
 async function createUserNotification(
-    supabase: ReturnType<typeof createClient>,
+    supabase: any,
     userId: string,
     title: string,
     message: string,
@@ -229,7 +386,7 @@ async function createUserNotification(
     actionUrl?: string
 ) {
     try {
-        await supabase.from('user_notifications').insert({
+        await (supabase.from('user_notifications') as any).insert({
             user_id: userId,
             title,
             message,
@@ -240,4 +397,3 @@ async function createUserNotification(
         console.error('[Webhook] Failed to create user notification:', e);
     }
 }
-
