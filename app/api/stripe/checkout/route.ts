@@ -73,30 +73,59 @@ export async function POST(req: Request) {
             .single();
 
         let customerId = profile?.stripe_customer_id;
+        let existingSubscription = null;
 
-        // 1. Get/Find Customer Logic
-        if (!customerId) {
-            // Try to find customer by email first to avoid duplicates
-            const existingCustomers = await stripe.customers.list({
-                email: userEmail || user.email,
-                limit: 1,
-            });
+        // 1. Get/Find Customer and Subscription Logic
+        // Search by email to find ALL potential customer records for this user
+        const allCustomersForEmail = await stripe.customers.list({
+            email: userEmail || user.email,
+            limit: 5,
+        });
 
-            if (existingCustomers.data.length > 0) {
-                customerId = existingCustomers.data[0].id;
-            } else {
-                const customer = await stripe.customers.create({
-                    email: userEmail || user.email,
-                    metadata: { userId: userId },
+        if (allCustomersForEmail.data.length > 0) {
+            console.log(`[API] Found ${allCustomersForEmail.data.length} customers for email ${userEmail || user.email}`);
+
+            // Iterate through ALL customer records to find the one with the ACTIVE subscription
+            for (const cust of allCustomersForEmail.data) {
+                const subs = await stripe.subscriptions.list({
+                    customer: cust.id,
+                    limit: 1,
+                    expand: ['data.default_payment_method', 'data.items.data.price'],
                 });
-                customerId = customer.id;
+
+                const activeSub = subs.data.find(sub =>
+                    ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status)
+                );
+
+                if (activeSub) {
+                    customerId = cust.id;
+                    existingSubscription = activeSub;
+                    console.log(`[API] SUCCESS: Found active subscription ${activeSub.id} on customer ${cust.id}`);
+                    break;
+                }
             }
 
-            // Save customer ID in Supabase
+            // If no active sub found yet, pick the one from DB or the first one from list
+            if (!customerId) {
+                customerId = profile?.stripe_customer_id || allCustomersForEmail.data[0].id;
+            }
+        }
+
+        // Create customer if absolutely none exist
+        if (!customerId) {
+            const customer = await stripe.customers.create({
+                email: userEmail || user.email,
+                metadata: { userId: userId },
+            });
+            customerId = customer.id;
+        }
+
+        // Sync Customer ID back to Supabase if it changed or was newly found
+        if (customerId !== profile?.stripe_customer_id) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
-        // 1.5 Handle special 'manage' priceId for Billing Portal (Main Portal)
+        // 1.5 Handle special 'manage' priceId for Billing Portal
         if (priceId === 'manage') {
             const portalSession = await stripe.billingPortal.sessions.create({
                 customer: customerId,
@@ -105,21 +134,20 @@ export async function POST(req: Request) {
             return NextResponse.json({ url: portalSession.url });
         }
 
-        // 2. Check for Existing Active/Trialing/Past Due Subscription
-        const subscriptionsList = await stripe.subscriptions.list({
-            customer: customerId,
-            limit: 5,
-            expand: ['data.default_payment_method', 'data.items.data.price'],
-        });
-
-        // Find the first subscription that isn't canceled
-        const existingSubscription = subscriptionsList.data.find(sub =>
-            ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status)
-        );
+        // Fallback check for subscription on the selected customerId if search didn't find one
+        if (!existingSubscription) {
+            const subscriptionsList = await stripe.subscriptions.list({
+                customer: customerId,
+                limit: 1,
+                expand: ['data.default_payment_method', 'data.items.data.price'],
+            });
+            existingSubscription = subscriptionsList.data.find(sub =>
+                ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status)
+            );
+        }
 
         const targetPriceId = priceId;
-
-        console.log(`[API] Customer: ${customerId}, Found Sub: ${existingSubscription?.id}, Status: ${existingSubscription?.status}`);
+        console.log(`[API] Final Selection - Customer: ${customerId}, Found Sub: ${existingSubscription?.id}, Status: ${existingSubscription?.status}`);
 
         // 3. Flow Routing
         if (existingSubscription && targetPriceId !== 'manage') {
