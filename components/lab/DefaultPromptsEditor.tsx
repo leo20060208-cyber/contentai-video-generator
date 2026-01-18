@@ -8,8 +8,11 @@ import { getSectionContent, updateSectionContent } from '@/lib/db/content';
 
 export function DefaultPromptsEditor() {
     const [isOpen, setIsOpen] = useState(false);
-    const [imagePrompt, setImagePrompt] = useState('');
-    const [videoPrompt, setVideoPrompt] = useState('');
+    const [livingPrompt, setLivingPrompt] = useState('');
+    const [directorsPrompt, setDirectorsPrompt] = useState('');
+    const [videoEditPrompt, setVideoEditPrompt] = useState('');
+    const [imageEditPrompt, setImageEditPrompt] = useState('');
+
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -24,14 +27,19 @@ export function DefaultPromptsEditor() {
     const loadPrompts = async () => {
         setIsLoading(true);
         try {
-            const [imageData, videoData] = await Promise.all([
-                getSectionContent('create_yours_image_default_prompt'),
-                getSectionContent('create_yours_video_default_prompt')
+            const [livingData, directorsData, videoEditData, imageEditData] = await Promise.all([
+                getSectionContent('living_background_default_prompt'),
+                getSectionContent('directors_cut_default_prompt'),
+                getSectionContent('video_editing_default_prompt'),
+                getSectionContent('image_editing_default_prompt')
             ]);
 
             // Set prompts with fallbacks
-            setImagePrompt(imageData?.prompt || 'RECREATE this reference image EXACTLY. Maintain the SAME composition, lighting, shadows, colors, perspective, and dimensions. The output must be IDENTICAL to the reference except for the modifications below.');
-            setVideoPrompt(videoData?.prompt || 'Transform this video while maintaining the core action, movement, and camera work. Replace the specified product seamlessly into the scene, matching lighting, perspective, and physics perfectly.');
+            setLivingPrompt(livingData?.prompt || 'Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural motion.');
+            setDirectorsPrompt(directorsData?.prompt || 'Create a smooth, cinematic transition between these frames. Maintain consistency in lighting, style, and subject matter throughout the sequence.');
+            setVideoEditPrompt(videoEditData?.prompt || 'Edit this video to enhance visual quality, stability, and color grading while maintaining the original content and duration.');
+            setImageEditPrompt(imageEditData?.prompt || 'Edit the image according to the mask and instructions. Maintain the style, lighting, and composition of the original image in the unmasked areas.');
+
         } catch (error) {
             console.error('Error loading prompts:', error);
         } finally {
@@ -45,8 +53,10 @@ export function DefaultPromptsEditor() {
 
         try {
             await Promise.all([
-                updateSectionContent('create_yours_image_default_prompt', { prompt: imagePrompt }),
-                updateSectionContent('create_yours_video_default_prompt', { prompt: videoPrompt })
+                updateSectionContent('living_background_default_prompt', { prompt: livingPrompt }),
+                updateSectionContent('directors_cut_default_prompt', { prompt: directorsPrompt }),
+                updateSectionContent('video_editing_default_prompt', { prompt: videoEditPrompt }),
+                updateSectionContent('image_editing_default_prompt', { prompt: imageEditPrompt })
             ]);
 
             setSaveStatus('success');
@@ -112,48 +122,80 @@ export function DefaultPromptsEditor() {
                                 </div>
                             ) : (
                                 <div className="space-y-6">
-                                    {/* Image Prompt */}
-                                    <div className="space-y-3">
+                                    {/* Living Backgrounds */}
+                                    <div className="space-y-3 pt-6 border-t border-zinc-800">
                                         <div className="flex items-center justify-between">
                                             <label className="text-sm font-semibold text-white">
-                                                Create Yours Images - Default Prompt
+                                                Living Backgrounds - Default Prompt
                                             </label>
                                             <span className="text-xs text-zinc-500">
-                                                {imagePrompt.length} characters
+                                                {livingPrompt.length} characters
                                             </span>
                                         </div>
                                         <textarea
-                                            value={imagePrompt}
-                                            onChange={(e) => setImagePrompt(e.target.value)}
+                                            value={livingPrompt}
+                                            onChange={(e) => setLivingPrompt(e.target.value)}
                                             rows={8}
                                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-sm text-white font-mono leading-relaxed focus:outline-none focus:border-purple-500 resize-none"
-                                            placeholder="Enter default prompt for image creation..."
+                                            placeholder="Enter default prompt for Living Backgrounds..."
                                         />
-                                        <p className="text-xs text-zinc-500">
-                                            This prompt is used as the base for all Create Yours image generations when no template is selected.
-                                        </p>
                                     </div>
 
-                                    {/* Video Prompt */}
+                                    {/* Director's Cut */}
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between">
                                             <label className="text-sm font-semibold text-white">
-                                                Create Yours Videos - Default Prompt
+                                                Director's Cut (Image to Video) - Default Prompt
                                             </label>
                                             <span className="text-xs text-zinc-500">
-                                                {videoPrompt.length} characters
+                                                {directorsPrompt.length} characters
                                             </span>
                                         </div>
                                         <textarea
-                                            value={videoPrompt}
-                                            onChange={(e) => setVideoPrompt(e.target.value)}
-                                            rows={8}
+                                            value={directorsPrompt}
+                                            onChange={(e) => setDirectorsPrompt(e.target.value)}
+                                            rows={4}
                                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-sm text-white font-mono leading-relaxed focus:outline-none focus:border-purple-500 resize-none"
-                                            placeholder="Enter default prompt for video creation..."
+                                            placeholder="Enter default prompt for Director's Cut..."
                                         />
-                                        <p className="text-xs text-zinc-500">
-                                            This prompt will be used for Create Yours video generations (when video flow is implemented).
-                                        </p>
+                                    </div>
+
+                                    {/* Video Editing */}
+                                    <div className="space-y-3 pt-6 border-t border-zinc-800">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-sm font-semibold text-white">
+                                                Video Editing - Default Prompt
+                                            </label>
+                                            <span className="text-xs text-zinc-500">
+                                                {videoEditPrompt.length} characters
+                                            </span>
+                                        </div>
+                                        <textarea
+                                            value={videoEditPrompt}
+                                            onChange={(e) => setVideoEditPrompt(e.target.value)}
+                                            rows={12}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-sm text-white font-mono leading-relaxed focus:outline-none focus:border-purple-500 resize-none"
+                                            placeholder="Enter default prompt for Video Editing..."
+                                        />
+                                    </div>
+
+                                    {/* Image Editing */}
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-sm font-semibold text-white">
+                                                Image Editing - Default Prompt
+                                            </label>
+                                            <span className="text-xs text-zinc-500">
+                                                {imageEditPrompt.length} characters
+                                            </span>
+                                        </div>
+                                        <textarea
+                                            value={imageEditPrompt}
+                                            onChange={(e) => setImageEditPrompt(e.target.value)}
+                                            rows={12}
+                                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-sm text-white font-mono leading-relaxed focus:outline-none focus:border-purple-500 resize-none"
+                                            placeholder="Enter default prompt for Image Editing..."
+                                        />
                                     </div>
 
                                     {/* Save Button */}

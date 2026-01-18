@@ -12,6 +12,7 @@ import { LazyVideo } from '@/components/LazyVideo';
 
 import { useLikedTemplates } from '@/lib/contexts/LikedTemplatesContext';
 import { CollectionCard } from '@/components/CollectionCard';
+import { OnboardingPopup } from '@/components/onboarding/OnboardingPopup';
 
 // VideoCard Component
 function VideoCard({ video, size = 'normal', isManageMode = false, onDelete, previewMode = 'reference' }: { video: any; size?: 'normal' | 'large'; isManageMode?: boolean; onDelete?: (id: number) => void; previewMode?: 'reference' | 'product' }) { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -451,6 +452,13 @@ export default function VideosPage() {
                         </motion.div>
                     )
                 }
+
+                <OnboardingPopup
+                    pageKey="videos-library"
+                    stepsKey="recreateVideoSteps"
+                    defaultTitle="VIDEOS LIBRARY"
+                    plusInfoUrl="/guide/videos-library"
+                />
             </div >
         </div >
     );

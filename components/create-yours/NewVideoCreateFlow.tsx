@@ -101,60 +101,81 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         });
     }, [layers]);
 
+    // Default Prompt State
+    const [defaultPrompt, setDefaultPrompt] = useState("Recreate the reference video EXACTLY, shot by shot, frame by frame. The ONLY changes allowed are the instructions below. Maintain original camera movement, lighting, and physics.");
+
+    useEffect(() => {
+        async function loadDefault() {
+            try {
+                const { getSectionContent } = await import('@/lib/db/content');
+                const data = await getSectionContent('video_editing_default_prompt');
+                if (data?.prompt) setDefaultPrompt(data.prompt);
+            } catch (e) { console.error("Failed to load default prompt", e); }
+        }
+        loadDefault();
+    }, []);
+
     // Construct Prompt (Auto)
     useEffect(() => {
-        let p = "Recreate the reference video EXACTLY, shot by shot, frame by frame. ";
-        p += "The ONLY changes allowed are the instructions below. Maintain original camera movement, lighting, and physics.\n\n";
-
-        let imgIndexCounter = 1; // Assuming 0 is video frames? Or just count inputs.
-        // Actually, we should reference products by order.
+        let instructions = "";
 
         if (layers.length > 0) {
-            p += "PRODUCT INTEGRATION:\n";
+            instructions += "PRODUCT INTEGRATION:\n";
             layers.forEach((layer, i) => {
                 const sub = productSubstitutions[i] || layer.name;
-                p += `• Product ${i + 1} (${sub}): Integrate realistically.`;
+                instructions += `• Product ${i + 1} (${sub}): Integrate realistically.`;
                 if (layer.prompt) {
-                    p += ` Description: ${layer.prompt}`;
+                    instructions += ` Description: ${layer.prompt}`;
                 }
 
                 if (layer.details && layer.details.length > 0) {
                     layer.details.forEach((detail, idx) => {
-                        p += ` Detail ${idx + 1}: Use provided detail image. Note: ${detail.description || 'Texture/Material reference'}.`;
+                        instructions += ` Detail ${idx + 1}: Use provided detail image. Note: ${detail.description || 'Texture/Material reference'}.`;
                     });
                 }
-                p += "\n";
+                instructions += "\n";
             });
         }
 
         if (backgroundImage) {
-            p += "\nBACKGROUND CHANGE:\n";
-            p += "Replace the environment/background with the provided background image. Keep the main subject and foreground elements intact.\n";
+            instructions += "\nBACKGROUND CHANGE:\n";
+            instructions += "Replace the environment/background with the provided background image. Keep the main subject and foreground elements intact.\n";
         }
 
         if (personImage) {
-            p += "\nPERSON REPLACEMENT / FACE SWAP:\n";
-            p += "Replace the main person/face in the video with the provided person image. Maintain original expression and lighting.\n";
+            instructions += "\nPERSON REPLACEMENT / FACE SWAP:\n";
+            instructions += "Replace the main person/face in the video with the provided person image. Maintain original expression and lighting.\n";
         }
 
         const hasMask = layers.some(l => l.maskPoints.length > 0);
         if (hasMask && !skipMask) {
-            p += "\nMASK: Only modify the content within the provided mask area.\n";
+            instructions += "\nMASK: Only modify the content within the provided mask area.\n";
         } else if (skipMask) {
-            p += "\nMODE: Full frame editing (Masking skipped). Modify the entire scene as needed based on instructions.\n";
+            instructions += "\nMODE: Full frame editing (Masking skipped). Modify the entire scene as needed based on instructions.\n";
         }
 
-        p += "\nSTRICT RECREATION REQUIREMENTS:\n";
-        p += `- EXACT DURATION: same as the reference video (${Math.ceil(videoDuration) || 'X'} seconds). Do not change the speed.\n`;
-        p += "- Camera movement: identical to original.\n";
-        p += "- Lighting: identical direction, intensity, shadows.\n";
-        p += "- Physics: realistic material behavior.\n";
-        p += "- 8K resolution, high fidelity, photorealistic.\n";
-        p += "- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE VIDEO.\n";
+        // Construct final prompt using template
+        let finalPrompt = defaultPrompt;
+        const durationStr = `${Math.ceil(videoDuration) || 'X'}`;
 
-        // Only update if changed to avoid loop
-        if (prompt !== p) setPrompt(p);
-    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask, videoDuration, prompt]);
+        // Inject Insertions
+        if (finalPrompt.includes('{{INSERTIONS}}')) {
+            finalPrompt = finalPrompt.replace('{{INSERTIONS}}', instructions);
+        } else {
+            // Fallback: Append instructions if placeholder missing
+            finalPrompt = `${finalPrompt}\n\n${instructions}`;
+        }
+
+        // Inject Duration
+        if (finalPrompt.includes('{{DURATION}}')) {
+            finalPrompt = finalPrompt.replace('{{DURATION}}', durationStr);
+        } else if (!finalPrompt.includes('EXACT DURATION')) {
+            // Only append generic duration req if it seems missing from template
+            finalPrompt += `\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${durationStr} seconds. Do not change the speed.`;
+        }
+
+        if (prompt !== finalPrompt) setPrompt(finalPrompt);
+    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask, videoDuration, prompt, defaultPrompt]);
 
     // Timer Logic
     useEffect(() => {

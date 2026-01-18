@@ -38,7 +38,7 @@ export function Navbar() {
             </Link>
 
             {/* Desktop Nav Items */}
-            <div className="hidden md:flex items-center gap-3">
+            <div className="hidden 2xl:flex items-center gap-3">
               <div className="h-4 w-px bg-white/10" />
 
               {/* VIDEO GROUP */}
@@ -99,7 +99,7 @@ export function Navbar() {
           </div>
 
           {/* Right Side */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden 2xl:flex items-center gap-6">
             {isLoading ? (
               <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
             ) : user ? (
@@ -169,7 +169,7 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden w-10 h-10 flex items-center justify-center"
+            className="2xl:hidden w-10 h-10 flex items-center justify-center"
           >
             {isMenuOpen ? (
               <X className="w-5 h-5 text-white" />
@@ -184,7 +184,7 @@ export function Navbar() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="md:hidden py-4 border-t border-zinc-900 bg-black"
+            className="2xl:hidden py-4 border-t border-zinc-900 bg-black"
           >
             <div className="flex flex-col gap-4">
               {/* Mobile Video Section */}
@@ -225,6 +225,20 @@ export function Navbar() {
                     className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
                   >
                     Library
+                  </Link>
+                </div>
+              </div>
+
+              {/* Mobile Magic/Video Generation Section */}
+              <div className="px-4">
+                <span className="text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider mb-2 inline-block">MAGIC</span>
+                <div className="flex flex-col gap-2 pl-2 border-l border-white/10 ml-1">
+                  <Link
+                    href="/magic-video"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
+                  >
+                    Video Generation
                   </Link>
                 </div>
               </div>

@@ -164,8 +164,8 @@ export default function MagicVideoPage() {
 
     // Grid Layout: 2 columns, 2 rows. Full height container to fit screen without scroll if possible.
     return (
-        <div className="h-screen w-full pt-20 pb-4 px-4 md:px-8 flex flex-col justify-center max-w-[1400px] mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full max-h-[85vh]">
+        <div className="min-h-screen w-full pt-28 pb-12 px-4 md:px-8 max-w-[1400px] mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                 {/* 1. Living Backgrounds */}
                 {renderCard(config.livingBackgrounds)}
 

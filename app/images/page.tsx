@@ -15,6 +15,8 @@ import { CollectionCard } from '@/components/CollectionCard';
  * Mirrors the Video Library but for static images.
  * Uses Nano Banana API logic for 'recreation'.
  */
+import { OnboardingPopup } from '@/components/onboarding/OnboardingPopup';
+
 export default function ImagesPage() {
     const { user } = useAuth();
     const [activeCategory, setActiveCategory] = useState('All');
@@ -283,6 +285,13 @@ create policy "Users can insert their own images" on public.images for insert wi
                         <p className="text-zinc-400">Try a different search or category</p>
                     </motion.div>
                 )}
+
+                <OnboardingPopup
+                    pageKey="images-library"
+                    stepsKey="recreateImageSteps"
+                    defaultTitle="IMAGES LIBRARY"
+                    plusInfoUrl="/guide/images-library"
+                />
             </div>
         </div>
     );

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+import { getSectionContent } from '@/lib/db/content';
 import {
     X,
     Upload,
@@ -47,7 +48,15 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
     const [activeTool, setActiveTool] = useState<'brush' | 'eraser'>('brush');
 
     // Generation Params
-    const [prompt, setPrompt] = useState('');
+    // const [prompt, setPrompt] = useState(''); // Removed simple prompt state
+    const [userPrompt, setUserPrompt] = useState('');
+    const [basePrompt, setBasePrompt] = useState('');
+    const [showFullPrompt, setShowFullPrompt] = useState(false);
+    const [fullPromptPreview, setFullPromptPreview] = useState('');
+
+    useEffect(() => {
+        setFullPromptPreview(`${userPrompt ? userPrompt + '. ' : ''}${basePrompt}`);
+    }, [userPrompt, basePrompt]);
     const [duration, setDuration] = useState<5 | 10>(5);
     const [quality, setQuality] = useState('HD');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -67,11 +76,33 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
     const [isHoveringCanvas, setIsHoveringCanvas] = useState(false);
 
     // Initial Prompt
-    const getBasePrompt = (d: number) => `Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural ${d}s video motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${d} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
+    // const getBasePrompt = (d: number) => `Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural ${d}s video motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${d} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
+
+    const [dbBasePrompt, setDbBasePrompt] = useState('Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: {{DURATION}} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.');
 
     useEffect(() => {
-        setPrompt(getBasePrompt(duration));
-    }, [duration]);
+        async function loadPrompt() {
+            try {
+                const data = await getSectionContent('living_background_default_prompt');
+                if (data?.prompt) {
+                    setDbBasePrompt(data.prompt);
+                }
+            } catch (e) { console.error(e); }
+        }
+        loadPrompt();
+    }, []);
+
+    useEffect(() => {
+        // Inject dynamic values into the base prompt template
+        let p = dbBasePrompt;
+        if (p.includes('{{DURATION}}')) {
+            p = p.replace('{{DURATION}}', duration.toString());
+        } else if (!p.includes('EXACT DURATION')) {
+            // Backward compatibility if template doesn't have duration tag
+            p += `\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${duration} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
+        }
+        setBasePrompt(p);
+    }, [duration, dbBasePrompt]);
 
     // Drawing Logic
     const getPoint = (e: React.MouseEvent | React.TouchEvent) => {
@@ -259,7 +290,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                 body: JSON.stringify({
                     imageUrl: image,
                     maskUrl: maskUrl,
-                    prompt: prompt,
+                    prompt: fullPromptPreview, // Use computed prompt
                     duration: duration,
                     contextImages: contextImages
                 })
@@ -324,7 +355,8 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
 
                 {/* Floating Left Toolbar */}
                 {/* Floating Left Toolbar */}
-                <div className="absolute left-6 top-1/2 -translate-y-1/2 flex gap-4 z-50 items-center">
+                {/* Floating Left Toolbar */}
+                <div className="absolute left-6 top-1/2 -translate-y-1/2 flex flex-col md:flex-row gap-4 z-50 items-center">
                     {/* Tool Buttons */}
                     <div className="flex flex-col gap-2">
                         <button
@@ -438,7 +470,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                 {/* Center Canvas */}
                 <div
                     ref={canvasContainerRef}
-                    className="relative max-w-full h-full flex items-center justify-center aspect-auto rounded-xl overflow-hidden bg-transparent group cursor-none"
+                    className="relative max-w-full h-full flex items-center justify-center aspect-auto rounded-xl overflow-hidden bg-transparent group cursor-none touch-none"
                     onMouseDown={startDrawing}
                     onMouseMove={handleMouseMove}
                     onMouseUp={stopDrawing}
@@ -532,6 +564,41 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                 )}
             </AnimatePresence>
 
+            {/* Scale Full Prompt Popup */}
+            <AnimatePresence>
+                {showFullPrompt && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    >
+                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative">
+                            <button
+                                onClick={() => setShowFullPrompt(false)}
+                                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                            <h3 className="text-lg font-bold text-white mb-4">Edit Full Prompt</h3>
+                            <textarea
+                                value={fullPromptPreview}
+                                onChange={(e) => setFullPromptPreview(e.target.value)}
+                                className="w-full h-64 bg-black/50 border border-white/10 rounded-xl p-4 text-sm text-white focus:ring-1 focus:ring-orange-500 resize-none mb-4 custom-scrollbar"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    onClick={() => setShowFullPrompt(false)}
+                                    className="bg-white text-black hover:bg-zinc-200 w-full rounded-lg h-12 font-bold"
+                                >
+                                    Done
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Bottom Panel (Floating Prompt Bar) */}
             <div className="p-3 md:pb-4 relative z-50 shrink-0">
                 <div className="max-w-3xl mx-auto">
@@ -539,12 +606,19 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                         <div className="flex gap-2">
                             <div className="flex-1 bg-transparent rounded-lg p-2">
                                 <textarea
-                                    value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
-                                    className="w-full bg-transparent border-none focus:ring-0 text-xs text-white placeholder-zinc-500 resize-none h-6 custom-scrollbar leading-tight focus:bg-transparent"
-                                    placeholder="Describe how to animate the background..."
+                                    value={userPrompt}
+                                    onChange={(e) => setUserPrompt(e.target.value)}
+                                    className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-xs text-white placeholder-zinc-500 resize-none h-6 custom-scrollbar leading-tight focus:bg-transparent"
+                                    placeholder="Add prompt..."
                                 />
                             </div>
+
+                            <button
+                                onClick={() => setShowFullPrompt(true)}
+                                className="text-[9px] font-black text-zinc-500 hover:text-white transition-colors whitespace-nowrap px-2"
+                            >
+                                VIEW FULL PROMPT
+                            </button>
 
                             <button
                                 onClick={handleGenerate}

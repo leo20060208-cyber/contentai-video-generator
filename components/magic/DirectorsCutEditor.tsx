@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { getSectionContent } from '@/lib/db/content';
 
 interface DirectorsCutEditorProps {
     onBack: () => void;
@@ -19,7 +20,26 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
     const [endImage, setEndImage] = useState<string | null>(null);
     const [selectedFrame, setSelectedFrame] = useState<{ type: 'start' | 'mid' | 'end', index?: number }>({ type: 'start' });
 
-    const [prompt, setPrompt] = useState('Create a smooth, cinematic transition between these frames.');
+    const [userPrompt, setUserPrompt] = useState('');
+    const [basePrompt, setBasePrompt] = useState('Create a smooth, cinematic transition between these frames.');
+
+    useEffect(() => {
+        async function loadPrompt() {
+            try {
+                const data = await getSectionContent('directors_cut_default_prompt');
+                if (data?.prompt) {
+                    setBasePrompt(data.prompt);
+                }
+            } catch (e) { console.error(e); }
+        }
+        loadPrompt();
+    }, []);
+    const [showFullPrompt, setShowFullPrompt] = useState(false);
+    const [fullPromptPreview, setFullPromptPreview] = useState('');
+
+    useEffect(() => {
+        setFullPromptPreview(`${userPrompt ? userPrompt + '. ' : ''}${basePrompt}`);
+    }, [userPrompt, basePrompt]);
     const [duration, setDuration] = useState<4 | 8>(4);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
@@ -123,7 +143,7 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                     startImage: startUrl,
                     endImage: endUrl,
                     midImages: midUrls,
-                    prompt: prompt || `Create a smooth transition based on the images, maintaining chronological order: Start -> Mid -> End.`, // Default if empty
+                    prompt: fullPromptPreview, // Use computed full prompt
                     duration,
                     aspectRatio
                 })
@@ -344,6 +364,41 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                 )}
             </AnimatePresence>
 
+            {/* Scale Full Prompt Popup */}
+            <AnimatePresence>
+                {showFullPrompt && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    >
+                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative">
+                            <button
+                                onClick={() => setShowFullPrompt(false)}
+                                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                            <h3 className="text-lg font-bold text-white mb-4">Edit Full Prompt</h3>
+                            <textarea
+                                value={fullPromptPreview}
+                                onChange={(e) => setFullPromptPreview(e.target.value)}
+                                className="w-full h-64 bg-black/50 border border-white/10 rounded-xl p-4 text-sm text-white focus:ring-1 focus:ring-orange-500 resize-none mb-4 custom-scrollbar"
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    onClick={() => setShowFullPrompt(false)}
+                                    className="bg-white text-black hover:bg-zinc-200 w-full rounded-lg h-12 font-bold"
+                                >
+                                    Done
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Bottom Panel (Floating Prompt Bar) */}
             <div className="p-3 md:pb-4 relative z-50 shrink-0">
                 <div className="max-w-3xl mx-auto">
@@ -351,12 +406,19 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                         <div className="flex gap-2">
                             <div className="flex-1 bg-transparent rounded-lg p-2">
                                 <textarea
-                                    value={prompt}
-                                    onChange={(e) => setPrompt(e.target.value)}
+                                    value={userPrompt}
+                                    onChange={(e) => setUserPrompt(e.target.value)}
                                     className="w-full bg-transparent border-none focus:ring-0 text-xs text-white placeholder-zinc-500 resize-none h-6 custom-scrollbar leading-tight focus:bg-transparent"
-                                    placeholder="Describe the video... (Auto-Prompt Active: Chronological Flow & Cinematic Lighting)"
+                                    placeholder="Add prompt..."
                                 />
                             </div>
+
+                            <button
+                                onClick={() => setShowFullPrompt(true)}
+                                className="text-[9px] font-black text-zinc-500 hover:text-white transition-colors whitespace-nowrap px-2"
+                            >
+                                VIEW FULL PROMPT
+                            </button>
 
                             <button
                                 onClick={handleGenerate}
@@ -372,7 +434,6 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                     <>
                                         <span className="flex items-center gap-1 text-[10px]">
                                             GENERATE CUT
-                                            <span className="bg-orange-500/20 text-orange-200 px-1 rounded text-[8px] border border-orange-500/30">AUTO</span>
                                         </span>
                                         <span className="text-[7px] opacity-40">COST: {duration === 8 ? 55 : 30} CR</span>
                                     </>
@@ -387,46 +448,13 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                     {[4, 8].map((d) => (
                                         <button
                                             key={d}
-                                            onClick={() => {
-                                                const oldVal = `${duration}s duration`;
-                                                const newVal = `${d}s duration`;
-                                                setDuration(d as 4 | 8);
-                                                setPrompt(prev => {
-                                                    if (!prev) return newVal;
-                                                    if (prev.includes(oldVal)) return prev.replace(oldVal, newVal);
-                                                    if (prev.includes(`${d}s`)) return prev;
-                                                    return `${prev}, ${newVal}`;
-                                                });
-                                            }}
+                                            onClick={() => setDuration(d as 4 | 8)}
                                             className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${duration === d ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
                                         >
                                             {d}s
                                         </button>
                                     ))}
                                 </div>
-
-                                <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
-                                    {['16:9', '9:16', '1:1', '4:3', '21:9'].map((ratio) => (
-                                        <button
-                                            key={ratio}
-                                            onClick={() => {
-                                                const oldVal = `${aspectRatio} aspect ratio`;
-                                                const newVal = `${ratio} aspect ratio`;
-                                                setAspectRatio(ratio);
-                                                setPrompt(prev => {
-                                                    if (!prev) return newVal;
-                                                    if (prev.includes(oldVal)) return prev.replace(oldVal, newVal);
-                                                    if (prev.includes(ratio)) return prev;
-                                                    return `${prev}, ${newVal}`;
-                                                });
-                                            }}
-                                            className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${aspectRatio === ratio ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
-                                        >
-                                            {ratio}
-                                        </button>
-                                    ))}
-                                </div>
-
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -462,7 +490,7 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                         )}
                     </AnimatePresence>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

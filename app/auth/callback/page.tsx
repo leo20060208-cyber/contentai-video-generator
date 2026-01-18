@@ -62,16 +62,8 @@ export default function AuthCallbackPage() {
         };
     }, [router, searchParams]);
 
-    // Safety timeout - if stuck on this page for > 8 seconds, go to login
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (!hasRedirected.current) {
-                console.warn('Auth callback timeout - redirecting to login');
-                router.push('/login?error=timeout');
-            }
-        }, 8000);
-        return () => clearTimeout(timer);
-    }, [router]);
+
+
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white">

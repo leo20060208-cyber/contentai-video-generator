@@ -134,7 +134,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
     useEffect(() => {
         const loadDefaultPrompt = async () => {
             try {
-                const data = await getSectionContent('create_yours_image_default_prompt');
+                const data = await getSectionContent('image_editing_default_prompt');
                 if (data?.prompt) {
                     setDefaultPrompt(data.prompt);
                 }
@@ -158,21 +158,17 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         });
     }, [layers]);
 
-    // Build the final prompt - focused on exact recreation + substitutions
+    // Build the final prompt - use template from DB with dynamic insertions
     useEffect(() => {
         if (!referenceImage) {
             setPrompt('');
             return;
         }
 
-        // --- NEW PROMPT LOGIC FOR [REF, MASK, PRODUCTS] STRUCTURE ---
-        // Image 1: Reference
-        // Image 2: Mask (Ref + Overlay)
-        // Image 3+: Products
-
-        let p = "IMAGE ROLES:\n";
-        p += "- Image 1: CLEAN REFERENCE IMAGE. The original scene.\n";
-        p += "- Image 2: MASK GUIDE. A BLACK image with COLORED MARKERS indicating where to place products.\n";
+        // --- BUILD DYNAMIC INSERTIONS ---
+        let insertions = "IMAGE ROLES:\n";
+        insertions += "- Image 1: CLEAN REFERENCE IMAGE. The original scene.\n";
+        insertions += "- Image 2: MASK GUIDE. A BLACK image with COLORED MARKERS indicating where to place products.\n";
 
         // Products start at Image 3
         let currentImageIndex = 2; // Last used index (1=Ref, 2=Mask)
@@ -180,18 +176,18 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         layers.forEach((layer, i) => {
             if (layer.type === 'product') {
                 currentImageIndex++;
-                p += `- Image ${currentImageIndex}: PRODUCT ${i + 1} to be inserted.\n`;
+                insertions += `- Image ${currentImageIndex}: PRODUCT ${i + 1} to be inserted.\n`;
                 if (layer.details) {
                     layer.details.forEach(() => {
                         currentImageIndex++;
-                        p += `- Image ${currentImageIndex}: TEXTURE/DETAIL Reference for Product ${i + 1}.\n`;
+                        insertions += `- Image ${currentImageIndex}: TEXTURE/DETAIL Reference for Product ${i + 1}.\n`;
                     });
                 }
             }
         });
 
-        p += "\nINSTRUCTIONS:\n";
-        p += "RECREATE the scene from Image 1 EXACTLY. Keep the background, lighting, and style IDENTICAL. only perform the following SUBSTITUTIONS:\n\n";
+        insertions += "\nINSTRUCTIONS:\n";
+        insertions += "RECREATE the scene from Image 1 EXACTLY. Keep the background, lighting, and style IDENTICAL. only perform the following SUBSTITUTIONS:\n\n";
 
         // Reset index for instruction mapping
         currentImageIndex = 2;
@@ -212,27 +208,41 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                     });
                 }
 
-                p += `• PRODUCT ${i + 1}: Look at the ${colorName} area in Image 2 (Mask Guide). REPLACE the object at that location with the PRODUCT from Image ${productImgIdx}. ${instruction || ''} ${layer.prompt ? `Description: ${layer.prompt}` : ''} ${detailTxt}\n`;
+                insertions += `• PRODUCT ${i + 1}: Look at the ${colorName} area in Image 2 (Mask Guide). REPLACE the object at that location with the PRODUCT from Image ${productImgIdx}. ${instruction || ''} ${layer.prompt ? `Description: ${layer.prompt}` : ''} ${detailTxt}\n`;
             } else {
                 // Mask layer (just text instruction usually)
-                p += `• EDIT: Applies to the ${colorName} area shown in Image 2. ${instruction || 'Modify this area.'}\n`;
+                insertions += `• EDIT: Applies to the ${colorName} area shown in Image 2. ${instruction || 'Modify this area.'}\n`;
             }
         });
 
         if (additionalDetails.trim()) {
-            p += `\nADDITIONAL NOTES: ${additionalDetails.trim()}\n`;
+            insertions += `\nADDITIONAL NOTES: ${additionalDetails.trim()}\n`;
         }
 
-        p += "\nSTRICT RECREATION REQUIREMENTS:\n";
-        p += "1. PIXEL PERFECT: The unmasked areas must match Image 1 EXACTLY.\n";
-        p += "2. MASK GUIDE: Do NOT render the colored markers from Image 2. They are invisible guides.\n";
-        p += "3. Lighting: identical direction, intensity, shadows.\n";
-        p += "4. Physics: realistic material behavior.\n";
-        p += "5. Photorealistic, high fidelity.\n";
-        p += "6. OUTPUT IMAGE MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.\n";
+        // --- CONSTRUCT FINAL PROMPT USING TEMPLATE ---
+        let finalPrompt = defaultPrompt;
 
-        setPrompt(p);
-    }, [referenceImage, productSubstitutions, additionalDetails, layers]);
+        // Inject Insertions
+        if (finalPrompt.includes('{{INSERTIONS}}')) {
+            finalPrompt = finalPrompt.replace('{{INSERTIONS}}', insertions);
+        } else {
+            // Fallback: Prepend insertions, then append requirements if not in template
+            finalPrompt = `${insertions}\n${finalPrompt}`;
+
+            // Add standard requirements if missing
+            if (!finalPrompt.includes('STRICT RECREATION REQUIREMENTS')) {
+                finalPrompt += "\n\nSTRICT RECREATION REQUIREMENTS:\n";
+                finalPrompt += "1. PIXEL PERFECT: The unmasked areas must match Image 1 EXACTLY.\n";
+                finalPrompt += "2. MASK GUIDE: Do NOT render the colored markers from Image 2. They are invisible guides.\n";
+                finalPrompt += "3. Lighting: identical direction, intensity, shadows.\n";
+                finalPrompt += "4. Physics: realistic material behavior.\n";
+                finalPrompt += "5. Photorealistic, high fidelity.\n";
+                finalPrompt += "6. OUTPUT IMAGE MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.\n";
+            }
+        }
+
+        setPrompt(finalPrompt);
+    }, [referenceImage, productSubstitutions, additionalDetails, layers, defaultPrompt]);
 
     // --- HANDLERS ---
 

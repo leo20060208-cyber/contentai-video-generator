@@ -13,6 +13,90 @@ interface OnboardingPopupProps {
     plusInfoUrl?: string; // URL to guide page
 }
 
+// Default Content Fallback
+const defaultContent: Record<string, any[]> = {
+    createVideoSteps: [
+        {
+            title: "VIDEO EDITING",
+            description: "Upload your raw footage and let AI transform it into viral content.",
+            image: "/images/what-we-do/create-yours-video-1.png",
+            ctaText: "Next"
+        },
+        {
+            title: "AI Analysis",
+            description: "Our engine analyzes pacing, lighting, and composition to optimize for retention.",
+            image: "/images/what-we-do/create-yours-video-2.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Viral Result",
+            description: "Get a finished, polished video ready to dominate social media feeds.",
+            image: "/images/what-we-do/create-yours-video-3.png",
+            ctaText: "Start Creating"
+        }
+    ],
+    recreateVideoSteps: [
+        {
+            title: "Recreate Template Video",
+            description: "Browse our curated library of high-performing viral video templates.",
+            image: "/images/what-we-do/recreate-template-video-1.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Insert Product",
+            description: "Seamlessly integrate your product into the narrative with one click.",
+            image: "/images/what-we-do/recreate-template-video-2.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Generate Magic",
+            description: "Watch as your product becomes the star of a proven viral format.",
+            image: "/images/what-we-do/recreate-template-video-3.png",
+            ctaText: "Browse Templates"
+        }
+    ],
+    createImageSteps: [
+        {
+            title: "IMAGE EDITING",
+            description: "Define your style and vision. From minimalist to extravagant.",
+            image: "/images/what-we-do/create-yours-image-1.png",
+            ctaText: "Next"
+        },
+        {
+            title: "AI Generation",
+            description: "Advanced algorithms generate stunning visuals tailored to your brand.",
+            image: "/images/what-we-do/create-yours-image-2.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Masterpiece",
+            description: "Download high-resolution images that stop the scroll instantly.",
+            image: "/images/what-we-do/create-yours-image-3.png",
+            ctaText: "Create Image"
+        }
+    ],
+    recreateImageSteps: [
+        {
+            title: "Image Editing",
+            description: "Edit materials and details in any interior.",
+            image: "/images/what-we-do/recreate-template-image-1.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Nano Banana Pro",
+            description: "Powered by Nano Banana Pro",
+            image: "/images/what-we-do/recreate-template-image-2.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Try Edits Now",
+            description: "Push your creativity to the limit",
+            image: "/images/what-we-do/recreate-template-image-3.png",
+            ctaText: "Try Now"
+        }
+    ]
+};
+
 export function OnboardingPopup({
     pageKey,
     stepsKey,
@@ -30,7 +114,7 @@ export function OnboardingPopup({
         const hasSeen = localStorage.getItem(hasSeenKey);
 
         if (!hasSeen) {
-            // Load content from database
+            // Load content from database or fallback
             loadOnboardingContent();
             setIsVisible(true);
         }
@@ -39,14 +123,23 @@ export function OnboardingPopup({
     const loadOnboardingContent = async () => {
         try {
             const data = await getSectionContent('what_we_do_v2');
+
             if (data && data[stepsKey]) {
                 setSteps(data[stepsKey]);
                 if (titleKey && data[titleKey]) {
                     setTitle(data[titleKey]);
                 }
+            } else if (defaultContent[stepsKey]) {
+                // Fallback to default content
+                console.log(`Using default content for ${stepsKey}`);
+                setSteps(defaultContent[stepsKey]);
             }
         } catch (error) {
             console.error('Failed to load onboarding content:', error);
+            // Fallback on error too
+            if (defaultContent[stepsKey]) {
+                setSteps(defaultContent[stepsKey]);
+            }
         }
     };
 
