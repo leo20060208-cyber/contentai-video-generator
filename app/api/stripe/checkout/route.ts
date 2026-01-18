@@ -39,9 +39,14 @@ export async function POST(req: Request) {
         const userEmail = user.email?.toLowerCase().trim() || '';
 
         // 2. GET OR CREATE STRIPE CUSTOMER
-        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+        if (!serviceRoleKey) {
+            console.error('[Checkout] SUPABASE_SERVICE_ROLE_KEY not set');
+            return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+        }
         const adminSupabase = createClient(supabaseUrl, serviceRoleKey);
         const { data: profile } = await adminSupabase.from('profiles').select('stripe_customer_id, plan').eq('id', userId).single();
+
 
         let customerId = profile?.stripe_customer_id;
 
