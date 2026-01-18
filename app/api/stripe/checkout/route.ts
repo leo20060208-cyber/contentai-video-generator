@@ -21,7 +21,8 @@ export async function POST(req: Request) {
             cancelUrl,
             returnUrl,
             planName,
-            userEmail
+            userEmail,
+            stripe_customer_id: bodyCustomerId
         } = body;
 
         const successUrl = success_url_underscore || successUrlCamel || returnUrl || `${req.headers.get('origin')}/profile`;
@@ -49,38 +50,49 @@ export async function POST(req: Request) {
         const adminSupabase = createClient(supabaseUrl, serviceRoleKey!);
         const { data: profile } = await adminSupabase.from('profiles').select('*').eq('id', userId).single();
 
-        let customerId = profile?.stripe_customer_id;
+        let customerId = bodyCustomerId || profile?.stripe_customer_id;
         let existingSubscription = null;
 
-        // 3. SEARCH STRATEGY FOR SUBSCRIPTIONS
+        // 3. SEARCH STRATEGY FOR SUBSCRIPTIONS (Super Robust)
         const customersToSearch = new Set<string>();
         if (customerId) customersToSearch.add(customerId);
 
-        // Broad search by email
+        // Search by email to find ALL records (sometimes Stripe creates duplicates)
         if (email) {
-            const byEmail = await stripe.customers.list({ email: email, limit: 10 });
+            const byEmail = await stripe.customers.list({ email: email, limit: 15 });
             byEmail.data.forEach(c => customersToSearch.add(c.id));
         }
 
-        // Broad search by metadata
-        const byMeta = await stripe.customers.search({ query: `metadata['userId']:'${userId}'`, limit: 5 });
+        // Search by metadata userId
+        const byMeta = await stripe.customers.search({
+            query: `metadata['userId']:'${userId}'`,
+            limit: 5
+        });
         byMeta.data.forEach(c => customersToSearch.add(c.id));
 
-        console.log(`[API] Searching ${customersToSearch.size} customers for subscriptions for ${email}`);
+        console.log(`[API] Deep scanning ${customersToSearch.size} customer records for ${email}`);
 
-        for (const cId of customersToSearch) {
-            const subs = await stripe.subscriptions.list({
-                customer: cId,
-                status: 'all',
-                limit: 5,
-                expand: ['data.items.data.price'],
-            });
-            const active = subs.data.find(s => ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
-            if (active) {
-                existingSubscription = active;
-                customerId = cId;
-                console.log(`[API] Found ACTIVE sub ${active.id} on customer ${cId}`);
-                break;
+        // Scrutinize every customer for any active/trialing/past_due subscription
+        for (const cId of Array.from(customersToSearch)) {
+            try {
+                const subs = await stripe.subscriptions.list({
+                    customer: cId as string,
+                    status: 'all',
+                    limit: 10,
+                    expand: ['data.items.data.price'],
+                });
+
+                // Identify ANY subscription that isn't canceled or complete_expired
+                const active = subs.data.find(s => ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
+
+                if (active) {
+                    existingSubscription = active;
+                    customerId = cId as string;
+                    console.log(`[API] FOUND ACTIVE SUB ${active.id} on customer ${cId}`);
+                    break;
+                }
+            } catch (e) {
+                console.error(`[API] Sub retrieval error for ${cId}:`, e);
             }
         }
 

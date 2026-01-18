@@ -129,7 +129,9 @@ function PricingContentInner() {
                     amount: plan.price.includes('€') ? parseFloat(plan.price.replace('€', '')) : parseFloat(plan.price),
                     currency: plan.price.includes('€') ? 'eur' : 'usd',
                     isMonthly: plan.period === '/month',
-                    returnUrl // Pass current returnUrl
+                    returnUrl,
+                    userEmail: session?.user?.email, // Ensure email is passed
+                    stripe_customer_id: profile?.stripe_customer_id // Pass existing ID if known
                 })
             });
 
