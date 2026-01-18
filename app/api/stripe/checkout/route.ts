@@ -15,7 +15,21 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder'
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { priceId, credits, isMonthly, cancelUrl, successUrl, planName, userEmail } = body;
+        const {
+            priceId,
+            credits,
+            isMonthly,
+            cancelUrl,
+            successUrl: successUrlCamel,
+            success_url: success_url_underscore,
+            cancel_url,
+            returnUrl,
+            planName,
+            userEmail
+        } = body;
+
+        const successUrl = success_url_underscore || successUrlCamel || returnUrl;
+        const cancelUrlFinal = cancel_url || cancelUrl || successUrl;
 
         // --- AUTHENTICATION & USER RETRIEVAL ---
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -62,13 +76,22 @@ export async function POST(req: Request) {
 
         if (!customerId) {
             const customer = await stripe.customers.create({
-                email: userEmail,
+                email: userEmail || user.email,
                 metadata: { userId: userId },
             });
             customerId = customer.id;
 
             // Save customer ID using Admin Client to bypass RLS restrictions on this system field
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
+        }
+
+        // 1.5 Handle special 'manage' priceId for Billing Portal
+        if (priceId === 'manage') {
+            const portalSession = await stripe.billingPortal.sessions.create({
+                customer: customerId,
+                return_url: successUrl,
+            });
+            return NextResponse.json({ url: portalSession.url });
         }
 
         // 2. Check for Existing Active Subscription
@@ -167,7 +190,7 @@ export async function POST(req: Request) {
                 ],
                 mode: mode,
                 success_url: successUrl,
-                cancel_url: cancelUrl,
+                cancel_url: cancelUrlFinal,
                 customer: customerId,
                 client_reference_id: userId,
                 metadata: {
