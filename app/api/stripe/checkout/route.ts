@@ -119,10 +119,11 @@ export async function POST(req: Request) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
-        // If STILL no sub found but user is Elite in DB, they might be in a sync mismatch.
+        // If STILL no sub found but user is already on a PAID plan in DB, they might be in a sync mismatch.
         // We will REFUSE to create a new checkout and instead send them to the 'manage' portal to fix it.
-        if (!existingSubscription && profile?.plan === 'Elite' && priceId !== 'manage') {
-            console.log(`[API] GUARD: User is Elite in DB but no sub found in Stripe. Redirecting to billing portal to sync.`);
+        const isCurrentlyPaid = profile?.plan && profile.plan.toLowerCase() !== 'free';
+        if (!existingSubscription && isCurrentlyPaid && priceId !== 'manage') {
+            console.log(`[API] GUARD: User is ${profile.plan} in DB but no sub found in Stripe. Redirecting to billing portal.`);
             const portal = await stripe.billingPortal.sessions.create({ customer: customerId || '', return_url: successUrl });
             return NextResponse.json({ url: portal.url });
         }
