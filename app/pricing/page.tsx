@@ -116,6 +116,12 @@ function PricingContentInner() {
             // Get Session Token
             const { data: { session } } = await (await import('@/lib/supabase')).supabase.auth.getSession();
 
+            // CRITICAL: If user is already subscribed, ALWAYS go to billing portal
+            const isSubscribed = profile?.subscription_status === 'active' && profile?.plan && profile.plan.toLowerCase() !== 'free';
+            const effectivePriceId = isSubscribed ? 'manage' : plan.priceId;
+
+            console.log(`[Pricing] User subscribed: ${isSubscribed}, sending priceId: ${effectivePriceId}`);
+
             const res = await fetch('/api/stripe/checkout', {
                 method: 'POST',
                 headers: {
@@ -124,16 +130,12 @@ function PricingContentInner() {
                 },
                 body: JSON.stringify({
                     planName: plan.name,
-                    priceId: plan.priceId,
+                    priceId: effectivePriceId,
                     credits: plan.credits,
-                    amount: plan.price.includes('€') ? parseFloat(plan.price.replace('€', '')) : parseFloat(plan.price),
-                    currency: plan.price.includes('€') ? 'eur' : 'usd',
-                    isMonthly: plan.period === '/month',
                     returnUrl,
-                    userEmail: session?.user?.email,
-                    stripe_customer_id: profile?.stripe_customer_id
                 })
             });
+
 
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}));
@@ -273,10 +275,11 @@ function PricingContentInner() {
                                         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                                     ) : isCurrentPlan ? (
                                         <span className="flex items-center gap-2"><Check className="w-4 h-4" /> Active</span>
-                                    ) : profile?.subscription_status === 'active' ? (
-                                        `Switch to ${plan.name}`
+                                    ) : profile?.subscription_status === 'active' && profile?.plan?.toLowerCase() !== 'free' ? (
+                                        'Manage Subscription'
                                     ) : plan.cta}
                                 </Button>
+
                             </motion.div>
                         );
                     })}
