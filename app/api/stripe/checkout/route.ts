@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { STRIPE_PLANS } from '@/lib/stripe/config';
 
 export const runtime = 'nodejs';
 
 // Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
     apiVersion: '2023-10-16' as any,
 });
 
@@ -16,11 +15,10 @@ export async function POST(req: Request) {
         const {
             priceId,
             credits,
-            isMonthly,
-            cancelUrl,
             successUrl: successUrlCamel,
             success_url: success_url_underscore,
             cancel_url,
+            cancelUrl,
             returnUrl,
             planName,
             userEmail
@@ -29,178 +27,127 @@ export async function POST(req: Request) {
         const successUrl = success_url_underscore || successUrlCamel || returnUrl || `${req.headers.get('origin')}/profile`;
         const cancelUrlFinal = cancel_url || cancelUrl || successUrl || `${req.headers.get('origin')}/pricing`;
 
-        // --- AUTHENTICATION & USER RETRIEVAL ---
+        // 1. Auth check
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
         const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
         const authHeader = req.headers.get('Authorization');
 
-        if (!authHeader) {
-            return NextResponse.json({ error: 'Unauthorized: Missing Authorization header' }, { status: 401 });
-        }
+        if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const supabase = createClient(supabaseUrl, supabaseKey, {
             global: { headers: { Authorization: authHeader } },
         });
 
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 401 });
-        }
+        if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         const userId = user.id;
+        const email = (userEmail || user.email || '').toLowerCase().trim();
 
-        if (!priceId) {
-            return NextResponse.json({ error: 'Missing priceId parameter' }, { status: 400 });
-        }
-
-        // --- DATABASE PROFILE LOOKUP ---
+        // 2. Fetch Profile to get stripe_customer_id
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
         const adminSupabase = createClient(supabaseUrl, serviceRoleKey!);
-
-        const { data: profile } = await adminSupabase
-            .from('profiles')
-            .select('stripe_customer_id')
-            .eq('id', userId)
-            .single();
+        const { data: profile } = await adminSupabase.from('profiles').select('*').eq('id', userId).single();
 
         let customerId = profile?.stripe_customer_id;
         let existingSubscription = null;
-        const searchEmail = (userEmail || user.email || '').toLowerCase().trim();
 
-        console.log(`[API] --- AGGRESSIVE SEARCH for ${searchEmail} (${userId}) ---`);
+        // 3. SEARCH STRATEGY FOR SUBSCRIPTIONS
+        const customersToSearch = new Set<string>();
+        if (customerId) customersToSearch.add(customerId);
 
-        // 1. COLLECT ALL POTENTIAL CUSTOMERS
-        const potentialCustomers = new Set<string>();
-        if (customerId) potentialCustomers.add(customerId);
-
-        try {
-            // Search by Email
-            const customersByEmail = await stripe.customers.list({ email: searchEmail, limit: 10 });
-            customersByEmail.data.forEach(c => potentialCustomers.add(c.id));
-
-            // Search by Metadata
-            const customersByMeta = await stripe.customers.search({
-                query: `metadata['userId']:'${userId}'`,
-                limit: 5,
-            });
-            customersByMeta.data.forEach(c => potentialCustomers.add(c.id));
-        } catch (e) {
-            console.error('[API] Customer search error:', e);
+        // Broad search by email
+        if (email) {
+            const byEmail = await stripe.customers.list({ email: email, limit: 10 });
+            byEmail.data.forEach(c => customersToSearch.add(c.id));
         }
 
-        console.log(`[API] Found ${potentialCustomers.size} potential customer records:`, Array.from(potentialCustomers));
+        // Broad search by metadata
+        const byMeta = await stripe.customers.search({ query: `metadata['userId']:'${userId}'`, limit: 5 });
+        byMeta.data.forEach(c => customersToSearch.add(c.id));
 
-        // 2. SCAN FOR ANY ACTIVE/PENDING SUBSCRIPTION
-        for (const custId of potentialCustomers) {
-            try {
-                const subs = await stripe.subscriptions.list({
-                    customer: custId,
-                    status: 'all',
-                    limit: 10,
-                    expand: ['data.items.data.price'],
-                });
+        console.log(`[API] Searching ${customersToSearch.size} customers for subscriptions for ${email}`);
 
-                // Find ANY subscription that isn't canceled or incomplete_expired
-                const validSub = subs.data.find(sub =>
-                    ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status)
-                );
-
-                if (validSub) {
-                    customerId = custId;
-                    existingSubscription = validSub;
-                    console.log(`[API] Found valid subscription ${validSub.id} on customer ${custId} (Status: ${validSub.status})`);
-                    break;
-                }
-            } catch (e) {
-                console.error(`[API] Error listing subs for ${custId}:`, e);
+        for (const cId of customersToSearch) {
+            const subs = await stripe.subscriptions.list({
+                customer: cId,
+                status: 'all',
+                limit: 5,
+                expand: ['data.items.data.price'],
+            });
+            const active = subs.data.find(s => ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
+            if (active) {
+                existingSubscription = active;
+                customerId = cId;
+                console.log(`[API] Found ACTIVE sub ${active.id} on customer ${cId}`);
+                break;
             }
         }
 
-        // 3. SELECTION & FALLBACK
-        if (!customerId && potentialCustomers.size > 0) {
-            customerId = Array.from(potentialCustomers)[0];
-        }
-
-        if (!customerId) {
-            console.log(`[API] Creating brand new customer for ${searchEmail}`);
-            const newCust = await stripe.customers.create({ email: searchEmail, metadata: { userId: userId } });
-            customerId = newCust.id;
-        }
-
-        // Sync back to DB if needed
-        if (customerId !== profile?.stripe_customer_id) {
+        // Sync customer ID if found/different
+        if (customerId && customerId !== profile?.stripe_customer_id) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
-        // 4. ACTION ROUTING
-        const targetPriceId = priceId;
+        // Create customer if absolutely none found
+        if (!customerId) {
+            const newCust = await stripe.customers.create({ email: email, metadata: { userId: userId } });
+            customerId = newCust.id;
+        }
 
-        // Manage Portal Requested
-        if (targetPriceId === 'manage') {
-            const portalSession = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+        // 4. ACTION ROUTING
+        if (priceId === 'manage') {
+            const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+            return NextResponse.json({ url: session.url });
+        }
+
+        // FOR SUBSCRIBERS: Handle Plan Changes via Portal
+        if (existingSubscription) {
+            const currentPrice = existingSubscription.items.data[0].price.id;
+
+            // If same plan, just go to manage portal
+            if (currentPrice === priceId) {
+                const session = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+                return NextResponse.json({ url: session.url });
+            }
+
+            // Redirect to Portal Update Flow (Handled by Stripe UI)
+            console.log(`[API] Triggering Portal Plan Change for ${customerId}: ${currentPrice} -> ${priceId}`);
+            const portalSession = await stripe.billingPortal.sessions.create({
+                customer: customerId,
+                return_url: successUrl,
+                flow_data: {
+                    type: 'subscription_update',
+                    subscription_update: { subscription: existingSubscription.id },
+                },
+            } as any);
             return NextResponse.json({ url: portalSession.url });
         }
 
-        // Plan Change (Update) Flow
-        if (existingSubscription) {
-            const currentPriceId = existingSubscription.items.data[0].price.id;
-            console.log(`[API] Existing Sub found (${existingSubscription.id}). Target Price: ${targetPriceId}. Current: ${currentPriceId}`);
+        // FOR NEW USERS: Handle Checkout Flow
+        console.log(`[API] Triggering NEW Checkout for ${customerId}: ${priceId}`);
+        const mode = body.mode || 'subscription';
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [{ price: priceId, quantity: 1 }],
+            mode: mode as any,
+            success_url: successUrl,
+            cancel_url: cancelUrlFinal,
+            customer: customerId,
+            client_reference_id: userId,
+            metadata: {
+                userId: userId,
+                planName: planName || '',
+                credits: credits?.toString() || '0',
+                type: mode === 'subscription' ? 'subscription_creation' : 'credit_purchase'
+            },
+            allow_promotion_codes: true,
+        });
 
-            try {
-                // If same plan, just go to general portal
-                if (currentPriceId === targetPriceId) {
-                    const portalSession = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
-                    return NextResponse.json({ url: portalSession.url });
-                }
-
-                // Force a Subscription Update flow in the billing portal
-                const portalSession = await stripe.billingPortal.sessions.create({
-                    customer: customerId,
-                    return_url: successUrl,
-                    flow_data: {
-                        type: 'subscription_update',
-                        subscription_update: {
-                            subscription: existingSubscription.id,
-                            items: [{
-                                id: existingSubscription.items.data[0].id,
-                                price: targetPriceId,
-                                quantity: 1,
-                            }],
-                        },
-                    },
-                } as any);
-                return NextResponse.json({ url: portalSession.url });
-            } catch (e: any) {
-                console.error('[API] Specialized Portal Flow failed, using fallback:', e);
-                const portalSession = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
-                return NextResponse.json({ url: portalSession.url });
-            }
-        } else {
-            // New Subscription Checkout Flow
-            const mode = body.mode || 'subscription';
-            const session = await stripe.checkout.sessions.create({
-                payment_method_types: ['card'],
-                line_items: [{ price: targetPriceId, quantity: 1 }],
-                mode: mode as any,
-                success_url: successUrl,
-                cancel_url: cancelUrlFinal,
-                customer: customerId,
-                client_reference_id: userId,
-                metadata: {
-                    userId: userId,
-                    planName: planName || '',
-                    credits: credits?.toString() || '0',
-                    type: mode === 'subscription' ? 'subscription_creation' : 'credit_purchase'
-                },
-                allow_promotion_codes: true,
-            });
-
-            return NextResponse.json({ sessionId: session.id, url: session.url });
-        }
+        return NextResponse.json({ sessionId: session.id, url: session.url });
 
     } catch (error: any) {
-        console.error('[API] Checkout Error:', error);
+        console.error('[API] Fatal Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
