@@ -51,17 +51,22 @@ export async function POST(req: Request) {
         const { data: profile } = await adminSupabase.from('profiles').select('*').eq('id', userId).single();
 
         let customerId = bodyCustomerId || profile?.stripe_customer_id;
-        let existingSubscription = null;
         const profileEmail = (profile?.email || '').toLowerCase().trim();
+        const currentDBPlan = (profile?.plan || 'free').toLowerCase();
+        let existingSubscription = null;
 
-        // 3. SEARCH STRATEGY FOR SUBSCRIPTIONS (Super Robust)
+        console.log(`[STRIKE_SEARCH] User: ${userId} | DB Plan: ${currentDBPlan} | Emails: [${authEmail}, ${profileEmail}]`);
+
+        // 2. SEARCH STRATEGY FOR SUBSCRIPTIONS (Super Robust)
         const customersToSearch = new Set<string>();
         if (customerId) customersToSearch.add(customerId);
+        if (bodyCustomerId) customersToSearch.add(bodyCustomerId);
 
         // Search by both emails to find records
         for (const e of [authEmail, profileEmail]) {
-            if (e) {
-                const byEmail = await stripe.customers.list({ email: e, limit: 15 });
+            if (e && e.length > 3) {
+                const byEmail = await stripe.customers.list({ email: e, limit: 10 });
+                console.log(`[STRIKE_SEARCH] Customers found for email ${e}: ${byEmail.data.length}`);
                 byEmail.data.forEach(c => customersToSearch.add(c.id));
             }
         }
@@ -71,9 +76,10 @@ export async function POST(req: Request) {
             query: `metadata['userId']:'${userId}'`,
             limit: 5
         });
+        console.log(`[STRIKE_SEARCH] Customers found by metadata userId: ${byMeta.data.length}`);
         byMeta.data.forEach(c => customersToSearch.add(c.id));
 
-        console.log(`[API] Deep scanning ${customersToSearch.size} customers for user ${userId}`);
+        console.log(`[STRIKE_SEARCH] Deep scanning ${customersToSearch.size} unique customers: ${Array.from(customersToSearch).join(', ')}`);
 
         // Scan ALL customers for subscriptions
         for (const cId of Array.from(customersToSearch)) {
@@ -81,37 +87,52 @@ export async function POST(req: Request) {
                 const subs = await stripe.subscriptions.list({
                     customer: cId as string,
                     status: 'all',
-                    limit: 10,
+                    limit: 20,
                     expand: ['data.items.data.price'],
                 });
+
+                console.log(`[STRIKE_SEARCH] Subscriptions for ${cId}: ${subs.data.length}`);
                 const active = subs.data.find(s => ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
+
                 if (active) {
                     existingSubscription = active;
                     customerId = cId as string;
-                    console.log(`[API] FOUND SUB ${active.id} on CUST ${cId}`);
+                    console.log(`[STRIKE_SEARCH] ✅ MATCH FOUND: Sub ${active.id} (Status: ${active.status}) on CUST ${cId}`);
                     break;
                 }
-            } catch (e) { console.error(`[API] Scan error for ${cId}:`, e); }
+            } catch (e) { console.error(`[STRIKE_SEARCH] Error scanning customer ${cId}:`, e); }
         }
 
         // --- EMERGENCY BROAD SCAN IF USER IS SUPPOSED TO BE PAID ---
-        if (!existingSubscription && profile?.plan && profile.plan !== 'free') {
-            console.log(`[API] EMERGENCY: Paid user (${profile.plan}) missing sub in standard search. BROAD SCANNING.`);
+        if (!existingSubscription && currentDBPlan !== 'free') {
+            console.log(`[STRIKE_SEARCH] ⚠️ ALERT: User is ${currentDBPlan} in DB but no sub found yet. STARTING NUCLEAR SCAN.`);
             try {
-                const allRecent = await stripe.subscriptions.list({ status: 'all', limit: 100, expand: ['data.customer'] });
-                const found = allRecent.data.find((s: any) => {
+                // Fetch the 100 most recent active/trialing/past_due subs in the whole account
+                const allSubs = await stripe.subscriptions.list({
+                    status: 'all',
+                    limit: 100,
+                    expand: ['data.customer', 'data.items.data.price']
+                });
+
+                console.log(`[STRIKE_SEARCH] Nuclear scan checking ${allSubs.data.length} subs...`);
+
+                const found = allSubs.data.find((s: any) => {
                     const c = s.customer;
                     if (!c || typeof c === 'string') return false;
-                    const match = (c.email && (c.email.toLowerCase() === authEmail || c.email.toLowerCase() === profileEmail)) ||
-                        (c.metadata && c.metadata.userId === userId);
-                    return match && ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status);
+
+                    const emailMatch = (c.email && (c.email.toLowerCase() === authEmail || c.email.toLowerCase() === profileEmail));
+                    const metaMatch = (c.metadata && c.metadata.userId === userId);
+                    const isLive = ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status);
+
+                    return (emailMatch || metaMatch) && isLive;
                 });
+
                 if (found) {
                     existingSubscription = found;
-                    customerId = typeof found.customer === 'string' ? found.customer : (found.customer as any).id;
-                    console.log(`[API] BROAD SCAN SUCCESS: Found ${found.id}`);
+                    customerId = (found.customer as any).id;
+                    console.log(`[STRIKE_SEARCH] ☢️ NUCLEAR MATCH: Found sub ${found.id} on ${customerId}`);
                 }
-            } catch (e) { console.error('[API] Broad scan error:', e); }
+            } catch (e) { console.error('[STRIKE_SEARCH] Nuclear scan failed:', e); }
         }
 
         // --- VERIFY CUSTOMER EXISTENCE ---
@@ -130,32 +151,37 @@ export async function POST(req: Request) {
             }
         }
 
-        // --- SYNC CUSTOMER ID IF VALID ---
+        // Create customer if absolutely none found or invalid (WE MUST HAVE A CUSTOMER ID HERE)
+        if (!customerId) {
+            console.log(`[STRIKE_SEARCH] No valid customer found. Creating new one for ${authEmail}`);
+            try {
+                const newCust = await stripe.customers.create({ email: authEmail, metadata: { userId: userId } });
+                customerId = newCust.id;
+                await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
+            } catch (e) {
+                console.error('[API] Customer creation failed:', e);
+            }
+        }
+
+        // --- SYNC CUSTOMER ID IF VALID AND DIFFERENT ---
         if (customerId && customerId !== profile?.stripe_customer_id) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
         // --- GUARD FOR PAID USERS (PREVENT DUPLICATE CHECKOUT) ---
+        // If user is already on a paid plan in our DB, we SHOULD NOT show them a new Checkout screen.
+        // We either found a sub (existingSubscription) or we send them to the portal to manage it.
         const isCurrentlyPaid = profile?.plan && profile.plan.toLowerCase() !== 'free';
         if (!existingSubscription && isCurrentlyPaid && priceId !== 'manage') {
-            // We only do this if we have a customerId (which might have been reset above if invalid)
-            if (customerId) {
-                console.log(`[API] GUARD: User is ${profile.plan} but no sub found. Redirecting to billing portal.`);
-                try {
-                    const portal = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
-                    return NextResponse.json({ url: portal.url });
-                } catch (e) {
-                    console.error('[API] Guard Portal Error:', e);
-                }
+            console.log(`[API] 🛡️ GUARD TRIGGERED: User is ${profile.plan} in DB but no sub found in Stripe. Redirecting to Portal instead of Checkout.`);
+            try {
+                const portal = await stripe.billingPortal.sessions.create({ customer: customerId as string, return_url: successUrl });
+                return NextResponse.json({ url: portal.url });
+            } catch (e: any) {
+                console.error('[API] Guard Portal Session Error:', e);
+                // If portal fails too, we still refuse checkout and return error
+                return NextResponse.json({ error: 'Your account is already on a paid plan. Please use the Billing Portal to change plans.' }, { status: 400 });
             }
-        }
-
-        // Create customer if absolutely none found or invalid
-        if (!customerId) {
-            console.log(`[API] No valid customer found. Creating new one for ${authEmail}`);
-            const newCust = await stripe.customers.create({ email: authEmail, metadata: { userId: userId } });
-            customerId = newCust.id;
-            await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
         // 4. ACTION ROUTING
