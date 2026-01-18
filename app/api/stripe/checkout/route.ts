@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { headers } from 'next/headers';
 import { STRIPE_PLANS } from '@/lib/stripe/config';
 
 export const runtime = 'nodejs';
 
-// Initialize Stripe
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder', {
     apiVersion: '2023-10-16' as any,
@@ -56,13 +54,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing priceId parameter' }, { status: 400 });
         }
 
-        // 1. Get Customer Logic
-        // We reuse the initialized supabase client or create an admin one if needed for reading profile?
-        // Reading profile is usually safe with user token if RLS allows 'select own'.
-        // But for updating profile (stripe_customer_id), we might need admin key or RLS allowing update.
-        // Let's assume user can update their own profile or we use Service Role for ID saving.
-        // For safety, let's use Service Role for the backend profile operations like fetching stripe_id.
-
+        // --- DATABASE PROFILE LOOKUP ---
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
         const adminSupabase = createClient(supabaseUrl, serviceRoleKey!);
 
@@ -74,108 +66,95 @@ export async function POST(req: Request) {
 
         let customerId = profile?.stripe_customer_id;
         let existingSubscription = null;
-        const searchEmail = userEmail || user.email;
+        const searchEmail = (userEmail || user.email || '').toLowerCase().trim();
 
-        console.log(`[API] --- START PARANOID SEARCH for ${searchEmail} (${userId}) ---`);
+        console.log(`[API] --- AGGRESSIVE SEARCH for ${searchEmail} (${userId}) ---`);
 
-        // LAYER 1: Check Customer ID from Database
-        if (customerId) {
-            console.log(`[API] Layer 1: Checking DB customerId: ${customerId}`);
-            const subs = await stripe.subscriptions.list({
-                customer: customerId,
-                status: 'all',
-                limit: 5,
-                expand: ['data.items.data.price'],
-            });
-            const foundSub = subs.data.find(sub => ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status));
-            if (foundSub) {
-                existingSubscription = foundSub;
-                console.log(`[API] Layer 1 SUCCESS: Found sub ${foundSub.id}`);
-            }
-        }
+        // 1. COLLECT ALL POTENTIAL CUSTOMERS
+        const potentialCustomers = new Set<string>();
+        if (customerId) potentialCustomers.add(customerId);
 
-        // LAYER 2: Search by Metadata (userId)
-        if (!existingSubscription) {
-            console.log(`[API] Layer 2: Searching by metadata.userId: ${userId}`);
-            const metaSearch = await stripe.customers.search({
+        try {
+            // Search by Email
+            const customersByEmail = await stripe.customers.list({ email: searchEmail, limit: 10 });
+            customersByEmail.data.forEach(c => potentialCustomers.add(c.id));
+
+            // Search by Metadata
+            const customersByMeta = await stripe.customers.search({
                 query: `metadata['userId']:'${userId}'`,
                 limit: 5,
             });
-            for (const cust of metaSearch.data) {
-                const subs = await stripe.subscriptions.list({ customer: cust.id, status: 'all', expand: ['data.items.data.price'] });
-                const foundSub = subs.data.find(sub => ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status));
-                if (foundSub) {
-                    customerId = cust.id;
-                    existingSubscription = foundSub;
-                    console.log(`[API] Layer 2 SUCCESS: Found sub ${foundSub.id} on customer ${cust.id}`);
+            customersByMeta.data.forEach(c => potentialCustomers.add(c.id));
+        } catch (e) {
+            console.error('[API] Customer search error:', e);
+        }
+
+        console.log(`[API] Found ${potentialCustomers.size} potential customer records:`, Array.from(potentialCustomers));
+
+        // 2. SCAN FOR ANY ACTIVE/PENDING SUBSCRIPTION
+        for (const custId of potentialCustomers) {
+            try {
+                const subs = await stripe.subscriptions.list({
+                    customer: custId,
+                    status: 'all',
+                    limit: 10,
+                    expand: ['data.items.data.price'],
+                });
+
+                // Find ANY subscription that isn't canceled or incomplete_expired
+                const validSub = subs.data.find(sub =>
+                    ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status)
+                );
+
+                if (validSub) {
+                    customerId = custId;
+                    existingSubscription = validSub;
+                    console.log(`[API] Found valid subscription ${validSub.id} on customer ${custId} (Status: ${validSub.status})`);
                     break;
                 }
+            } catch (e) {
+                console.error(`[API] Error listing subs for ${custId}:`, e);
             }
         }
 
-        // LAYER 3: Search by Email
-        if (!existingSubscription && searchEmail) {
-            console.log(`[API] Layer 3: Searching by email: ${searchEmail}`);
-            const emailSearch = await stripe.customers.list({ email: searchEmail, limit: 10 });
-            for (const cust of emailSearch.data) {
-                const subs = await stripe.subscriptions.list({ customer: cust.id, status: 'all', expand: ['data.items.data.price'] });
-                const foundSub = subs.data.find(sub => ['active', 'trialing', 'past_due', 'incomplete'].includes(sub.status));
-                if (foundSub) {
-                    customerId = cust.id;
-                    existingSubscription = foundSub;
-                    console.log(`[API] Layer 3 SUCCESS: Found sub ${foundSub.id} on customer ${cust.id}`);
-                    break;
-                }
-            }
+        // 3. SELECTION & FALLBACK
+        if (!customerId && potentialCustomers.size > 0) {
+            customerId = Array.from(potentialCustomers)[0];
         }
 
-        // FINAL FALLBACK: If we have customers but NO active sub, pick the first customer
         if (!customerId) {
-            const firstCust = await stripe.customers.list({ email: searchEmail, limit: 1 });
-            if (firstCust.data.length > 0) {
-                customerId = firstCust.data[0].id;
-                console.log(`[API] No sub found, using fallback first customer found: ${customerId}`);
-            } else {
-                console.log(`[API] Creating brand new customer for ${searchEmail}`);
-                const newCust = await stripe.customers.create({ email: searchEmail, metadata: { userId: userId } });
-                customerId = newCust.id;
-            }
+            console.log(`[API] Creating brand new customer for ${searchEmail}`);
+            const newCust = await stripe.customers.create({ email: searchEmail, metadata: { userId: userId } });
+            customerId = newCust.id;
         }
 
-        // SYNC DB
+        // Sync back to DB if needed
         if (customerId !== profile?.stripe_customer_id) {
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
-        // MANAGE ACTION
-        if (priceId === 'manage') {
+        // 4. ACTION ROUTING
+        const targetPriceId = priceId;
+
+        // Manage Portal Requested
+        if (targetPriceId === 'manage') {
             const portalSession = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
             return NextResponse.json({ url: portalSession.url });
         }
 
-        const targetPriceId = priceId;
-        console.log(`[API] --- END PARANOID SEARCH. Final Customer: ${customerId}, Found Sub: ${existingSubscription?.id || 'NONE'} ---`);
-
-        // 3. Flow Routing
-        if (existingSubscription && targetPriceId !== 'manage') {
-            // --- UPDATING EXISTING SUBSCRIPTION ---
-            // If they are trying to buy the SAME plan they already have, just send to portal
+        // Plan Change (Update) Flow
+        if (existingSubscription) {
             const currentPriceId = existingSubscription.items.data[0].price.id;
-
-            if (currentPriceId === targetPriceId) {
-                console.log(`[API] Same plan selected (${currentPriceId}). Redirecting to billing portal.`);
-                const portalSession = await stripe.billingPortal.sessions.create({
-                    customer: customerId,
-                    return_url: successUrl,
-                });
-                return NextResponse.json({ url: portalSession.url });
-            }
-
-            // For any other change (upgrade or downgrade), use the Portal Update flow
-            console.log(`[API] Plan change: ${currentPriceId} -> ${targetPriceId}. Redirecting to Portal Update Flow.`);
+            console.log(`[API] Existing Sub found (${existingSubscription.id}). Target Price: ${targetPriceId}. Current: ${currentPriceId}`);
 
             try {
-                // IMPORTANT: We use subscription_update flow to show the Stripe hosted plan change UI
+                // If same plan, just go to general portal
+                if (currentPriceId === targetPriceId) {
+                    const portalSession = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
+                    return NextResponse.json({ url: portalSession.url });
+                }
+
+                // Force a Subscription Update flow in the billing portal
                 const portalSession = await stripe.billingPortal.sessions.create({
                     customer: customerId,
                     return_url: successUrl,
@@ -193,35 +172,24 @@ export async function POST(req: Request) {
                 } as any);
                 return NextResponse.json({ url: portalSession.url });
             } catch (e: any) {
-                console.error('[API] Portal Update Flow failed, falling back to general portal:', e);
-                const portalSession = await stripe.billingPortal.sessions.create({
-                    customer: customerId,
-                    return_url: successUrl,
-                });
+                console.error('[API] Specialized Portal Flow failed, using fallback:', e);
+                const portalSession = await stripe.billingPortal.sessions.create({ customer: customerId, return_url: successUrl });
                 return NextResponse.json({ url: portalSession.url });
             }
-
         } else {
-            // --- NEW SUBSCRIPTION / ONE TIME PAYMENT ---
-            console.log(`[API] No existing subscription for customer ${customerId}. Creating new checkout session for ${targetPriceId}.`);
+            // New Subscription Checkout Flow
             const mode = body.mode || 'subscription';
-
             const session = await stripe.checkout.sessions.create({
                 payment_method_types: ['card'],
-                line_items: [
-                    {
-                        price: targetPriceId,
-                        quantity: 1,
-                    }
-                ],
-                mode: mode,
+                line_items: [{ price: targetPriceId, quantity: 1 }],
+                mode: mode as any,
                 success_url: successUrl,
                 cancel_url: cancelUrlFinal,
                 customer: customerId,
                 client_reference_id: userId,
                 metadata: {
                     userId: userId,
-                    planName: planName,
+                    planName: planName || '',
                     credits: credits?.toString() || '0',
                     type: mode === 'subscription' ? 'subscription_creation' : 'credit_purchase'
                 },
