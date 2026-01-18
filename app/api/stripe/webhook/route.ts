@@ -92,90 +92,100 @@ export async function POST(request: Request) {
 }
 
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-    const userId = session.metadata?.userId;
-    const creditsToAdd = parseInt(session.metadata?.credits || '0', 10);
-    const planName = session.metadata?.planName || 'Unknown Plan';
     const supabase = getSupabaseAdmin();
+    const stripe = getStripe();
 
-    console.log(`[Webhook] Processing checkout. Session: ${session.id}, User: ${userId}, Plan: ${planName}`);
+    console.log(`[Webhook] 🎯 checkout.session.completed: ${session.id}`);
 
-    let finalUserId = userId;
+    // 1. FIND USER: Try metadata first, then email lookup
+    let userId = session.metadata?.userId || session.client_reference_id;
+    const customerEmail = session.customer_details?.email?.toLowerCase().trim();
+    const customerId = session.customer as string;
 
-    if (!finalUserId) {
-        console.warn('[Webhook] No userId in metadata, attempting to find user by email...');
-        const email = session.customer_details?.email || session.metadata?.email;
-        if (email) {
-            const { data: profileData } = await (supabase.from('profiles').select('id').eq('email', email.toLowerCase()).single() as any);
-            if (profileData) {
-                finalUserId = profileData.id;
-                console.log(`[Webhook] Found User ID ${finalUserId} by email: ${email}`);
-            }
+    if (!userId && customerEmail) {
+        console.log(`[Webhook] No userId in metadata, searching by email: ${customerEmail}`);
+        const { data } = await (supabase.from('profiles').select('id').eq('email', customerEmail).single() as any);
+        userId = data?.id;
+    }
+
+    if (!userId) {
+        console.error(`[Webhook] ❌ CRITICAL: Cannot find user for session ${session.id}. Email: ${customerEmail}`);
+        await logError(supabase, null, 'checkout_no_user', 'User not found by metadata or email', null, { sessionId: session.id, email: customerEmail }, session.id, 'checkout.session.completed');
+        return;
+    }
+
+    console.log(`[Webhook] ✅ Found user: ${userId}`);
+
+    // 2. GET PLAN INFO: Fetch subscription to get priceId and credits from config
+    let planConfig = null;
+    let subscriptionPeriodEnd = null;
+
+    if (session.subscription) {
+        try {
+            const subscription = await stripe.subscriptions.retrieve(session.subscription as string, { expand: ['items.data.price'] }) as any;
+            const priceId = subscription.items.data[0].price.id;
+            planConfig = getPlanByPriceId(priceId);
+            subscriptionPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+            console.log(`[Webhook] 📦 Plan: ${planConfig?.name}, Credits: ${planConfig?.credits}, Period End: ${subscriptionPeriodEnd}`);
+        } catch (e) {
+            console.error('[Webhook] Error fetching subscription details:', e);
         }
     }
 
-    if (!finalUserId) {
-        console.error('[Webhook] No userId found in metadata or by email');
-        await logError(supabase, null, 'payment_webhook', 'No userId found for session', 'MISSING_USER_ID', {
-            sessionId: session.id,
-            email: session.customer_details?.email
-        }, session.id, 'checkout.session.completed');
-        return;
+    // Fallback: try to get plan from metadata if subscription fetch failed
+    if (!planConfig) {
+        const planName = session.metadata?.planName;
+        if (planName) {
+            planConfig = Object.values(STRIPE_PLANS).find(p => p.name.toLowerCase() === planName.toLowerCase());
+        }
     }
 
-    // 1. Log Transaction
-    const { error: txError } = await (supabase.from('transactions') as any).insert({
-        user_id: finalUserId,
-        amount: session.amount_total ? session.amount_total / 100 : 0,
-        currency: session.currency,
-        status: 'completed',
-        stripe_payment_id: session.id,
-        description: `Purchase: ${planName}`,
-        credits_added: creditsToAdd,
-        metadata: session.metadata
-    });
+    const credits = planConfig?.credits || 0;
+    const planName = planConfig?.name || session.metadata?.planName || 'Unknown';
 
-    if (txError) console.error('[Webhook] Transaction log error:', txError);
-
-    // 2. Fetch User Profile
-    const { data: profile, error: profileError } = await (supabase.from('profiles') as any).select('credits, subscription_status').eq('id', finalUserId).single();
-
-    if (profileError) {
-        console.error('[Webhook] Profile fetch error:', profileError);
-        return;
-    }
-
-    // 3. Update Credits & Subscription Status
-    const currentCredits = profile.credits || 0;
-    const newCredits = currentCredits + creditsToAdd;
-
+    // 3. UPDATE SUPABASE PROFILE
     const updates: any = {
-        credits: newCredits,
+        credits: credits, // Set to plan max, not accumulate
+        plan: planName,
+        subscription_status: 'active',
+        stripe_customer_id: customerId,
     };
 
-    if (session.mode === 'subscription') {
-        updates.subscription_status = 'active';
-        updates.plan = planName;
-        updates.stripe_customer_id = session.customer as string;
-
-        if (session.subscription) {
-            try {
-                const stripe = getStripe();
-                const subscriptionLabel = await stripe.subscriptions.retrieve(session.subscription as string) as any;
-                updates.subscription_period_end = new Date(subscriptionLabel.current_period_end * 1000).toISOString();
-            } catch (e) {
-                console.error('[Webhook] Error fetching sub period:', e);
-            }
-        }
+    if (subscriptionPeriodEnd) {
+        updates.subscription_period_end = subscriptionPeriodEnd;
     }
 
-    const { error: updateError } = await (supabase.from('profiles') as any).update(updates).eq('id', finalUserId);
+    console.log(`[Webhook] 💾 Updating profile for ${userId}:`, updates);
 
-    if (updateError) {
-        console.error('[Webhook] Credit update error:', updateError);
-        throw updateError;
+    const { error } = await (supabase.from('profiles').update(updates).eq('id', userId) as any);
+
+    if (error) {
+        console.error('[Webhook] ❌ Profile update failed:', error);
+        await logError(supabase, userId, 'profile_update_failed', error.message, error.code, error, session.id, 'checkout.session.completed');
+        return;
     }
 
-    await createUserNotification(supabase, finalUserId, '🎉 Pago procesado', `Se han añadido ${creditsToAdd} créditos. Plan: ${planName}`, 'success', '/profile');
+    // 4. LOG TRANSACTION
+    await (supabase.from('transactions') as any).insert({
+        user_id: userId,
+        amount: session.amount_total ? session.amount_total / 100 : 0,
+        currency: session.currency || 'eur',
+        status: 'completed',
+        stripe_payment_id: session.id,
+        description: `Subscription: ${planName}`,
+        credits_added: credits,
+        metadata: { priceId: planConfig?.priceId, planName }
+    });
+
+    // 5. NOTIFY USER
+    await createUserNotification(supabase, userId,
+        '🎉 ¡Bienvenido a ' + planName + '!',
+        `Tu suscripción está activa. Tienes ${credits} créditos disponibles.`,
+        'success',
+        '/profile'
+    );
+
+    console.log(`[Webhook] ✅ SUCCESS: User ${userId} is now ${planName} with ${credits} credits.`);
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
@@ -183,47 +193,63 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     const stripe = getStripe();
 
     const subscriptionId = (invoice as any).subscription as string;
-    if (!subscriptionId) return;
+    if (!subscriptionId) {
+        console.log('[Webhook] Invoice.paid has no subscription, skipping.');
+        return;
+    }
+
+    console.log(`[Webhook] 🧾 invoice.paid: ${invoice.id} for sub ${subscriptionId}`);
 
     try {
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId) as Stripe.Subscription;
+        // 1. GET SUBSCRIPTION AND PLAN INFO
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['items.data.price'] }) as any;
         const priceId = subscription.items.data[0].price.id;
+        const planConfig = getPlanByPriceId(priceId);
+
+        if (!planConfig) {
+            console.warn(`[Webhook] No plan config for priceId: ${priceId}`);
+            return;
+        }
+
+        // 2. FIND USER: Try subscription metadata, then customer metadata, then email
         let userId = subscription.metadata?.userId;
 
-        // Fallback search for userId
         if (!userId) {
-            console.warn('[Webhook] Invoice.paid missing userId metadata, searching...');
+            console.log('[Webhook] No userId in subscription metadata, checking customer...');
             const customer = await stripe.customers.retrieve(invoice.customer as string) as any;
             userId = customer.metadata?.userId;
 
             if (!userId && customer.email) {
-                const { data: profileData } = await (supabase.from('profiles').select('id').eq('email', customer.email.toLowerCase()).single() as any);
-                userId = profileData?.id;
+                console.log(`[Webhook] Searching user by customer email: ${customer.email}`);
+                const { data } = await (supabase.from('profiles').select('id').eq('email', customer.email.toLowerCase()).single() as any);
+                userId = data?.id;
             }
         }
 
         if (!userId) {
-            console.error('[Webhook] Still no userId found for invoice:', invoice.id);
+            console.error(`[Webhook] ❌ Cannot find user for invoice ${invoice.id}`);
             return;
         }
 
-        const planConfig = getPlanByPriceId(priceId);
-        if (!planConfig) return;
+        // 3. UPDATE PROFILE: Reset credits to plan max
+        console.log(`[Webhook] 💳 Resetting credits for ${userId} to ${planConfig.credits} (${planConfig.name})`);
 
-        console.log(`[Webhook] Invoice paid for ${userId}. Resetting credits to ${planConfig.credits} for plan ${planConfig.name}`);
-
-        const { error } = await (supabase.from('profiles') as any).update({
+        const { error } = await (supabase.from('profiles').update({
             credits: planConfig.credits,
             subscription_status: 'active',
             plan: planConfig.name,
-            subscription_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+            subscription_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
             stripe_customer_id: invoice.customer as string
-        }).eq('id', userId);
+        }).eq('id', userId) as any);
 
-        if (error) console.error('[Webhook] Invoice update profile error:', error);
+        if (error) {
+            console.error('[Webhook] Profile update error:', error);
+        } else {
+            console.log(`[Webhook] ✅ User ${userId} renewed with ${planConfig.credits} credits.`);
+        }
 
     } catch (e: any) {
-        console.error('[Webhook] Fatal handleInvoicePaid error:', e);
+        console.error('[Webhook] handleInvoicePaid error:', e);
     }
 }
 
