@@ -95,37 +95,55 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     const stripe = getStripe();
 
     console.log(`[Webhook] 🎯 checkout.session.completed: ${session.id}`);
+    console.log(`[Webhook] Session data: mode=${session.mode}, sub=${session.subscription}, customer=${session.customer}`);
 
-    // 1. FIND USER: Try metadata first, then search auth.users by email
+    // 1. FIND USER - Try multiple sources (Stripe API structure varies)
     let userId = session.metadata?.userId || session.client_reference_id;
     const customerEmail = session.customer_details?.email?.toLowerCase().trim();
     const customerId = session.customer as string;
 
-    console.log(`[Webhook] Looking for user. Metadata userId: ${userId}, Email: ${customerEmail}`);
+    console.log(`[Webhook] Step 1: metadata.userId=${session.metadata?.userId}, client_ref=${session.client_reference_id}`);
 
-    // If no userId in metadata, search in auth.users (NOT profiles - profiles has no email column!)
-    if (!userId && customerEmail) {
-        console.log(`[Webhook] Searching auth.users for email: ${customerEmail}`);
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+    // 2. If no userId yet, fetch subscription and check its metadata
+    if (!userId && session.subscription) {
+        try {
+            const sub = await stripe.subscriptions.retrieve(session.subscription as string) as any;
+            userId = sub.metadata?.userId;
+            console.log(`[Webhook] Step 2: subscription.metadata.userId=${userId}`);
 
-        if (!authError && authUsers) {
-            const matchingUser = authUsers.users.find(u => u.email?.toLowerCase() === customerEmail);
-            if (matchingUser) {
-                userId = matchingUser.id;
-                console.log(`[Webhook] ✅ Found user in auth.users: ${userId}`);
+            // Also check line items (newer Stripe API puts userId there)
+            if (!userId && sub.items?.data?.[0]?.metadata?.userId) {
+                userId = sub.items.data[0].metadata.userId;
+                console.log(`[Webhook] Step 3: line_item.metadata.userId=${userId}`);
             }
-        } else {
-            console.error('[Webhook] Error searching auth.users:', authError);
+        } catch (e) {
+            console.error('[Webhook] Error fetching subscription for userId:', e);
+        }
+    }
+
+    // 3. If still no userId, check the Stripe customer metadata
+    if (!userId && customerId) {
+        try {
+            const customer = await stripe.customers.retrieve(customerId) as any;
+            userId = customer.metadata?.userId;
+            console.log(`[Webhook] Step 4: customer.metadata.userId=${userId}`);
+        } catch (e) {
+            console.error('[Webhook] Error fetching customer:', e);
         }
     }
 
     if (!userId) {
-        console.error(`[Webhook] ❌ CRITICAL: Cannot find user for session ${session.id}. Email: ${customerEmail}`);
-        await logError(supabase, null, 'checkout_no_user', 'User not found', null, { sessionId: session.id, email: customerEmail }, session.id, 'checkout.session.completed');
+        console.error(`[Webhook] ❌ CRITICAL: No userId found anywhere for session ${session.id}`);
+        await logError(supabase, null, 'checkout_no_user', 'User not found in any metadata', null, {
+            sessionId: session.id,
+            email: customerEmail,
+            customerId: customerId
+        }, session.id, 'checkout.session.completed');
         return;
     }
 
-    console.log(`[Webhook] ✅ Processing for user: ${userId}`);
+    console.log(`[Webhook] ✅ Found userId: ${userId}, proceeding with profile update`);
+
 
 
     // 2. GET PLAN INFO: Fetch subscription to get priceId and credits from config
