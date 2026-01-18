@@ -96,24 +96,37 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
     console.log(`[Webhook] 🎯 checkout.session.completed: ${session.id}`);
 
-    // 1. FIND USER: Try metadata first, then email lookup
+    // 1. FIND USER: Try metadata first, then search auth.users by email
     let userId = session.metadata?.userId || session.client_reference_id;
     const customerEmail = session.customer_details?.email?.toLowerCase().trim();
     const customerId = session.customer as string;
 
+    console.log(`[Webhook] Looking for user. Metadata userId: ${userId}, Email: ${customerEmail}`);
+
+    // If no userId in metadata, search in auth.users (NOT profiles - profiles has no email column!)
     if (!userId && customerEmail) {
-        console.log(`[Webhook] No userId in metadata, searching by email: ${customerEmail}`);
-        const { data } = await (supabase.from('profiles').select('id').eq('email', customerEmail).single() as any);
-        userId = data?.id;
+        console.log(`[Webhook] Searching auth.users for email: ${customerEmail}`);
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+
+        if (!authError && authUsers) {
+            const matchingUser = authUsers.users.find(u => u.email?.toLowerCase() === customerEmail);
+            if (matchingUser) {
+                userId = matchingUser.id;
+                console.log(`[Webhook] ✅ Found user in auth.users: ${userId}`);
+            }
+        } else {
+            console.error('[Webhook] Error searching auth.users:', authError);
+        }
     }
 
     if (!userId) {
         console.error(`[Webhook] ❌ CRITICAL: Cannot find user for session ${session.id}. Email: ${customerEmail}`);
-        await logError(supabase, null, 'checkout_no_user', 'User not found by metadata or email', null, { sessionId: session.id, email: customerEmail }, session.id, 'checkout.session.completed');
+        await logError(supabase, null, 'checkout_no_user', 'User not found', null, { sessionId: session.id, email: customerEmail }, session.id, 'checkout.session.completed');
         return;
     }
 
-    console.log(`[Webhook] ✅ Found user: ${userId}`);
+    console.log(`[Webhook] ✅ Processing for user: ${userId}`);
+
 
     // 2. GET PLAN INFO: Fetch subscription to get priceId and credits from config
     let planConfig = null;
@@ -210,7 +223,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
             return;
         }
 
-        // 2. FIND USER: Try subscription metadata, then customer metadata, then email
+        // 2. FIND USER: Try subscription metadata, then customer metadata, then auth.users email
         let userId = subscription.metadata?.userId;
 
         if (!userId) {
@@ -218,12 +231,18 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
             const customer = await stripe.customers.retrieve(invoice.customer as string) as any;
             userId = customer.metadata?.userId;
 
+            // Search auth.users by email (NOT profiles - no email column there!)
             if (!userId && customer.email) {
-                console.log(`[Webhook] Searching user by customer email: ${customer.email}`);
-                const { data } = await (supabase.from('profiles').select('id').eq('email', customer.email.toLowerCase()).single() as any);
-                userId = data?.id;
+                console.log(`[Webhook] Searching auth.users for: ${customer.email}`);
+                const { data: authUsers } = await supabase.auth.admin.listUsers();
+                const matchingUser = authUsers?.users.find(u => u.email?.toLowerCase() === customer.email.toLowerCase());
+                if (matchingUser) {
+                    userId = matchingUser.id;
+                    console.log(`[Webhook] ✅ Found user in auth.users: ${userId}`);
+                }
             }
         }
+
 
         if (!userId) {
             console.error(`[Webhook] ❌ Cannot find user for invoice ${invoice.id}`);
