@@ -74,18 +74,29 @@ export async function POST(req: Request) {
 
         let customerId = profile?.stripe_customer_id;
 
+        // 1. Get/Find Customer Logic
         if (!customerId) {
-            const customer = await stripe.customers.create({
+            // Try to find customer by email first to avoid duplicates
+            const existingCustomers = await stripe.customers.list({
                 email: userEmail || user.email,
-                metadata: { userId: userId },
+                limit: 1,
             });
-            customerId = customer.id;
 
-            // Save customer ID using Admin Client to bypass RLS restrictions on this system field
+            if (existingCustomers.data.length > 0) {
+                customerId = existingCustomers.data[0].id;
+            } else {
+                const customer = await stripe.customers.create({
+                    email: userEmail || user.email,
+                    metadata: { userId: userId },
+                });
+                customerId = customer.id;
+            }
+
+            // Save customer ID in Supabase
             await adminSupabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
         }
 
-        // 1.5 Handle special 'manage' priceId for Billing Portal
+        // 1.5 Handle special 'manage' priceId for Billing Portal (Main Portal)
         if (priceId === 'manage') {
             const portalSession = await stripe.billingPortal.sessions.create({
                 customer: customerId,
@@ -95,67 +106,52 @@ export async function POST(req: Request) {
         }
 
         // 2. Check for Existing Active Subscription
-        const subscriptions = await stripe.subscriptions.list({
+        // Use expanded data to ensure we have item IDs for updates
+        const activeSubscriptions = await stripe.subscriptions.list({
             customer: customerId,
             status: 'active',
-            limit: 1,
+            expand: ['data.default_payment_method'],
         });
 
-        const existingSubscription = subscriptions.data.find(sub => sub.status === 'active');
-        let session: Stripe.Checkout.Session | null = null;
+        const existingSubscription = activeSubscriptions.data[0];
         const targetPriceId = priceId;
 
-        if (existingSubscription) {
+        // 3. Flow Routing
+        if (existingSubscription && targetPriceId !== 'manage') {
             // --- UPDATING EXISTING SUBSCRIPTION ---
-            // Determine if Upgrade (Price Increase) or Downgrade
+            // If they are trying to buy the SAME plan they already have, just send to portal
+            const currentPriceId = existingSubscription.items.data[0].price.id;
+            if (currentPriceId === targetPriceId) {
+                const portalSession = await stripe.billingPortal.sessions.create({
+                    customer: customerId,
+                    return_url: successUrl,
+                });
+                return NextResponse.json({ url: portalSession.url });
+            }
 
-            const currentPriceItem = existingSubscription.items.data[0];
-            const currentPriceObj = currentPriceItem.price;
+            // For any other change (upgrade or downgrade), use the Portal Update flow
+            // This ensures Stripe handles proration, period ends, and "Plan Change" UI correctly
+            console.log(`[API] Redirecting active subscriber (${existingSubscription.id}) to Update Portal for price: ${targetPriceId}`);
 
-            // Fetch target price to compare amounts
-            const targetPriceObj = await stripe.prices.retrieve(targetPriceId);
-
-            const currentAmount = currentPriceObj.unit_amount || 0;
-            const targetAmount = targetPriceObj.unit_amount || 0;
-            const isUpgrade = targetAmount > currentAmount;
-
-            console.log(`[API] Processing subscription change. Current: ${currentAmount}, Target: ${targetAmount}. Is Upgrade? ${isUpgrade}`);
-
-            if (isUpgrade) {
-                // --- UPGRADE: Use Billing Portal with Update Flow ---
-                // User sees confirmation page.
-                console.log('[API] Upgrade: Redirecting to Billing Portal');
-
-                try {
-                    const portalSession = await stripe.billingPortal.sessions.create({
-                        customer: customerId,
-                        return_url: successUrl,
-                        flow_data: {
-                            type: 'subscription_update',
-                            subscription_update: {
-                                subscription: existingSubscription.id,
-                                items: [{
-                                    id: currentPriceItem.id,
-                                    price: targetPriceId,
-                                    quantity: 1,
-                                }],
-                            },
+            try {
+                const portalSession = await stripe.billingPortal.sessions.create({
+                    customer: customerId,
+                    return_url: successUrl,
+                    flow_data: {
+                        type: 'subscription_update',
+                        subscription_update: {
+                            subscription: existingSubscription.id,
+                            items: [{
+                                id: existingSubscription.items.data[0].id,
+                                price: targetPriceId,
+                                quantity: 1,
+                            }],
                         },
-                    } as any);
-                    return NextResponse.json({ url: portalSession.url });
-                } catch (e: any) {
-                    console.error('[API] Portal Upgrade Error, falling back to standard portal:', e);
-                    const portalSession = await stripe.billingPortal.sessions.create({
-                        customer: customerId,
-                        return_url: successUrl,
-                    });
-                    return NextResponse.json({ url: portalSession.url });
-                }
-
-            } else {
-                // --- DOWNGRADE: Solo redirigimos al portal normal para que Stripe lo gestione ---
-                // Stripe Customer Portal maneja los downgrades al final del periodo automáticamente si está configurado.
-                console.log('[API] Downgrade/Same: Redirecting to Portal');
+                    },
+                } as any);
+                return NextResponse.json({ url: portalSession.url });
+            } catch (e: any) {
+                console.error('[API] Portal Update Flow failed, falling back to general portal:', e);
                 const portalSession = await stripe.billingPortal.sessions.create({
                     customer: customerId,
                     return_url: successUrl,
@@ -165,22 +161,9 @@ export async function POST(req: Request) {
 
         } else {
             // --- NEW SUBSCRIPTION / ONE TIME PAYMENT ---
-
-            // Determine Mode: If targetPrice is strictly a one-time price (credits), use payment.
-            // But usually plans are subscriptions.
-            // Logic: Assume Subscription unless 'payment' mode requested or inferred?
-            // User passes isMonthly?
-            // "Buy Credits" uses this route too?
-            // If body.credits and NO planName, maybe it's credits?
-            // Let's assume passed 'mode' or default to subscription.
-
-            // Wait, previous code checked `isMonthly`.
-            // If `isMonthly` is not passed for credit packs, we assume payment?
-            // Actually, plans are always 'subscription'. Credit packs are 'payment'.
-            // Simple heuristic to differentiate:
             const mode = body.mode || 'subscription';
 
-            session = await stripe.checkout.sessions.create({
+            const session = await stripe.checkout.sessions.create({
                 payment_method_types: ['card'],
                 line_items: [
                     {
