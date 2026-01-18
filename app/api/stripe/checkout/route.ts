@@ -69,62 +69,58 @@ export async function POST(req: Request) {
         if (authEmail) emailQueries.push(`email:'${authEmail}'`);
         if (profileEmail && profileEmail !== authEmail) emailQueries.push(`email:'${profileEmail}'`);
 
-        // Search Customers
-        if (emailQueries.length > 0 || userId) {
-            try {
-                const query = [...emailQueries, `metadata['userId']:'${userId}'`].join(' OR ');
-                const searchResults = await stripe.customers.search({ query, limit: 20 });
-                console.log(`[STRIKE_SEARCH] Customers found: ${searchResults.data.length} for query: ${query}`);
-                searchResults.data.forEach(c => customersToSearch.add(c.id));
-            } catch (e) {
-                console.error('[STRIKE_SEARCH] Customer search failed:', e);
+        // Search Customers by Query (Search API)
+        try {
+            const query = [...emailQueries, `metadata['userId']:'${userId}'`].join(' OR ');
+            const searchResults = await stripe.customers.search({ query, limit: 20 });
+            searchResults.data.forEach(c => customersToSearch.add(c.id));
+            console.log(`[STRIKE_SEARCH] Search API found ${searchResults.data.length} customers.`);
+        } catch (e) {
+            console.error('[STRIKE_SEARCH] Customer search failed:', e);
+        }
+
+        // Search Customers by List (List API fallback/supplement)
+        for (const e of [authEmail, profileEmail]) {
+            if (e && e.length > 3) {
+                try {
+                    const listResults = await stripe.customers.list({ email: e, limit: 10 });
+                    listResults.data.forEach(c => customersToSearch.add(c.id));
+                } catch (e) { console.error(`[STRIKE_SEARCH] List by email ${e} failed:`, e); }
             }
         }
 
-        // --- NEW: DIRECT SUBSCRIPTION SEARCH ---
-        if (!existingSubscription && emailQueries.length > 0) {
-            try {
-                // We search for subscriptions where the customer's email matches
-                // Note: Subscription search doesn't support searching by customer email directly easily, 
-                // but we can search for the customers first (already did) or use the list with expansion.
+        console.log(`[STRIKE_SEARCH] Final candidate list (${customersToSearch.size}): ${Array.from(customersToSearch).join(', ')}`);
 
-                console.log(`[STRIKE_SEARCH] Attempting direct sub list scan for ${customersToSearch.size} customers...`);
-            } catch (e) { console.error('[STRIKE_SEARCH] Direct sub search failed:', e); }
-        }
-
-        // Scan ALL identified customers for ANY subscription (to check for sync issues)
+        // Scan EVERY customer for a live subscription
         let foundAnySub = false;
-        const scannedCustomers = Array.from(customersToSearch);
-        for (const cId of scannedCustomers) {
+        const allCandidates = Array.from(customersToSearch);
+        for (const cId of allCandidates) {
             try {
                 const subs = await stripe.subscriptions.list({
                     customer: cId as string,
                     status: 'all',
-                    limit: 20,
+                    limit: 10,
                     expand: ['data.items.data.price'],
                 });
 
-                console.log(`[STRIKE_SEARCH] Customer ${cId} has ${subs.data.length} subs in Stripe.`);
+                console.log(`[STRIKE_SEARCH] Checking CUST ${cId}: Found ${subs.data.length} subs.`);
+                if (subs.data.length > 0) foundAnySub = true;
 
-                for (const s of subs.data) {
-                    console.log(`[STRIKE_SEARCH] Found sub ${s.id} (Status: ${s.status}) on ${cId}`);
-                    foundAnySub = true;
+                // Find any "live" subscription
+                const liveSub = subs.data.find(s => ['active', 'trialing', 'past_due', 'incomplete'].includes(s.status));
 
-                    // If we find a LIVE subscription, use it!
-                    if (['active', 'trialing', 'past_due', 'incomplete'].includes(s.status)) {
-                        existingSubscription = s;
-                        customerId = cId as string;
-                        console.log(`[STRIKE_SEARCH] ✅ LIVE SUB MATCH: ${s.id}`);
-                        break;
-                    }
+                if (liveSub) {
+                    existingSubscription = liveSub;
+                    customerId = cId as string; // THIS IS THE ONE!
+                    console.log(`[STRIKE_SEARCH] ✅ LIVE SUB MATCH: ${liveSub.id} (Status: ${liveSub.status}) on CUST ${cId}`);
+                    break; // Stop looking, we found the active one
                 }
-                if (existingSubscription) break;
-            } catch (e) { console.error(`[STRIKE_SEARCH] Error scanning ${cId}:`, e); }
+            } catch (e) { console.error(`[STRIKE_SEARCH] Error scanning customer ${cId}:`, e); }
         }
 
         // --- NUCLEAR SCAN (LAST RESORT) ---
         if (!existingSubscription && isLikelySubscribed) {
-            console.log(`[STRIKE_SEARCH] ☢️ NUCLEAR SCAN STARTING. Account-wide search for ${authEmail}/${userId}`);
+            console.log(`[STRIKE_SEARCH] ☢️ NUCLEAR SCAN: User marked ${dbPlan}/${dbStatus} in DB but no sub found in candidate customers. Searching ALL subs in account...`);
             try {
                 const allSubs = await stripe.subscriptions.list({
                     status: 'all',
@@ -143,7 +139,7 @@ export async function POST(req: Request) {
                 if (match) {
                     existingSubscription = match;
                     customerId = (match.customer as any).id;
-                    console.log(`[STRIKE_SEARCH] ☢️ NUCLEAR MATCH: ${match.id} on ${customerId}`);
+                    console.log(`[STRIKE_SEARCH] ☢️ NUCLEAR MATCH: Found ${match.id} on ${customerId}`);
                 }
             } catch (e) { console.error('[STRIKE_SEARCH] Nuclear scan failed:', e); }
         }
