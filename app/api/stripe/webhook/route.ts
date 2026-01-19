@@ -241,5 +241,97 @@ export async function POST(request: Request) {
         }
     }
 
+    // Handle customer.subscription.updated (Plan Changes / Cancellations)
+    if (event.type === 'customer.subscription.updated') {
+        const sub = event.data.object as any;
+        console.log(`[Webhook] Subscription Updated: ${sub.id}, status=${sub.status}`);
+
+        // Get Metadata via expansion if needed, or re-fetch
+        // Note: Event object might not have expanded fields, so safer to fetch or use what's there if sufficient
+        // We'll trust the event data for speed, but if critical fields missing, fetch.
+
+        let userId = sub.metadata?.userId;
+        if (!userId) {
+            // Try to find customer
+            try {
+                const customer = await stripe.customers.retrieve(sub.customer as string) as any;
+                userId = customer.metadata?.userId;
+            } catch (e) { console.warn('Could not fetch customer for userId', e); }
+        }
+
+        if (userId) {
+            const supabase = getSupabase();
+
+            // Check if it's a cancellation (cancel_at_period_end = true)
+            if (sub.cancel_at_period_end) {
+                console.log(`[Webhook] User ${userId} canceled subscription (at period end)`);
+                await supabase.from('profiles').update({
+                    subscription_status: 'canceling', // Or keep 'active' but UI shows 'Ends on...'
+                    updated_at: new Date().toISOString()
+                }).eq('id', userId);
+            } else {
+                // It might be a plan change (Upgrade/Downgrade)
+                // We need to determine the new plan name
+                const priceId = sub.items?.data[0]?.price?.id;
+                if (priceId) {
+                    // We need to fetch product to get name if not in config
+                    let planName = 'Unknown';
+                    const planConfig = getPlanByPriceId(priceId);
+
+                    if (planConfig) {
+                        planName = planConfig.name;
+                    } else {
+                        // Fetch detailed sub to get product name
+                        try {
+                            const fullSub = await stripe.subscriptions.retrieve(sub.id, {
+                                expand: ['items.data.price.product']
+                            });
+                            const product = (fullSub.items.data[0].price.product as any);
+                            planName = product.name;
+                        } catch (e) { console.warn('Could not fetch detailed sub', e); }
+                    }
+
+                    console.log(`[Webhook] Updating plan for ${userId} to ${planName}`);
+                    await supabase.from('profiles').update({
+                        plan: planName,
+                        subscription_status: sub.status, // active, past_due, etc.
+                        subscription_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+                        updated_at: new Date().toISOString()
+                    }).eq('id', userId);
+                }
+            }
+            return NextResponse.json({ success: true, type: 'subscription_updated' });
+        }
+        return NextResponse.json({ warning: 'no_user_id_updated' });
+    }
+
+    // Handle customer.subscription.deleted (Final Cancellation)
+    if (event.type === 'customer.subscription.deleted') {
+        const sub = event.data.object as any;
+        console.log(`[Webhook] Subscription Deleted: ${sub.id}`);
+
+        let userId = sub.metadata?.userId;
+        if (!userId) {
+            try {
+                const customer = await stripe.customers.retrieve(sub.customer as string) as any;
+                userId = customer.metadata?.userId;
+            } catch (e) { }
+        }
+
+        if (userId) {
+            const supabase = getSupabase();
+            await supabase.from('profiles').update({
+                plan: 'Free', // Revert to Free? Or leave plan name but status canceled?
+                subscription_status: 'canceled',
+                subscription_period_end: null, // Or keep last date
+                updated_at: new Date().toISOString()
+            }).eq('id', userId);
+
+            console.log(`[Webhook] User ${userId} subscription marked canceled.`);
+            return NextResponse.json({ success: true, type: 'subscription_deleted' });
+        }
+        return NextResponse.json({ warning: 'no_user_id_deleted' });
+    }
+
     return NextResponse.json({ received: true });
 }

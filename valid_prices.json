@@ -1,0 +1,37 @@
+[
+  {
+    "productName": "Credit Top-up (75 Credits)",
+    "priceId": "price_1SrMTX3pHdaDhch33m3L4jKj",
+    "amount": 3.5,
+    "currency": "eur",
+    "type": "one_time"
+  },
+  {
+    "productName": "Single Video (75 Credits)",
+    "priceId": "price_1SrMTW3pHdaDhch3yIPQP2WZ",
+    "amount": 5,
+    "currency": "eur",
+    "type": "one_time"
+  },
+  {
+    "productName": "Elite",
+    "priceId": "price_1Smt4S3pHdaDhch3JQZ2Sd99",
+    "amount": 59,
+    "currency": "eur",
+    "type": "recurring"
+  },
+  {
+    "productName": "Pro",
+    "priceId": "price_1Smt4A3pHdaDhch3FI9DCmnU",
+    "amount": 34,
+    "currency": "eur",
+    "type": "recurring"
+  },
+  {
+    "productName": "Starter",
+    "priceId": "price_1Smt3w3pHdaDhch3uYpZJJ4g",
+    "amount": 19,
+    "currency": "eur",
+    "type": "recurring"
+  }
+]
