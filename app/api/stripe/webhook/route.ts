@@ -84,12 +84,40 @@ export async function POST(request: Request) {
             let priceId = '';
 
             if (session.subscription) {
-                const sub = await stripe.subscriptions.retrieve(session.subscription as string) as any;
-                priceId = sub.items.data[0].price.id;
+                // Expand price.product to access product metadata
+                const sub = await stripe.subscriptions.retrieve(session.subscription as string, {
+                    expand: ['items.data.price.product']
+                }) as any;
+
+                const item = sub.items.data[0];
+                const price = item.price;
+                const product = price.product;
+
+                priceId = price.id;
+
+                // 1. Try to get Plan Config from Config File (Legacy/Fast path)
                 const planConfig = getPlanByPriceId(priceId);
 
-                credits = planConfig?.credits || 0;
-                planName = planConfig?.name || 'Unknown';
+                // 2. Try to get Credits from Metadata (Dynamic/Robust path)
+                // Check Price metadata first, then Product metadata
+                const metaCredits = price.metadata?.credits || product.metadata?.credits;
+                const metaTier = price.metadata?.tier || product.metadata?.tier; // e.g. 'pro', 'elite'
+
+                if (metaCredits) {
+                    credits = parseInt(metaCredits);
+                    planName = product.name; // Use valid product name from Stripe
+                    console.log(`[Webhook] Found explicit credits in Stripe Metadata: ${credits}`);
+                } else if (planConfig) {
+                    // Fallback to config
+                    credits = planConfig.credits;
+                    planName = planConfig.name;
+                    console.log(`[Webhook] Using config.ts for plan: ${planName}`);
+                } else {
+                    console.warn(`[Webhook] Plan not found in config AND no metadata.credits found. PriceID: ${priceId}`);
+                    // Default to product name if available, even if 0 credits
+                    planName = product.name || 'Unknown';
+                }
+
                 periodEnd = new Date(sub.current_period_end * 1000).toISOString();
             }
 
@@ -142,8 +170,16 @@ export async function POST(request: Request) {
             const subId = invoice.subscription;
             if (!subId) return NextResponse.json({ skipped: 'no_sub' });
 
-            const sub = await stripe.subscriptions.retrieve(subId) as any;
-            const priceId = sub.items.data[0].price.id;
+            // Expand to get metadata
+            const sub = await stripe.subscriptions.retrieve(subId, {
+                expand: ['items.data.price.product']
+            }) as any;
+
+            const item = sub.items.data[0];
+            const price = item.price;
+            const product = price.product;
+            const priceId = price.id;
+
             const planConfig = getPlanByPriceId(priceId);
 
             // Resolve User ID (from sub metadata or customer metadata)
@@ -153,39 +189,55 @@ export async function POST(request: Request) {
                 userId = customer.metadata?.userId;
             }
 
-            if (userId && planConfig) {
+            // Determine Credits & Plan Name (Dynamic + Fallback)
+            let credits = 0;
+            let planName = 'Unknown';
+
+            const metaCredits = price.metadata?.credits || product.metadata?.credits;
+
+            if (metaCredits) {
+                credits = parseInt(metaCredits);
+                planName = product.name;
+            } else if (planConfig) {
+                credits = planConfig.credits;
+                planName = planConfig.name;
+            } else {
+                planName = product.name || 'Unknown';
+            }
+
+            if (userId) {
                 // Update Period
                 const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
                 const supabase = getSupabase();
 
                 const { error: profileError } = await supabase.from('profiles').update({
+                    plan: planName, // Update in case they upgraded/changed
+                    subscription_status: 'active',
                     subscription_period_end: periodEnd,
-                    subscription_status: 'active'
+                    updated_at: new Date().toISOString() // Ensure updated_at is touched
                 }).eq('id', userId);
 
-                if (profileError) {
-                    console.error('[Webhook] Profile Update Error (Renewal):', profileError);
-                    // Usually not critical if profile update fails (just status date), but bad.
+                if (profileError) console.error('[Webhook Renewal] Profile update failed:', profileError);
+
+                // Add Credits
+                if (credits > 0) {
+                    console.log(`[Webhook] Renewing ${credits} credits for ${userId} (${planName})`);
+                    try {
+                        await addCredits(supabase, userId, credits, 'subscription_refill', `Subscription Renewal: ${planName}`);
+                    } catch (err: any) {
+                        console.error('[WebhookRenewal] Credit add failed:', err);
+                    }
                 }
 
-                // Add Renewal Credits
-                try {
-                    console.log(`[Webhook] Adding ${planConfig.credits} credits to ${userId} (Renewal)`);
-                    await addCredits(supabase, userId, planConfig.credits, 'subscription_refill', `Monthly Refill: ${planConfig.name}`);
-                } catch (creditError: any) {
-                    console.error('[Webhook] Add Credits Error (Renewal):', creditError);
-                    throw new Error(`Credit addition failed: ${creditError.message}`);
-                }
-
-                return NextResponse.json({ success: true, type: 'renewal' });
+                return NextResponse.json({ success: true, type: 'renewal', credits });
+            } else {
+                console.warn('[Webhook] No userId found for renewal invoice:', invoice.id);
+                return NextResponse.json({ warning: 'no_user_id' });
             }
 
         } catch (err: any) {
-            console.error('[Webhook] invoice.paid error:', err);
-            return NextResponse.json({
-                error: 'Internal Server Error (Invoice)',
-                details: err.message
-            }, { status: 500 });
+            console.error('[Webhook] Renewal Error:', err);
+            return NextResponse.json({ error: err.message }, { status: 500 });
         }
     }
 
