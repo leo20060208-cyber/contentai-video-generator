@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { Menu, X, User, Coins } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
-
 import { usePathname } from 'next/navigation';
 
 import Image from 'next/image';
@@ -38,7 +37,7 @@ export function Navbar() {
             </Link>
 
             {/* Desktop Nav Items */}
-            <div className="hidden 2xl:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-3">
               <div className="h-4 w-px bg-white/10" />
 
               {/* VIDEO GROUP */}
@@ -64,7 +63,6 @@ export function Navbar() {
 
               {/* IMAGE GROUP */}
               <div className="flex items-center gap-4">
-
                 <span className="text-[10px] font-black bg-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">IMAGE</span>
                 <div className="h-4 w-px bg-white/20" />
                 <Link
@@ -99,14 +97,13 @@ export function Navbar() {
           </div>
 
           {/* Right Side */}
-          <div className="hidden 2xl:flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-6">
             {isLoading ? (
               <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
             ) : user ? (
               // Logged in: Pricing + Profile Icon
-              <div className="flex items-center gap-6">
-
-                <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4">
                   <Link href="/pricing" className="group">
                     <div className="flex items-center gap-2 bg-transparent px-3 py-1.5 rounded-full transition-colors">
                       {/* Plan Badge */}
@@ -142,7 +139,7 @@ export function Navbar() {
                 </div>
               </div>
             ) : (
-              // Not logged in: Pricing + Acceso + Inscribirse
+              // Not logged in: Pricing + Login + Signup
               <div className="flex items-center gap-4">
                 <Link
                   href="/pricing"
@@ -154,13 +151,13 @@ export function Navbar() {
                   href="/login"
                   className="px-4 py-2 text-sm font-medium text-white border border-zinc-700 rounded-lg hover:border-orange-500 hover:text-orange-500 transition-colors"
                 >
-                  Acceso
+                  Login
                 </Link>
                 <Link
                   href="/signup"
                   className="px-4 py-2 text-sm font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
                 >
-                  Inscribirse
+                  Sign Up
                 </Link>
               </div>
             )}
@@ -169,7 +166,7 @@ export function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="2xl:hidden w-10 h-10 flex items-center justify-center"
+            className="lg:hidden w-10 h-10 flex items-center justify-center"
           >
             {isMenuOpen ? (
               <X className="w-5 h-5 text-white" />
@@ -184,7 +181,7 @@ export function Navbar() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="2xl:hidden py-4 border-t border-zinc-900 bg-black"
+            className="lg:hidden py-4 border-t border-zinc-900 bg-black"
           >
             <div className="flex flex-col gap-4">
               {/* Mobile Video Section */}
@@ -278,14 +275,14 @@ export function Navbar() {
                       onClick={() => setIsMenuOpen(false)}
                       className="px-4 py-2 text-white"
                     >
-                      Acceso
+                      Login
                     </Link>
                     <Link
                       href="/signup"
                       onClick={() => setIsMenuOpen(false)}
                       className="px-4 py-2 text-orange-500 font-medium"
                     >
-                      Inscribirse
+                      Sign Up
                     </Link>
                   </>
                 )}

@@ -1,4 +1,4 @@
--- Update the magic_video_hub configuration to include custom titles and descriptions
+-- Update the magic_video_hub configuration to include new titles and descriptions
 UPDATE site_content
 SET content = jsonb_set(
     jsonb_set(
@@ -11,18 +11,18 @@ SET content = jsonb_set(
                         '"Living Backgrounds"'
                     ),
                     '{livingBackgrounds,description}',
-                    '"Animate products with high-end motion"'
+                    '"POWERED BY KLING AI"'
                 ),
                 '{directorsCut,title}',
-                '"Director''s Cut"'
+                '"Image to Video"'
             ),
             '{directorsCut,description}',
-            '"Professional scene-to-scene transitions"'
+            '"POWERED BY SORA 2"'
         ),
         '{instantClips,title}',
         '"Instant Product Clips"'
     ),
     '{instantClips,description}',
-    '"Magic is cooking..."'
+    '"COMING SOON"'
 )
 WHERE section_key = 'magic_video_hub';

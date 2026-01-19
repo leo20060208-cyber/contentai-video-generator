@@ -132,6 +132,7 @@ function PricingContentInner() {
                     planName: plan.name,
                     priceId: effectivePriceId,
                     credits: plan.credits,
+                    mode: plan.mode || 'subscription',
                     returnUrl,
                 })
             });
@@ -311,7 +312,14 @@ function PricingContentInner() {
                                 variant="outline"
                                 size="sm"
                                 className="min-w-[140px] border-blue-500/20 hover:bg-blue-500/10 hover:text-blue-400 text-xs h-9"
-                                onClick={() => handlePurchase({ name: 'Single Video', price: '€5', credits: 75, period: 'one-time', priceId: 'price_XXXXXXXXXXXXX' })} // TODO: Replace with actual Single Video price ID
+                                onClick={() => handlePurchase({
+                                    name: 'Single Video',
+                                    price: '€5',
+                                    credits: 75,
+                                    period: 'one-time',
+                                    priceId: 'price_1SrMTW3pHdaDhch3yIPQP2WZ',
+                                    mode: 'payment'
+                                })}
                                 disabled={!!isLoading}
                             >
                                 {isLoading === 'Single Video' ? (
@@ -416,7 +424,14 @@ function PricingContentInner() {
                                         variant="secondary"
                                         disabled={profile?.subscription_status !== 'active'}
                                         className="h-7 text-xs bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onClick={() => handlePurchase({ name: 'Instant Topup', price: '€3.50', credits: 75, period: 'one-time' })}
+                                        onClick={() => handlePurchase({
+                                            name: 'Instant Topup',
+                                            price: '€3.50',
+                                            credits: 75,
+                                            period: 'one-time',
+                                            priceId: 'price_1SrMTX3pHdaDhch33m3L4jKj',
+                                            mode: 'payment'
+                                        })}
                                     >
                                         Buy Now
                                     </Button>

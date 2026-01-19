@@ -154,10 +154,8 @@ Technical Requirement: The video MUST start exactly with the Start Frame, pass t
         };
 
         // Deduct credits
-        await adminSupabase
-            .from('profiles')
-            .update({ credits: profile.credits - creditCost })
-            .eq('id', user.id);
+        const { deductCredits } = await import('@/lib/credits');
+        await deductCredits(adminSupabase, user.id, creditCost, `Magic Video: Directors Cut (${duration}s)`);
 
         // Store generation task
         const { data: task, error: taskError } = await adminSupabase

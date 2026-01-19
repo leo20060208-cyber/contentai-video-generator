@@ -127,10 +127,8 @@ export async function POST(request: NextRequest) {
         const taskId = result.taskId;
 
         // Deduct credits
-        await adminSupabase
-            .from('profiles')
-            .update({ credits: profile.credits - creditCost })
-            .eq('id', user.id);
+        const { deductCredits } = await import('@/lib/credits');
+        await deductCredits(adminSupabase, user.id, creditCost, `Magic Video: Living Background (${duration}s)`);
 
         // Store generation task
         const { data: task, error: taskError } = await adminSupabase

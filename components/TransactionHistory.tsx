@@ -9,7 +9,7 @@ interface Transaction {
     id: string;
     amount: number;
     balance_after: number;
-    type: 'add' | 'deduct';
+    type: string;
     description: string;
     created_at: string;
 }
@@ -106,8 +106,8 @@ export function TransactionHistory({ userId }: { userId: string }) {
                         <div className="flex items-start justify-between gap-4">
                             {/* Left: Icon + Details */}
                             <div className="flex items-start gap-3 flex-1">
-                                <div className={`mt-0.5 ${transaction.type === 'add' ? 'text-green-500' : 'text-red-500'}`}>
-                                    {transaction.type === 'add' ? (
+                                <div className={`mt-0.5 ${transaction.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {transaction.amount > 0 ? (
                                         <ArrowUpCircle className="w-5 h-5" />
                                     ) : (
                                         <ArrowDownCircle className="w-5 h-5" />
@@ -126,8 +126,8 @@ export function TransactionHistory({ userId }: { userId: string }) {
 
                             {/* Right: Amount + Balance */}
                             <div className="text-right shrink-0">
-                                <p className={`text-sm font-bold ${transaction.type === 'add' ? 'text-green-500' : 'text-red-500'}`}>
-                                    {transaction.type === 'add' ? '+' : ''}{transaction.amount.toLocaleString()} credits
+                                <p className={`text-sm font-bold ${transaction.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                    {transaction.amount > 0 ? '+' : ''}{transaction.amount.toLocaleString()} credits
                                 </p>
                                 <p className="text-zinc-500 text-xs mt-0.5">
                                     Balance: {transaction.balance_after.toLocaleString()}

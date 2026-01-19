@@ -6,43 +6,43 @@ import { useCategories } from '@/hooks/useCategories';
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 
-interface HeroProps {
-    selectedCategory: string;
-    onCategoryChange: (category: string) => void;
+export interface HeroInitialData {
+    heroVideo: any;
+    heroImage: any;
+    libraryContent: any;
+    magicVideoConfig: any;
 }
 
-export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
+interface HeroProps {
+    selectedCategory?: string;
+    onCategoryChange?: (category: string) => void;
+    initialData: HeroInitialData;
+}
+
+export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroProps) {
     const { categories, loading } = useCategories();
     const [businessRows, setBusinessRows] = useState<string[][]>([]);
-    const [heroVideo, setHeroVideo] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const [heroImage, setHeroImage] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-    const [libraryContent, setLibraryContent] = useState<any>(null);
-    const [magicVideoConfig, setMagicVideoConfig] = useState<any>(null);
+    const [internalCategory, setInternalCategory] = useState('All');
 
-    useEffect(() => {
-        async function loadHeroContent() {
-            try {
-                const { getHeroTemplate } = await import('@/lib/db/videos');
-                const { getSectionContent } = await import('@/lib/db/content');
+    // Use prop if provided, otherwise internal state
+    const currentCategory = selectedCategory ?? internalCategory;
 
-                const [vid, img, lib, libContent, magicConfig] = await Promise.all([
-                    getHeroTemplate('video'),
-                    getHeroTemplate('image'),
-                    getHeroTemplate('library'), // Fetch library card content
-                    getSectionContent('what_we_do_v2'),
-                    getSectionContent('magic_video_hub')
-                ]);
+    // Use initial data directly, no need for effect to fetch it
+    const { heroVideo, heroImage, libraryContent, magicVideoConfig: rawMagicConfig } = initialData;
 
-                if (vid) setHeroVideo(vid);
-                if (img) setHeroImage(img);
-                if (libContent) setLibraryContent(libContent);
-                if (magicConfig) setMagicVideoConfig(magicConfig);
-            } catch (e) {
-                console.error("Failed to load hero content", e);
-            }
+    // Apply the overrides immediately
+    const magicVideoConfig = rawMagicConfig ? {
+        ...rawMagicConfig,
+        livingBackgrounds: {
+            ...rawMagicConfig.livingBackgrounds,
+            description: 'POWERED BY KLING AI'
+        },
+        directorsCut: {
+            ...rawMagicConfig.directorsCut,
+            title: 'Image to Video',
+            description: 'POWERED BY SORA 2'
         }
-        loadHeroContent();
-    }, []);
+    } : null;
 
     useEffect(() => {
         if (categories.length > 0) {
@@ -56,7 +56,12 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
     }, [categories]);
 
     const handleBusinessClick = (business: string) => {
-        onCategoryChange(business === selectedCategory ? 'All' : business);
+        const newCategory = business === currentCategory ? 'All' : business;
+        if (onCategoryChange) {
+            onCategoryChange(newCategory);
+        } else {
+            setInternalCategory(newCategory);
+        }
     };
 
     return (
@@ -72,9 +77,7 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
                         letterSpacing: '-0.02em'
                     }}
                 >
-                    RECREATE VIRAL PRODUCT
-                    <br />
-                    CONTENT IN SECONDS
+                    GENERATE VIRAL CONTENT IN SECONDS
                 </h1>
 
                 {/* Scrolling Marquee of Buttons */}
@@ -238,7 +241,7 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
                                         {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
                                     </h3>
                                     <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
-                                        {magicVideoConfig.livingBackgrounds?.description || 'Animate products with high-end motion'}
+                                        {magicVideoConfig.livingBackgrounds?.description || 'POWERED BY KLING AI'}
                                     </p>
                                 </div>
                             </div>
@@ -258,16 +261,16 @@ export function Hero({ selectedCategory, onCategoryChange }: HeroProps) {
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
                             <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                 <Link href="/magic-video/directors-cut" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                    {magicVideoConfig.directorsCut?.title || "Director's Cut"}
+                                    {magicVideoConfig.directorsCut?.title || "Image to Video"}
                                 </Link>
                             </div>
                             <div className="absolute bottom-4 left-4 right-4 z-20">
                                 <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
                                     <h3 className="text-white font-bold uppercase tracking-tight text-sm">
-                                        {magicVideoConfig.directorsCut?.title || "Director's Cut"}
+                                        {magicVideoConfig.directorsCut?.title || "Image to Video"}
                                     </h3>
                                     <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
-                                        {magicVideoConfig.directorsCut?.description || 'Professional scene-to-scene transitions'}
+                                        {magicVideoConfig.directorsCut?.description || 'POWERED BY SORA 2'}
                                     </p>
                                 </div>
                             </div>

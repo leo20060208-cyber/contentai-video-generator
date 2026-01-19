@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 import { getPlanByPriceId } from '@/lib/stripe/config';
+import { addCredits } from '@/lib/credits';
 
 export const runtime = 'nodejs';
 
@@ -47,64 +48,58 @@ export async function POST(request: Request) {
     if (event.type === 'checkout.session.completed') {
         try {
             const session = event.data.object as Stripe.Checkout.Session;
-
-            // Get userId - client_reference_id is THE reliable source
             const userId = session.client_reference_id;
             const customerId = session.customer as string;
+            const metadata = session.metadata || {};
 
-            console.log(`[Webhook] userId=${userId}, customerId=${customerId}`);
+            console.log(`[Webhook] userId=${userId}, type=${metadata.type}`);
 
             if (!userId) {
-                console.error('[Webhook] NO userId!');
                 return NextResponse.json({ error: 'no_user_id' }, { status: 400 });
             }
 
-            // Get subscription details
+            const supabase = getSupabase();
+
+            // Handle ONE-TIME PAYMENT
+            if (metadata.type === 'one_time') {
+                const credits = parseInt(metadata.credits || '0');
+                if (credits > 0) {
+                    await addCredits(supabase, userId, credits, 'purchase', 'One-Time Purchase');
+                }
+                return NextResponse.json({ success: true, type: 'one_time' });
+            }
+
+            // Handle SUBSCRIPTION START
+            // (metadata.type is 'subscription' or undefined for older flows)
             let credits = 0;
             let planName = 'Unknown';
             let periodEnd: string | null = null;
+            let priceId = '';
 
             if (session.subscription) {
                 const sub = await stripe.subscriptions.retrieve(session.subscription as string) as any;
-                const priceId = sub.items.data[0].price.id;
+                priceId = sub.items.data[0].price.id;
                 const planConfig = getPlanByPriceId(priceId);
 
                 credits = planConfig?.credits || 0;
                 planName = planConfig?.name || 'Unknown';
                 periodEnd = new Date(sub.current_period_end * 1000).toISOString();
-
-                console.log(`[Webhook] Plan: ${planName}, Credits: ${credits}`);
             }
 
-            // UPDATE PROFILE
-            const supabase = getSupabase();
-
-            const updateData: any = {
-                credits: credits,
+            // Update Profile Status (Plan & Subscription)
+            await supabase.from('profiles').update({
                 plan: planName,
                 subscription_status: 'active',
-                stripe_customer_id: customerId,
-            };
+                subscription_period_end: periodEnd,
+                stripe_customer_id: customerId
+            }).eq('id', userId);
 
-            if (periodEnd) {
-                updateData.subscription_period_end = periodEnd;
+            // Add Credits (Accumulate)
+            if (credits > 0) {
+                await addCredits(supabase, userId, credits, 'purchase', `Subscription Started: ${planName}`);
             }
 
-            console.log(`[Webhook] Updating profile ${userId}:`, updateData);
-
-            const { data, error } = await supabase
-                .from('profiles')
-                .update(updateData)
-                .eq('id', userId)
-                .select();
-
-            if (error) {
-                console.error('[Webhook] UPDATE ERROR:', error);
-                return NextResponse.json({ error: error.message }, { status: 500 });
-            }
-
-            console.log(`[Webhook] ✅ SUCCESS! Updated:`, data);
-            return NextResponse.json({ success: true, updated: data });
+            return NextResponse.json({ success: true, type: 'subscription_start' });
 
         } catch (err: any) {
             console.error('[Webhook] Handler error:', err);
@@ -112,79 +107,47 @@ export async function POST(request: Request) {
         }
     }
 
-    // Handle invoice.paid (renewals)
+    // Handle invoice.paid (Renewals)
     if (event.type === 'invoice.paid') {
         try {
             const invoice = event.data.object as any;
-            const subId = invoice.subscription;
-
-            if (!subId) {
-                return NextResponse.json({ skipped: 'no_subscription' });
+            if (invoice.billing_reason === 'subscription_create') {
+                // Already handled by checkout.session.completed
+                return NextResponse.json({ skipped: 'subscription_create' });
             }
+
+            const subId = invoice.subscription;
+            if (!subId) return NextResponse.json({ skipped: 'no_sub' });
 
             const sub = await stripe.subscriptions.retrieve(subId) as any;
             const priceId = sub.items.data[0].price.id;
             const planConfig = getPlanByPriceId(priceId);
 
-            // Try to get userId from subscription metadata
+            // Resolve User ID (from sub metadata or customer metadata)
             let userId = sub.metadata?.userId;
-
-            // Fallback: check line items
-            if (!userId && sub.items?.data?.[0]?.metadata?.userId) {
-                userId = sub.items.data[0].metadata.userId;
-            }
-
-            // Fallback: check customer metadata
             if (!userId) {
                 const customer = await stripe.customers.retrieve(invoice.customer) as any;
                 userId = customer.metadata?.userId;
             }
 
-            if (!userId || !planConfig) {
-                console.log(`[Webhook] invoice.paid skipped: userId=${userId}, plan=${planConfig?.name}`);
-                return NextResponse.json({ skipped: 'missing_data' });
-            }
+            if (userId && planConfig) {
+                // Update Period
+                const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
+                const supabase = getSupabase();
+                await supabase.from('profiles').update({
+                    subscription_period_end: periodEnd,
+                    subscription_status: 'active'
+                }).eq('id', userId);
 
-            const supabase = getSupabase();
+                // Add Renewal Credits
+                await addCredits(supabase, userId, planConfig.credits, 'subscription_refill', `Monthly Refill: ${planConfig.name}`);
 
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    credits: planConfig.credits,
-                    plan: planConfig.name,
-                    subscription_status: 'active',
-                    subscription_period_end: new Date(sub.current_period_end * 1000).toISOString(),
-                })
-                .eq('id', userId);
-
-            if (error) {
-                console.error('[Webhook] invoice.paid update error:', error);
-            } else {
-                console.log(`[Webhook] ✅ Renewed ${userId} with ${planConfig.credits} credits`);
+                return NextResponse.json({ success: true, type: 'renewal' });
             }
 
         } catch (err: any) {
             console.error('[Webhook] invoice.paid error:', err);
-        }
-    }
-
-    // Handle subscription deleted
-    if (event.type === 'customer.subscription.deleted') {
-        try {
-            const sub = event.data.object as any;
-            const userId = sub.metadata?.userId;
-
-            if (userId) {
-                const supabase = getSupabase();
-                await supabase
-                    .from('profiles')
-                    .update({ subscription_status: 'inactive' })
-                    .eq('id', userId);
-
-                console.log(`[Webhook] ✅ Subscription cancelled for ${userId}`);
-            }
-        } catch (err: any) {
-            console.error('[Webhook] subscription.deleted error:', err);
+            return NextResponse.json({ error: err.message }, { status: 500 });
         }
     }
 

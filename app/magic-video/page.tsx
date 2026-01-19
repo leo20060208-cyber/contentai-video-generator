@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { getSectionContent } from '@/lib/db/content';
 import { Loader2 } from 'lucide-react';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 interface MagicCard {
     mediaType: 'video' | 'image';
@@ -26,14 +27,14 @@ const defaultConfig: MagicVideoConfig = {
         mediaUrl: '',
         link: '/magic-video/living-backgrounds',
         title: 'Living Backgrounds',
-        description: 'Animate products with high-end motion'
+        description: 'POWERED BY KLING AI'
     },
     directorsCut: {
         mediaType: 'image',
         mediaUrl: '',
         link: '/magic-video/directors-cut',
-        title: "Director's Cut",
-        description: 'Professional scene-to-scene transitions'
+        title: "Image to Video",
+        description: 'POWERED BY SORA 2'
     },
     instantClips: {
         mediaType: 'image',
@@ -81,12 +82,22 @@ export default function MagicVideoPage() {
                 setConfig(prev => ({
                     ...prev,
                     ...(magicData || {}),
+                    // Force correct descriptions
+                    livingBackgrounds: {
+                        ...prev.livingBackgrounds,
+                        ...(magicData?.livingBackgrounds || {}),
+                        description: 'POWERED BY KLING AI'
+                    },
+                    directorsCut: {
+                        ...prev.directorsCut,
+                        ...(magicData?.directorsCut || {}),
+                        title: 'Image to Video',
+                        description: 'POWERED BY SORA 2'
+                    },
                     videoEditing: {
                         ...prev.videoEditing,
                         mediaUrl: videoEditingMedia,
                         mediaType: videoEditingType,
-                        // If specific title/desc exists in what_we_do_v2 for video editing, usage:
-                        // title: whatWeDoData.videoEditingTitle || prev.videoEditing.title
                     }
                 }));
 

@@ -113,12 +113,15 @@ export async function POST(req: Request) {
             return NextResponse.json({ url: portalSession.url });
         }
 
-        // 6. NEW USER: Create Checkout Session
-        console.log(`[Checkout] Creating new checkout for unsubscribed user`);
-        const session = await stripe.checkout.sessions.create({
+        // 6. NEW USER or ONE-TIME PAYMENT: Create Checkout Session
+        console.log(`[Checkout] Creating new checkout. Mode: ${body.mode || 'subscription'}`);
+
+        const mode = body.mode === 'payment' ? 'payment' : 'subscription';
+
+        const sessionPayload: any = {
             payment_method_types: ['card'],
             line_items: [{ price: priceId, quantity: 1 }],
-            mode: 'subscription',
+            mode: mode,
             success_url: successUrl,
             cancel_url: cancelUrl,
             customer: customerId,
@@ -127,12 +130,24 @@ export async function POST(req: Request) {
                 userId: userId,
                 planName: planConfig?.name || planName || '',
                 credits: planConfig?.credits?.toString() || credits?.toString() || '0',
+                type: mode === 'payment' ? 'one_time' : 'subscription' // Marker for webhook
             },
             allow_promotion_codes: true,
-            subscription_data: {
+        };
+
+        if (mode === 'subscription') {
+            sessionPayload.subscription_data = {
                 metadata: { userId: userId }
-            }
-        });
+            };
+        } else {
+            // For one-time payments, we can add invoice_creation enabled if needed, 
+            // but usually strictly not required for basic checkout.
+            sessionPayload.invoice_creation = {
+                enabled: true,
+            };
+        }
+
+        const session = await stripe.checkout.sessions.create(sessionPayload);
 
         return NextResponse.json({ url: session.url, sessionId: session.id });
 
