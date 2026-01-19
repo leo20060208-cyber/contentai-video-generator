@@ -6,19 +6,19 @@
 export const STRIPE_PLANS = {
     STARTER: {
         name: 'Starter',
-        priceId: 'price_1Sr0bj9qh0qVkdaIlhbcxNHJ', // Reemplaza con tus IDs finales si cambian
+        priceId: 'price_1Smt3w3pHdaDhch3uYpZJJ4g',
         credits: 400,
         tier: 'normal'
     },
     PRO: {
         name: 'Pro',
-        priceId: 'price_1Sr0bx9qh0qVkdaIDwuQEOkJ',
+        priceId: 'price_1Smt4A3pHdaDhch3FI9DCmnU',
         credits: 875,
         tier: 'pro'
     },
     ELITE: {
         name: 'Elite',
-        priceId: 'price_1Sr0cA9qh0qVkdaIk0GVjBN2',
+        priceId: 'price_1Smt4S3pHdaDhch3JQZ2Sd99',
         credits: 1600,
         tier: 'elite'
     }
