@@ -64,7 +64,14 @@ export async function POST(request: Request) {
             if (metadata.type === 'one_time') {
                 const credits = parseInt(metadata.credits || '0');
                 if (credits > 0) {
-                    await addCredits(supabase, userId, credits, 'purchase', 'One-Time Purchase');
+                    try {
+                        console.log(`[Webhook] Adding ${credits} credits to ${userId} (One-Time)`);
+                        await addCredits(supabase, userId, credits, 'purchase', 'One-Time Purchase');
+                    } catch (creditError: any) {
+                        console.error('[Webhook] Add Credits Error (One-Time):', creditError);
+                        // Fail so Stripe retries
+                        throw new Error(`Credit addition failed: ${creditError.message}`);
+                    }
                 }
                 return NextResponse.json({ success: true, type: 'one_time' });
             }
@@ -87,23 +94,39 @@ export async function POST(request: Request) {
             }
 
             // Update Profile Status (Plan & Subscription)
-            await supabase.from('profiles').update({
+            const { error: profileError } = await supabase.from('profiles').update({
                 plan: planName,
                 subscription_status: 'active',
                 subscription_period_end: periodEnd,
                 stripe_customer_id: customerId
             }).eq('id', userId);
 
+            if (profileError) {
+                console.error('[Webhook] Profile Update Error:', profileError);
+                throw new Error(`Profile update failed: ${profileError.message}`);
+            }
+
             // Add Credits (Accumulate)
             if (credits > 0) {
-                await addCredits(supabase, userId, credits, 'purchase', `Subscription Started: ${planName}`);
+                console.log(`[Webhook] Adding ${credits} credits to ${userId} (Sub Start: ${planName})`);
+                try {
+                    await addCredits(supabase, userId, credits, 'purchase', `Subscription Started: ${planName}`);
+                } catch (creditError: any) {
+                    console.error('[Webhook] Add Credits Error (Sub):', creditError);
+                    throw new Error(`Credit addition failed: ${creditError.message}`);
+                }
             }
 
             return NextResponse.json({ success: true, type: 'subscription_start' });
 
         } catch (err: any) {
             console.error('[Webhook] Handler error:', err);
-            return NextResponse.json({ error: err.message }, { status: 500 });
+            // Return detailed error to Stripe to help debugging
+            return NextResponse.json({
+                error: 'Internal Server Error',
+                details: err.message,
+                stack: err.stack
+            }, { status: 500 });
         }
     }
 
@@ -134,20 +157,35 @@ export async function POST(request: Request) {
                 // Update Period
                 const periodEnd = new Date(sub.current_period_end * 1000).toISOString();
                 const supabase = getSupabase();
-                await supabase.from('profiles').update({
+
+                const { error: profileError } = await supabase.from('profiles').update({
                     subscription_period_end: periodEnd,
                     subscription_status: 'active'
                 }).eq('id', userId);
 
+                if (profileError) {
+                    console.error('[Webhook] Profile Update Error (Renewal):', profileError);
+                    // Usually not critical if profile update fails (just status date), but bad.
+                }
+
                 // Add Renewal Credits
-                await addCredits(supabase, userId, planConfig.credits, 'subscription_refill', `Monthly Refill: ${planConfig.name}`);
+                try {
+                    console.log(`[Webhook] Adding ${planConfig.credits} credits to ${userId} (Renewal)`);
+                    await addCredits(supabase, userId, planConfig.credits, 'subscription_refill', `Monthly Refill: ${planConfig.name}`);
+                } catch (creditError: any) {
+                    console.error('[Webhook] Add Credits Error (Renewal):', creditError);
+                    throw new Error(`Credit addition failed: ${creditError.message}`);
+                }
 
                 return NextResponse.json({ success: true, type: 'renewal' });
             }
 
         } catch (err: any) {
             console.error('[Webhook] invoice.paid error:', err);
-            return NextResponse.json({ error: err.message }, { status: 500 });
+            return NextResponse.json({
+                error: 'Internal Server Error (Invoice)',
+                details: err.message
+            }, { status: 500 });
         }
     }
 
