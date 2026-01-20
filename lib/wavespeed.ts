@@ -27,7 +27,7 @@ export class WavespeedClient {
             prompt: params.prompt,
             output_format: 'png',
             enable_base64_output: false,
-            enable_sync_mode: true
+            enable_sync_mode: false
         };
 
         if (params.width && params.height) {

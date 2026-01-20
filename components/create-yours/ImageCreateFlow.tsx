@@ -469,12 +469,15 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         let finalUrl = null;
         if (data.url) finalUrl = data.url;
         else if (data.taskId) {
-            for (let i = 0; i < 40; i++) {
+            for (let i = 0; i < 60; i++) {
                 await new Promise(r => setTimeout(r, 2000));
                 const s = await fetch(`/api/image/status?taskId=${data.taskId}`).then(r => r.json());
                 if (s.status === 'completed') {
                     finalUrl = s.url;
                     break;
+                } else if (s.status === 'failed') {
+                    console.error('[Create] Task failed:', s);
+                    throw new Error(s.data?.error || s.error || "Generation failed by provider");
                 }
             }
         }
@@ -712,9 +715,9 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
             await processGenerationResponse(data, prompt);
             if (data.url || data.taskId) setViewMode('result');
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert('Generation failed or timed out');
+            alert(error.message || 'Generation failed or timed out');
         } finally {
             setIsGenerating(false);
         }
