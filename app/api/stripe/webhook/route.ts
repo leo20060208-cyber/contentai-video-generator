@@ -261,13 +261,14 @@ export async function POST(request: Request) {
         const sub = event.data.object as any;
         console.log(`[Webhook] Subscription Updated: ${sub.id}, status=${sub.status}`);
 
-        // Get Metadata via expansion if needed, or re-fetch
-        // Note: Event object might not have expanded fields, so safer to fetch or use what's there if sufficient
-        // We'll trust the event data for speed, but if critical fields missing, fetch.
+        // HARDCODED credit values
+        const CREDITS_BY_PRODUCT_NAME: Record<string, number> = {
+            'Starter': 400, 'Pro': 875, 'Elite': 1600,
+            'starter': 400, 'pro': 875, 'elite': 1600,
+        };
 
         let userId = sub.metadata?.userId;
         if (!userId) {
-            // Try to find customer
             try {
                 const customer = await stripe.customers.retrieve(sub.customer as string) as any;
                 userId = customer.metadata?.userId;
@@ -277,42 +278,48 @@ export async function POST(request: Request) {
         if (userId) {
             const supabase = getSupabase();
 
-            // Check if it's a cancellation (cancel_at_period_end = true)
+            // Check if it's a cancellation
             if (sub.cancel_at_period_end) {
                 console.log(`[Webhook] User ${userId} canceled subscription (at period end)`);
                 await supabase.from('profiles').update({
-                    subscription_status: 'canceling', // Or keep 'active' but UI shows 'Ends on...'
+                    subscription_status: 'canceling',
                     updated_at: new Date().toISOString()
                 }).eq('id', userId);
             } else {
-                // It might be a plan change (Upgrade/Downgrade)
-                // We need to determine the new plan name
-                const priceId = sub.items?.data[0]?.price?.id;
-                if (priceId) {
-                    // We need to fetch product to get name if not in config
-                    let planName = 'Unknown';
-                    const planConfig = getPlanByPriceId(priceId);
+                // Plan change (Upgrade/Downgrade) - fetch full subscription to get product name
+                try {
+                    const fullSub = await stripe.subscriptions.retrieve(sub.id, {
+                        expand: ['items.data.price.product']
+                    });
+                    const product = (fullSub.items.data[0].price.product as any);
+                    const productName = product.name;
 
-                    if (planConfig) {
-                        planName = planConfig.name;
-                    } else {
-                        // Fetch detailed sub to get product name
-                        try {
-                            const fullSub = await stripe.subscriptions.retrieve(sub.id, {
-                                expand: ['items.data.price.product']
-                            });
-                            const product = (fullSub.items.data[0].price.product as any);
-                            planName = product.name;
-                        } catch (e) { console.warn('Could not fetch detailed sub', e); }
+                    // Get credits from product name
+                    let credits = CREDITS_BY_PRODUCT_NAME[productName] || 0;
+                    if (credits === 0 && productName) {
+                        const lowerName = productName.toLowerCase();
+                        if (lowerName.includes('starter')) credits = 400;
+                        else if (lowerName.includes('elite')) credits = 1600;
+                        else if (lowerName.includes('pro')) credits = 875;
                     }
 
-                    console.log(`[Webhook] Updating plan for ${userId} to ${planName}`);
+                    console.log(`[Webhook] Plan change to ${productName} with ${credits} credits for user ${userId}`);
+
+                    // Update profile
                     await supabase.from('profiles').update({
-                        plan: planName,
-                        subscription_status: sub.status, // active, past_due, etc.
+                        plan: productName,
+                        subscription_status: sub.status,
                         subscription_period_end: new Date(sub.current_period_end * 1000).toISOString(),
                         updated_at: new Date().toISOString()
                     }).eq('id', userId);
+
+                    // ADD CREDITS on plan change (upgrade)
+                    if (credits > 0) {
+                        console.log(`[Webhook] Adding ${credits} credits for plan upgrade to ${productName}`);
+                        await addCredits(supabase, userId, credits, 'purchase', `Plan Changed to: ${productName}`);
+                    }
+                } catch (e) {
+                    console.error('[Webhook] Error processing subscription update:', e);
                 }
             }
             return NextResponse.json({ success: true, type: 'subscription_updated' });
