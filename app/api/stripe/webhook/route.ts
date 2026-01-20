@@ -77,16 +77,25 @@ export async function POST(request: Request) {
             }
 
             // Handle SUBSCRIPTION START
-            // (metadata.type is 'subscription' or undefined for older flows)
+            // HARDCODED credit values by product name - this is the SOURCE OF TRUTH
+            const CREDITS_BY_PRODUCT_NAME: Record<string, number> = {
+                'Starter': 400,
+                'Pro': 875,
+                'Elite': 1600,
+                // Fallbacks for variations
+                'starter': 400,
+                'pro': 875,
+                'elite': 1600,
+            };
+
             let credits = 0;
             let planName = 'Unknown';
             let periodEnd: string | null = null;
-            let priceId = '';
 
-            console.log(`[Webhook] session.subscription exists: ${!!session.subscription}, value: ${session.subscription || 'null'}`);
+            console.log(`[Webhook] session.subscription: ${session.subscription || 'null'}`);
 
             if (session.subscription) {
-                // Expand price.product to access product metadata
+                // Get subscription details from Stripe
                 const sub = await stripe.subscriptions.retrieve(session.subscription as string, {
                     expand: ['items.data.price.product']
                 }) as any;
@@ -94,52 +103,29 @@ export async function POST(request: Request) {
                 const item = sub.items.data[0];
                 const price = item.price;
                 const product = price.product;
+                const productName = product.name;
 
-                priceId = price.id;
-                console.log(`[Webhook] Processing subscription with priceId: ${priceId}`);
-                console.log(`[Webhook] Product name from Stripe: ${product.name}`);
+                console.log(`[Webhook] Product name from Stripe: "${productName}"`);
 
-                // 1. Try to get Plan Config from Config File (Legacy/Fast path)
-                const planConfig = getPlanByPriceId(priceId);
-                console.log(`[Webhook] planConfig lookup result:`, planConfig ? `Found: ${planConfig.name} with ${planConfig.credits} credits` : 'NOT FOUND');
+                // Get credits directly from product name - NO METADATA NEEDED
+                planName = productName;
+                credits = CREDITS_BY_PRODUCT_NAME[productName] || 0;
 
-                // 2. Try to get Credits from Metadata (Dynamic/Robust path)
-                // Check Price metadata first, then Product metadata
-                const metaCredits = price.metadata?.credits || product.metadata?.credits;
-                const metaTier = price.metadata?.tier || product.metadata?.tier; // e.g. 'pro', 'elite'
-                console.log(`[Webhook] Metadata credits: ${metaCredits || 'none'}`);
-
-                if (metaCredits) {
-                    credits = parseInt(metaCredits);
-                    planName = product.name; // Use valid product name from Stripe
-                    console.log(`[Webhook] Using Stripe Metadata credits: ${credits}`);
-                } else if (planConfig) {
-                    // Fallback to config - THIS IS THE EXPECTED PATH
-                    credits = planConfig.credits;
-                    planName = planConfig.name;
-                    console.log(`[Webhook] Using config.ts fallback: ${planName} = ${credits} credits`);
-                } else {
-                    console.error(`[Webhook] CRITICAL: Plan not found in config AND no metadata.credits! PriceID: ${priceId}`);
-                    // Default to product name if available, even if 0 credits
-                    planName = product.name || 'Unknown';
-                    credits = 0;
+                // If still 0, try case-insensitive match
+                if (credits === 0) {
+                    const lowerName = productName.toLowerCase();
+                    if (lowerName.includes('starter')) credits = 400;
+                    else if (lowerName.includes('elite')) credits = 1600;
+                    else if (lowerName.includes('pro')) credits = 875;
                 }
 
-                console.log(`[Webhook] Final credits to add: ${credits}, planName: ${planName}`);
+                console.log(`[Webhook] Credits resolved: ${credits} for plan "${planName}"`);
                 periodEnd = new Date(sub.current_period_end * 1000).toISOString();
             } else {
-                // No subscription ID in session - this shouldn't happen for subscription checkouts!
-                console.error(`[Webhook] CRITICAL: session.subscription is NULL! This means no credits will be assigned!`);
-                console.log(`[Webhook] Session mode: ${session.mode}`);
-                console.log(`[Webhook] Session metadata: ${JSON.stringify(metadata)}`);
-
-                // Fallback: Try to get plan info from session metadata if present
-                // Note: Checkout sends 'planName' and 'credits' in metadata
-                if (metadata.planName && metadata.credits) {
-                    planName = metadata.planName;
-                    credits = parseInt(metadata.credits);
-                    console.log(`[Webhook] Using session metadata fallback: ${planName} = ${credits} credits`);
-                }
+                // Fallback: get from session metadata
+                console.warn(`[Webhook] No subscription in session, using metadata fallback`);
+                planName = metadata.planName || 'Unknown';
+                credits = parseInt(metadata.credits || '0');
             }
 
             console.log(`[Webhook] Before profile update - credits: ${credits}, planName: ${planName}`);
@@ -205,9 +191,13 @@ export async function POST(request: Request) {
             const item = sub.items.data[0];
             const price = item.price;
             const product = price.product;
-            const priceId = price.id;
+            const productName = product.name;
 
-            const planConfig = getPlanByPriceId(priceId);
+            // HARDCODED credit values - same as checkout handler
+            const CREDITS_BY_PRODUCT_NAME: Record<string, number> = {
+                'Starter': 400, 'Pro': 875, 'Elite': 1600,
+                'starter': 400, 'pro': 875, 'elite': 1600,
+            };
 
             // Resolve User ID (from sub metadata or customer metadata)
             let userId = sub.metadata?.userId;
@@ -216,21 +206,19 @@ export async function POST(request: Request) {
                 userId = customer.metadata?.userId;
             }
 
-            // Determine Credits & Plan Name (Dynamic + Fallback)
-            let credits = 0;
-            let planName = 'Unknown';
+            // Get credits directly from product name
+            let credits = CREDITS_BY_PRODUCT_NAME[productName] || 0;
+            let planName = productName || 'Unknown';
 
-            const metaCredits = price.metadata?.credits || product.metadata?.credits;
-
-            if (metaCredits) {
-                credits = parseInt(metaCredits);
-                planName = product.name;
-            } else if (planConfig) {
-                credits = planConfig.credits;
-                planName = planConfig.name;
-            } else {
-                planName = product.name || 'Unknown';
+            // Case-insensitive fallback
+            if (credits === 0 && productName) {
+                const lowerName = productName.toLowerCase();
+                if (lowerName.includes('starter')) credits = 400;
+                else if (lowerName.includes('elite')) credits = 1600;
+                else if (lowerName.includes('pro')) credits = 875;
             }
+
+            console.log(`[Webhook Renewal] Product: "${productName}", Credits: ${credits}`);
 
             if (userId) {
                 // Update Period
