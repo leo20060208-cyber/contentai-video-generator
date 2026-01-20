@@ -200,10 +200,28 @@ export async function POST(request: Request) {
             };
 
             // Resolve User ID (from sub metadata or customer metadata)
+            const customerId = invoice.customer as string;
             let userId = sub.metadata?.userId;
+
+            // Fallback 1: Check customer metadata
             if (!userId) {
-                const customer = await stripe.customers.retrieve(invoice.customer) as any;
+                const customer = await stripe.customers.retrieve(customerId) as any;
                 userId = customer.metadata?.userId;
+            }
+
+            // Fallback 2: Look up user by stripe_customer_id in Supabase
+            if (!userId && customerId) {
+                console.log(`[Webhook Renewal] Looking up user by stripe_customer_id: ${customerId}`);
+                const tempSupabase = getSupabase();
+                const { data: profile } = await tempSupabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('stripe_customer_id', customerId)
+                    .single();
+                if (profile?.id) {
+                    userId = profile.id;
+                    console.log(`[Webhook Renewal] Found userId: ${userId}`);
+                }
             }
 
             // Get credits directly from product name
@@ -268,12 +286,33 @@ export async function POST(request: Request) {
         };
 
         let userId = sub.metadata?.userId;
+        const customerId = sub.customer as string;
+
+        // Fallback 1: Check customer metadata
         if (!userId) {
             try {
-                const customer = await stripe.customers.retrieve(sub.customer as string) as any;
+                const customer = await stripe.customers.retrieve(customerId) as any;
                 userId = customer.metadata?.userId;
+                console.log(`[Webhook] userId from customer metadata: ${userId || 'not found'}`);
             } catch (e) { console.warn('Could not fetch customer for userId', e); }
         }
+
+        // Fallback 2: Look up user by stripe_customer_id in Supabase
+        if (!userId && customerId) {
+            console.log(`[Webhook] Looking up user by stripe_customer_id: ${customerId}`);
+            const supabase = getSupabase();
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('stripe_customer_id', customerId)
+                .single();
+            if (profile?.id) {
+                userId = profile.id;
+                console.log(`[Webhook] Found userId from profiles table: ${userId}`);
+            }
+        }
+
+        console.log(`[Webhook] Final userId resolved: ${userId || 'NOT FOUND'}`);
 
         if (userId) {
             const supabase = getSupabase();
