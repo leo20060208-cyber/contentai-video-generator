@@ -83,6 +83,8 @@ export async function POST(request: Request) {
             let periodEnd: string | null = null;
             let priceId = '';
 
+            console.log(`[Webhook] session.subscription exists: ${!!session.subscription}, value: ${session.subscription || 'null'}`);
+
             if (session.subscription) {
                 // Expand price.product to access product metadata
                 const sub = await stripe.subscriptions.retrieve(session.subscription as string, {
@@ -94,32 +96,53 @@ export async function POST(request: Request) {
                 const product = price.product;
 
                 priceId = price.id;
+                console.log(`[Webhook] Processing subscription with priceId: ${priceId}`);
+                console.log(`[Webhook] Product name from Stripe: ${product.name}`);
 
                 // 1. Try to get Plan Config from Config File (Legacy/Fast path)
                 const planConfig = getPlanByPriceId(priceId);
+                console.log(`[Webhook] planConfig lookup result:`, planConfig ? `Found: ${planConfig.name} with ${planConfig.credits} credits` : 'NOT FOUND');
 
                 // 2. Try to get Credits from Metadata (Dynamic/Robust path)
                 // Check Price metadata first, then Product metadata
                 const metaCredits = price.metadata?.credits || product.metadata?.credits;
                 const metaTier = price.metadata?.tier || product.metadata?.tier; // e.g. 'pro', 'elite'
+                console.log(`[Webhook] Metadata credits: ${metaCredits || 'none'}`);
 
                 if (metaCredits) {
                     credits = parseInt(metaCredits);
                     planName = product.name; // Use valid product name from Stripe
-                    console.log(`[Webhook] Found explicit credits in Stripe Metadata: ${credits}`);
+                    console.log(`[Webhook] Using Stripe Metadata credits: ${credits}`);
                 } else if (planConfig) {
-                    // Fallback to config
+                    // Fallback to config - THIS IS THE EXPECTED PATH
                     credits = planConfig.credits;
                     planName = planConfig.name;
-                    console.log(`[Webhook] Using config.ts for plan: ${planName}`);
+                    console.log(`[Webhook] Using config.ts fallback: ${planName} = ${credits} credits`);
                 } else {
-                    console.warn(`[Webhook] Plan not found in config AND no metadata.credits found. PriceID: ${priceId}`);
+                    console.error(`[Webhook] CRITICAL: Plan not found in config AND no metadata.credits! PriceID: ${priceId}`);
                     // Default to product name if available, even if 0 credits
                     planName = product.name || 'Unknown';
+                    credits = 0;
                 }
 
+                console.log(`[Webhook] Final credits to add: ${credits}, planName: ${planName}`);
                 periodEnd = new Date(sub.current_period_end * 1000).toISOString();
+            } else {
+                // No subscription ID in session - this shouldn't happen for subscription checkouts!
+                console.error(`[Webhook] CRITICAL: session.subscription is NULL! This means no credits will be assigned!`);
+                console.log(`[Webhook] Session mode: ${session.mode}`);
+                console.log(`[Webhook] Session metadata: ${JSON.stringify(metadata)}`);
+
+                // Fallback: Try to get plan info from session metadata if present
+                // Note: Checkout sends 'planName' and 'credits' in metadata
+                if (metadata.planName && metadata.credits) {
+                    planName = metadata.planName;
+                    credits = parseInt(metadata.credits);
+                    console.log(`[Webhook] Using session metadata fallback: ${planName} = ${credits} credits`);
+                }
             }
+
+            console.log(`[Webhook] Before profile update - credits: ${credits}, planName: ${planName}`);
 
             // Update Profile Status (Plan & Subscription)
             const { error: profileError } = await supabase.from('profiles').update({
@@ -139,13 +162,17 @@ export async function POST(request: Request) {
                 console.log(`[Webhook] Adding ${credits} credits to ${userId} (Sub Start: ${planName})`);
                 try {
                     await addCredits(supabase, userId, credits, 'purchase', `Subscription Started: ${planName}`);
+                    console.log(`[Webhook] SUCCESS: ${credits} credits added to user ${userId}`);
                 } catch (creditError: any) {
                     console.error('[Webhook] Add Credits Error (Sub):', creditError);
                     throw new Error(`Credit addition failed: ${creditError.message}`);
                 }
+            } else {
+                console.warn(`[Webhook] WARNING: credits is ${credits}, skipping credit addition!`);
             }
 
-            return NextResponse.json({ success: true, type: 'subscription_start' });
+            console.log(`[Webhook] checkout.session.completed finished for user ${userId}`);
+            return NextResponse.json({ success: true, type: 'subscription_start', credits_added: credits });
 
         } catch (err: any) {
             console.error('[Webhook] Handler error:', err);
