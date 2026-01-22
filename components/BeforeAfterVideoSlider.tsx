@@ -15,6 +15,8 @@ interface BeforeAfterVideoSliderProps {
     baseMode?: 'reference' | 'product';
     onBaseModeChange?: (mode: 'reference' | 'product') => void;
     showBaseToggle?: boolean;
+    // Compare button
+    onCompareClick?: () => void;
 }
 
 export function BeforeAfterVideoSlider({
@@ -25,7 +27,8 @@ export function BeforeAfterVideoSlider({
     className = '',
     baseMode = 'reference',
     onBaseModeChange,
-    showBaseToggle = false
+    showBaseToggle = false,
+    onCompareClick
 }: BeforeAfterVideoSliderProps) {
     const [sliderPosition, setSliderPosition] = useState(50); // 0-100%
     const [isPlaying, setIsPlaying] = useState(false);
@@ -211,10 +214,10 @@ export function BeforeAfterVideoSlider({
 
             {/* Controls Below - Spread across bottom */}
             <div className="flex items-center justify-between w-full">
-                {/* Left: Base Toggle */}
-                <div className="flex items-center gap-2 min-w-[140px]">
+                {/* Left: Base Toggle + Compare Button */}
+                <div className="flex flex-col gap-2 min-w-[200px]">
                     {showBaseToggle && onBaseModeChange && (
-                        <>
+                        <div className="flex items-center gap-2">
                             <button
                                 onClick={() => onBaseModeChange('reference')}
                                 className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${baseMode === 'reference' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
@@ -227,7 +230,15 @@ export function BeforeAfterVideoSlider({
                             >
                                 Product
                             </button>
-                        </>
+                        </div>
+                    )}
+                    {onCompareClick && (
+                        <button
+                            onClick={onCompareClick}
+                            className="px-4 py-2 bg-purple-500/90 hover:bg-purple-500 text-white font-bold uppercase text-[10px] tracking-wider rounded-md shadow-lg transition-all"
+                        >
+                            Compare
+                        </button>
                     )}
                 </div>
 

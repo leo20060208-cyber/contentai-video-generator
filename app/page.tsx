@@ -2,6 +2,10 @@ import { Hero } from '@/components/landing/Hero';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
+// Force dynamic rendering to ensure hero content updates immediately
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Server-side safe Supabase client for public data
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';

@@ -36,6 +36,7 @@ import { supabase } from '@/lib/supabase';
 import { Template } from '@/lib/db/videos';
 import { BeforeAfterVideoSlider } from '@/components/BeforeAfterVideoSlider';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
+import { BeforeAfterComparison } from '@/components/BeforeAfterComparison';
 
 // Available Models
 const ALL_MODELS = [
@@ -103,7 +104,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         videoUrl: string | null;
     }>({ status: 'idle', taskId: null, videoUrl: null });
 
-    const [viewMode, setViewMode] = useState<'workspace' | 'result'>('workspace');
+    const [viewMode, setViewMode] = useState<'workspace' | 'result' | 'comparison'>('workspace');
     const [activeComparison, setActiveComparison] = useState<'reference' | 'result'>('result');
     const [activeBase, setActiveBase] = useState<'reference' | 'product'>('reference');
     const [timer, setTimer] = useState(0);
@@ -459,7 +460,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                         </Button>
                         <h1 className="text-xl font-bold text-white uppercase tracking-wider">{template.title}</h1>
                     </div>
-                    {genState.videoUrl && (
+                    {(template?.before_video_url || template?.after_video_url) && (
                         <div className="flex bg-white/5 rounded-sm p-1 gap-1 border border-white/10">
                             <button onClick={() => setViewMode('workspace')} className={`px-3 py-1 text-[10px] rounded-sm transition-colors ${viewMode === 'workspace' ? 'bg-white text-black font-bold' : 'text-zinc-400 hover:text-white'}`}>Workspace</button>
                             <button onClick={() => setViewMode('result')} className={`px-3 py-1 text-[10px] rounded-sm transition-colors ${viewMode === 'result' ? 'bg-green-500 text-black font-bold' : 'text-zinc-400 hover:text-white'}`}>Result</button>
@@ -693,36 +694,12 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                                                 onBaseModeChange={setActiveBase}
 
                                                 // OVERLAY (Top): Toggle betwen Result (measured) or Reference (Template target)
-                                                // Usually we compare Result vs Reference Base. 
-                                                // If we toggle base to product, we compare Result vs Product.
                                                 afterVideoUrl={activeComparison === 'result' ? (genState.videoUrl || template.after_video_url) : (template.after_video_url || template.before_video_url)}
+
+                                                // Compare button handler
+                                                onCompareClick={() => setViewMode('comparison')}
                                             />
 
-
-
-                                            {/* Toggle Control Overlay - Top Right (Comparison Target) */}
-                                            {genState.videoUrl && (
-                                                <div className="absolute top-4 right-4 z-30 flex bg-black/60 backdrop-blur-md rounded-lg p-1 border border-white/10 shadow-xl opacity-0 group-hover/slider:opacity-100 transition-opacity duration-300">
-                                                    <button
-                                                        onClick={() => setActiveComparison('reference')}
-                                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${activeComparison === 'reference'
-                                                            ? 'bg-zinc-100 text-black shadow-sm'
-                                                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                                                            }`}
-                                                    >
-                                                        Compare to Ref
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setActiveComparison('result')}
-                                                        className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${activeComparison === 'result'
-                                                            ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-sm'
-                                                            : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                                                            }`}
-                                                    >
-                                                        Result
-                                                    </button>
-                                                </div>
-                                            )}
                                         </div>
                                     ) : (
                                         <div className="text-zinc-500 flex flex-col items-center gap-2">
@@ -731,12 +708,36 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                                         </div>
                                     )}
                                 </div>
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-black rounded-sm overflow-hidden">
-                                    {genState.videoUrl ? (
-                                        <video src={genState.videoUrl} controls autoPlay loop className="max-w-full max-h-full" />
+                            ) : viewMode === 'result' ? (
+                                <div className="w-full h-full flex items-center justify-center">
+                                    {template.before_video_url ? (
+                                        <div className="max-w-4xl w-full h-full md:h-[65vh] relative rounded-sm overflow-hidden">
+                                            {(genState.videoUrl || template?.after_video_url) ? (
+                                                <video src={genState.videoUrl || template.after_video_url!} controls autoPlay loop className="w-full h-full object-contain bg-black" />
+                                            ) : (
+                                                <div className="w-full h-full bg-black flex items-center justify-center">
+                                                    <span className="text-zinc-500">No result video</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
-                                        <span className="text-zinc-500">No result</span>
+                                        <span className="text-zinc-500">No base video for this template</span>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                    {template.before_video_url ? (
+                                        <div className="max-w-4xl w-full h-full md:h-[65vh] relative">
+                                            <BeforeAfterComparison
+                                                beforeUrl={template.before_video_url || null}
+                                                afterUrl={genState.videoUrl || template?.after_video_url || null}
+                                                type="video"
+                                                beforeLabel="Original"
+                                                afterLabel="Result"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <span className="text-zinc-500">No base video for this template</span>
                                     )}
                                 </div>
                             )}

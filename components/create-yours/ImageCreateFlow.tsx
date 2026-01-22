@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { getSectionContent } from '@/lib/db/content';
 import { SavedMasksModal } from '@/components/SavedMasksModal';
 import { BeforeAfterSlider } from '@/components/BeforeAfterSlider';
+import { BeforeAfterComparison } from '@/components/BeforeAfterComparison';
 import { RefreshCcw } from 'lucide-react';
 
 // Types
@@ -78,7 +79,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedImage, setGeneratedImage] = useState<string | null>(initialResultImage || null);
     const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'error' | null>(null);
-    const [viewMode, setViewMode] = useState<'workspace' | 'result'>('workspace'); // Toggle view - always start in workspace
+    const [viewMode, setViewMode] = useState<'workspace' | 'result' | 'comparison'>('workspace'); // Toggle view - always start in workspace
 
     // State for Aspect Ratio
     const [aspectRatio, setAspectRatio] = useState<number>(16 / 9);
@@ -802,7 +803,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                     <Sparkles className="w-5 h-5 text-zinc-400" /> AI Image Studio
                 </h1>
                 <div className="flex gap-2">
-                    {generatedImage && generatedImage !== initialResultImage && (
+                    {(generatedImage || initialResultImage) && (
                         <div className="flex bg-white/5 rounded-sm p-1 gap-1 border border-white/10">
                             <button
                                 onClick={() => setViewMode('workspace')}
@@ -1179,22 +1180,33 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
 
                                 {/* Control Bar - Minimal */}
-                                <div className="w-full max-w-4xl mt-4 flex items-center justify-center gap-4">
-                                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mr-2">Compare:</span>
-                                    <button
-                                        onClick={() => setBeforeImageSource('reference')}
-                                        className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${beforeImageSource === 'reference' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
-                                    >
-                                        Reference
-                                    </button>
-                                    {initialProductImage && (
+                                <div className="w-full max-w-4xl mt-4 flex flex-col gap-2">
+                                    <div className="flex items-center justify-center gap-4">
+                                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mr-2">Compare:</span>
                                         <button
-                                            onClick={() => setBeforeImageSource('product')}
-                                            className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${beforeImageSource === 'product' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                                            onClick={() => setBeforeImageSource('reference')}
+                                            className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${beforeImageSource === 'reference' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
                                         >
-                                            Product
+                                            Reference
                                         </button>
-                                    )}
+                                        {initialProductImage && (
+                                            <button
+                                                onClick={() => setBeforeImageSource('product')}
+                                                className={`px-4 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${beforeImageSource === 'product' ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
+                                            >
+                                                Product
+                                            </button>
+                                        )}
+                                    </div>
+                                    {/* Compare Button - Below Reference/Product */}
+                                    <div className="flex justify-center">
+                                        <button
+                                            onClick={() => setViewMode('comparison')}
+                                            className="px-6 py-2 bg-purple-500/90 hover:bg-purple-500 text-white font-bold uppercase text-[10px] tracking-wider rounded-md shadow-lg transition-all"
+                                        >
+                                            Compare
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -1414,6 +1426,19 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                     </button>
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {/* View: COMPARISON */}
+                    {viewMode === 'comparison' && (initialResultImage || generatedImage) && (
+                        <div className="w-full h-full p-4">
+                            <BeforeAfterComparison
+                                beforeUrl={initialReferenceImage || referenceImage}
+                                afterUrl={initialResultImage || generatedImage}
+                                type="image"
+                                beforeLabel="Original"
+                                afterLabel="Result"
+                            />
                         </div>
                     )}
                 </div>
