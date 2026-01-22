@@ -13,7 +13,22 @@ interface DirectorsCutEditorProps {
     onBack: () => void;
 }
 
-export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
+interface PromptPreset {
+    id: string;
+    name: string;
+    category: string;
+    prompt_template: string;
+    description?: string;
+    preview_video_url?: string | null;
+}
+
+interface DirectorsCutEditorProps {
+    onBack: () => void;
+    initialDefaultPrompt?: string;
+    initialPresets?: PromptPreset[];
+}
+
+export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPresets = [] }: DirectorsCutEditorProps) {
     const router = useRouter();
     const [startImage, setStartImage] = useState<string | null>(null);
     const [midImages, setMidImages] = useState<string[]>([]);
@@ -21,26 +36,89 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
     const [selectedFrame, setSelectedFrame] = useState<{ type: 'start' | 'mid' | 'end', index?: number }>({ type: 'start' });
 
     const [userPrompt, setUserPrompt] = useState('');
-    const [basePrompt, setBasePrompt] = useState('Create a smooth, cinematic transition between these frames.');
+    const [basePrompt, setBasePrompt] = useState('Create a smooth, cinematic transition between these frames. Maintain consistency in lighting, style, and subject matter throughout the sequence.');
 
+    // Base Default Prompt (from DB) - Use prop or fallback
+    const [dbDefaultPrompt, setDbDefaultPrompt] = useState(initialDefaultPrompt || 'Create a smooth, cinematic transition between these frames. Maintain consistency in lighting, style, and subject matter throughout the sequence.');
+
+    // We can skip client-side fetch if we have initial prop, but for robustness:
     useEffect(() => {
+        if (initialDefaultPrompt) return; // Skip if provided
+
         async function loadPrompt() {
             try {
                 const data = await getSectionContent('directors_cut_default_prompt');
                 if (data?.prompt) {
-                    setBasePrompt(data.prompt);
+                    setDbDefaultPrompt(data.prompt);
                 }
             } catch (e) { console.error(e); }
         }
         loadPrompt();
-    }, []);
+    }, [initialDefaultPrompt]);
+
+    const [selectedPreset, setSelectedPreset] = useState<PromptPreset | null>(null);
+    const [duration, setDuration] = useState<4 | 8>(4);
+
+    // Build Base Prompt (Concatenation)
+    useEffect(() => {
+        let parts = [dbDefaultPrompt];
+
+        if (selectedPreset) {
+            parts.push(selectedPreset.prompt_template);
+        }
+
+        // Duration Requirement
+        parts.push(`\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${duration} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.`);
+
+        setBasePrompt(parts.join(' '));
+    }, [dbDefaultPrompt, selectedPreset, duration]);
+
+    // Presets State
+    const [presets, setPresets] = useState<PromptPreset[]>(initialPresets);
+    const [showPresets, setShowPresets] = useState(false);
+    const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+    const [hoveredPreset, setHoveredPreset] = useState<string | null>(null);
+    const [previewPreset, setPreviewPreset] = useState<PromptPreset | null>(null);
+
+    useEffect(() => {
+        if (initialPresets && initialPresets.length > 0) return; // Skip if provided
+
+        const fetchPresets = async () => {
+            const { data } = await supabase
+                .from('prompt_presets')
+                .select('*')
+                .eq('category', 'transition')
+                .order('created_at', { ascending: false });
+
+            if (data) setPresets(data);
+        };
+        fetchPresets();
+    }, [initialPresets]);
+
+
+    const openPreview = (preset: PromptPreset) => {
+        setPreviewPreset(preset);
+        setShowPresets(false);
+    };
+
+    const confirmPresetSelection = (preset: PromptPreset) => {
+        if (selectedPresetId === preset.id) {
+            // Deselect
+            setSelectedPresetId(null);
+            setSelectedPreset(null);
+        } else {
+            setSelectedPresetId(preset.id);
+            setSelectedPreset(preset);
+        }
+        setPreviewPreset(null);
+    };
+
     const [showFullPrompt, setShowFullPrompt] = useState(false);
     const [fullPromptPreview, setFullPromptPreview] = useState('');
 
     useEffect(() => {
         setFullPromptPreview(`${userPrompt ? userPrompt + '. ' : ''}${basePrompt}`);
     }, [userPrompt, basePrompt]);
-    const [duration, setDuration] = useState<4 | 8>(4);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -362,6 +440,71 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                 )}
             </AnimatePresence>
 
+            {/* PRESET PREVIEW MODAL */}
+            <AnimatePresence>
+                {previewPreset && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                        onClick={(e) => { if (e.target === e.currentTarget) setPreviewPreset(null); }}
+                    >
+                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative flex flex-col gap-4">
+                            <button
+                                onClick={() => setPreviewPreset(null)}
+                                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+
+                            <h3 className="text-xl font-bold text-white">{previewPreset.name}</h3>
+
+                            <div className="w-full aspect-video bg-black rounded-xl overflow-hidden border border-white/10 relative">
+                                {previewPreset.preview_video_url ? (
+                                    <video
+                                        src={previewPreset.preview_video_url}
+                                        className="w-full h-full object-cover"
+                                        autoPlay
+                                        loop
+                                        muted
+                                        controls
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-600">
+                                        <span className="text-xs">No preview video</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-3 bg-white/5 rounded-lg border border-white/5">
+                                <p className="text-xs text-zinc-400 mb-1 font-bold uppercase tracking-wider">Prompt</p>
+                                <p className="text-sm text-zinc-200 leading-relaxed font-mono">{previewPreset.prompt_template}</p>
+                            </div>
+
+                            {previewPreset.description && (
+                                <p className="text-sm text-zinc-500 italic">{previewPreset.description}</p>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                                <Button
+                                    onClick={() => setPreviewPreset(null)}
+                                    className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-lg h-12 font-bold"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={() => confirmPresetSelection(previewPreset)}
+                                    className="flex-1 bg-white hover:bg-zinc-200 text-black rounded-lg h-12 font-bold flex items-center justify-center gap-2"
+                                >
+                                    Use This Transition
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Scale Full Prompt Popup */}
             <AnimatePresence>
                 {showFullPrompt && (
@@ -447,6 +590,80 @@ export function DirectorsCutEditor({ onBack }: DirectorsCutEditorProps) {
                                             {d}s
                                         </button>
                                     ))}
+                                </div>
+
+                                {/* TRANSITIONS PRESETS */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowPresets(!showPresets)}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border border-white/5 flex items-center gap-1 ${showPresets || selectedPresetId ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
+                                    >
+                                        <Sparkles className="w-3 h-3" />
+                                        {selectedPreset ? selectedPreset.name.toUpperCase() : 'TRANSITIONS'}
+                                    </button>
+
+                                    {/* PRESETS POPUP */}
+                                    <AnimatePresence>
+                                        {showPresets && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 10 }}
+                                                className="absolute bottom-full left-0 mb-2 w-72 bg-zinc-900 border border-white/10 rounded-xl p-2 shadow-xl z-50 max-h-[400px] overflow-y-auto custom-scrollbar"
+                                            >
+                                                <div className="space-y-1">
+                                                    <button
+                                                        onClick={() => { setSelectedPresetId(null); setSelectedPreset(null); setShowPresets(false); }}
+                                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex flex-col gap-0.5 ${!selectedPresetId ? 'bg-white text-black' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}
+                                                    >
+                                                        <span className="font-bold">None (Default)</span>
+                                                        <span className={`text-[9px] ${!selectedPresetId ? 'text-zinc-600' : 'text-zinc-500'}`}>Use standard transition logic</span>
+                                                    </button>
+
+                                                    {presets.map(preset => (
+                                                        <button
+                                                            key={preset.id}
+                                                            onClick={() => openPreview(preset)}
+                                                            onMouseEnter={() => setHoveredPreset(preset.id)}
+                                                            onMouseLeave={() => setHoveredPreset(null)}
+                                                            className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex gap-3 ${selectedPresetId === preset.id ? 'bg-white text-black' : 'text-zinc-400 hover:bg-white/5 hover:text-white bg-black/20'}`}
+                                                        >
+                                                            {/* Video Thumbnail */}
+                                                            <div className="w-16 h-16 shrink-0 bg-black rounded overflow-hidden relative border border-white/10">
+                                                                {preset.preview_video_url ? (
+                                                                    <video
+                                                                        src={preset.preview_video_url}
+                                                                        className="w-full h-full object-cover"
+                                                                        muted
+                                                                        loop
+                                                                        autoPlay
+                                                                        playsInline
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-600">
+                                                                        <Sparkles className="w-4 h-4" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex flex-col gap-1 py-1 min-w-0">
+                                                                <span className="font-bold truncate">{preset.name}</span>
+                                                                {preset.description && (
+                                                                    <span className={`text-[9px] line-clamp-2 leading-tight ${selectedPresetId === preset.id ? 'text-zinc-600' : 'text-zinc-500'}`}>{preset.description}</span>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    ))}
+
+                                                    {presets.length === 0 && (
+                                                        <div className="p-4 text-center text-zinc-500 text-[10px]">
+                                                            No transition presets found.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </div>
 

@@ -52,19 +52,13 @@ const getAdminClient = () => {
     return supabase;
 };
 
-/**
- * Deducts credits from a user.
- * Uses Service Role Key if available to bypass RLS.
- */
-/**
- * Deducts credits from a user.
- * Uses the atomic RPC function 'deduct_credits_v2' for safety and transaction logging.
- */
-export async function deductCredits(userId: string, amount: number, description: string = 'Usage'): Promise<boolean> {
-    if (!isSupabaseConfigured) return true;
+export async function deductCredits(userId: string, amount: number, description: string = 'Usage'): Promise<{ success: boolean; error?: any }> {
+    if (!isSupabaseConfigured) return { success: true };
+
+    const adminSupabase = getAdminClient();
 
     try {
-        const { data, error } = await supabase.rpc('deduct_credits_v2', {
+        const { data, error } = await adminSupabase.rpc('deduct_credits_v2', {
             p_user_id: userId,
             p_amount: amount,
             p_description: description
@@ -72,19 +66,22 @@ export async function deductCredits(userId: string, amount: number, description:
 
         if (error) {
             console.error('Error deducting credits via RPC:', error);
-            return false;
+            return { success: false, error: error };
         }
 
         if (data === true) {
             console.log(`[Credits] Deducted ${amount} from user ${userId}. Reason: ${description}`);
-            return true;
+            return { success: true };
         } else {
-            console.warn(`Insufficient credits for user ${userId}. Needs ${amount}.`);
-            return false;
+            // Get current credits for logging purposes
+            const { data: profile } = await adminSupabase.from('profiles').select('credits').eq('id', userId).single();
+            const current = profile?.credits ?? 'unknown';
+            console.warn(`[Credits] Failed to deduct ${amount}. User ${userId} has ${current}.`);
+            return { success: false, error: { message: `RPC returned false. Balance: ${current}, Needed: ${amount}` } };
         }
     } catch (err) {
         console.error('Unexpected error in deductCredits RPC:', err);
-        return false;
+        return { success: false, error: err };
     }
 }
 

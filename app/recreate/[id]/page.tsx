@@ -450,7 +450,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
 
     return (
         <ProtectedRoute>
-            <div className="w-full max-w-[1600px] mx-auto h-screen flex flex-col gap-2 md:gap-4 pt-[64px] pb-10 px-4 overflow-hidden">
+            <div className="w-full max-w-[1600px] mx-auto min-h-screen md:h-screen flex flex-col gap-2 md:gap-4 pt-[64px] pb-10 px-4 overflow-y-auto md:overflow-hidden">
 
                 {/* HEADER */}
                 <div className="flex items-center justify-between shrink-0 py-2">
@@ -468,10 +468,10 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                     )}
                 </div>
 
-                <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 overflow-hidden">
+                <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 md:min-h-0 md:overflow-hidden h-auto">
 
                     {/* LEFT SIDEBAR (Inputs) */}
-                    <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] shrink-0 flex flex-col gap-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
+                    <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] shrink-0 flex flex-col gap-0 h-auto md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
 
@@ -684,7 +684,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                                     {/* Before / After Slider */}
                                     {/* Before / After Slider */}
                                     {template.before_video_url ? (
-                                        <div className="max-w-4xl w-full h-full md:h-[65vh] relative group/slider rounded-sm overflow-hidden">
+                                        <div className="max-w-4xl w-full h-[50vh] md:h-[65vh] relative group/slider rounded-sm overflow-hidden">
                                             <BeforeAfterVideoSlider
                                                 // BASE (Bottom): Toggle between Template Video (Reference) and Product Image
                                                 beforeVideoUrl={activeBase === 'reference' ? template.before_video_url : null}
@@ -711,7 +711,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                             ) : viewMode === 'result' ? (
                                 <div className="w-full h-full flex items-center justify-center">
                                     {template.before_video_url ? (
-                                        <div className="max-w-4xl w-full h-full md:h-[65vh] relative rounded-sm overflow-hidden">
+                                        <div className="max-w-4xl w-full h-[50vh] md:h-[65vh] relative rounded-sm overflow-hidden">
                                             {(genState.videoUrl || template?.after_video_url) ? (
                                                 <video src={genState.videoUrl || template.after_video_url!} controls autoPlay loop className="w-full h-full object-contain bg-black" />
                                             ) : (
@@ -727,7 +727,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                     {template.before_video_url ? (
-                                        <div className="max-w-4xl w-full h-full md:h-[65vh] relative">
+                                        <div className="max-w-4xl w-full h-[50vh] md:h-[65vh] relative">
                                             <BeforeAfterComparison
                                                 beforeUrl={template.before_video_url || null}
                                                 afterUrl={genState.videoUrl || template?.after_video_url || null}
@@ -764,6 +764,6 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                     }}
                 />
             </div>
-        </ProtectedRoute>
+        </ProtectedRoute >
     );
 }

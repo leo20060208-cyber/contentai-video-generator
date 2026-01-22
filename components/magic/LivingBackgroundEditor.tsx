@@ -31,6 +31,8 @@ import { supabase } from '@/lib/supabase';
 interface LivingBackgroundEditorProps {
     image: string;
     onBack: () => void;
+    initialDefaultPrompt?: string;
+    initialPresets?: PromptPreset[];
 }
 
 interface MaskStroke {
@@ -39,7 +41,16 @@ interface MaskStroke {
     width: number;
 }
 
-export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditorProps) {
+// Presets Interface
+interface PromptPreset {
+    id: string;
+    name: string;
+    prompt_template: string;
+    description?: string;
+    preview_video_url?: string | null;
+}
+
+export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, initialPresets = [] }: LivingBackgroundEditorProps) {
     const router = useRouter();
     // Media State
     const [maskStrokes, setMaskStrokes] = useState<MaskStroke[]>([]);
@@ -48,7 +59,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
     const [activeTool, setActiveTool] = useState<'brush' | 'eraser'>('brush');
 
     // Generation Params
-    // const [prompt, setPrompt] = useState(''); // Removed simple prompt state
     const [userPrompt, setUserPrompt] = useState('');
     const [basePrompt, setBasePrompt] = useState('');
     const [showFullPrompt, setShowFullPrompt] = useState(false);
@@ -58,7 +68,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
         setFullPromptPreview(`${userPrompt ? userPrompt + '. ' : ''}${basePrompt}`);
     }, [userPrompt, basePrompt]);
     const [duration, setDuration] = useState<5 | 10>(5);
-    const [quality, setQuality] = useState('HD');
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
@@ -75,26 +84,61 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
     const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
     const [isHoveringCanvas, setIsHoveringCanvas] = useState(false);
 
-    // Initial Prompt
-    // const getBasePrompt = (d: number) => `Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural ${d}s video motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${d} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
+    // Prompt Logic
+    // Prompt Logic
+    const [dbBasePrompt, setDbBasePrompt] = useState(initialDefaultPrompt || 'Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: {{DURATION}} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.');
 
-    const [dbBasePrompt, setDbBasePrompt] = useState('Keep the main subject/product perfectly still and sharp. Animate only the background areas I have painted with a smooth, natural motion.\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: {{DURATION}} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.');
+    // Presets State
+    const [presets, setPresets] = useState<PromptPreset[]>(initialPresets);
+    const [showPresets, setShowPresets] = useState(false);
+    const [selectedPresetId, setSelectedPresetId] = useState<string | 'default'>('default');
+    const [previewPreset, setPreviewPreset] = useState<PromptPreset | null>(null);
+    const [currentTemplate, setCurrentTemplate] = useState('');
 
     useEffect(() => {
-        async function loadPrompt() {
-            try {
-                const data = await getSectionContent('living_background_default_prompt');
-                if (data?.prompt) {
-                    setDbBasePrompt(data.prompt);
-                }
-            } catch (e) { console.error(e); }
+        if (initialDefaultPrompt && initialPresets && initialPresets.length > 0) return; // Skip if all props provided
+
+        async function loadData() {
+            // Load Default Prompt
+            if (!initialDefaultPrompt) {
+                try {
+                    const data = await getSectionContent('living_background_default_prompt');
+                    if (data?.prompt) {
+                        setDbBasePrompt(data.prompt);
+                        // Only set current template if we remain on default
+                        if (selectedPresetId === 'default') {
+                            setCurrentTemplate(data.prompt);
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            // Load Presets
+            if (!initialPresets || initialPresets.length === 0) {
+                try {
+                    const { data } = await supabase.from('prompt_presets')
+                        .select('*')
+                        .eq('category', 'living_background')
+                        .order('created_at', { ascending: false });
+                    if (data) setPresets(data);
+                } catch (e) { console.error(e); }
+            }
         }
-        loadPrompt();
-    }, []);
+        loadData();
+    }, [initialDefaultPrompt, initialPresets]); // Dependencies updated
+
+    // Update current template when dbBasePrompt loads (initial sync)
+    useEffect(() => {
+        if (dbBasePrompt && selectedPresetId === 'default') {
+            setCurrentTemplate(dbBasePrompt);
+        }
+    }, [dbBasePrompt, selectedPresetId]);
+
 
     useEffect(() => {
         // Inject dynamic values into the base prompt template
-        let p = dbBasePrompt;
+        let p = currentTemplate || dbBasePrompt;
+
         if (p.includes('{{DURATION}}')) {
             p = p.replace('{{DURATION}}', duration.toString());
         } else if (!p.includes('EXACT DURATION')) {
@@ -102,7 +146,42 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
             p += `\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${duration} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
         }
         setBasePrompt(p);
-    }, [duration, dbBasePrompt]);
+    }, [duration, currentTemplate, dbBasePrompt]);
+
+    const openPreview = (preset: PromptPreset) => {
+        setPreviewPreset(preset);
+        setShowPresets(false);
+    };
+
+    const confirmPresetSelection = (preset: PromptPreset) => {
+        handlePresetSelect(preset.id);
+        setPreviewPreset(null);
+    };
+
+    const handlePresetSelect = (presetId: string) => {
+        if (presetId === 'default') {
+            setSelectedPresetId('default');
+            setCurrentTemplate(dbBasePrompt);
+        } else {
+            const preset = presets.find(p => p.id === presetId);
+            if (preset) {
+                setSelectedPresetId(presetId);
+                // Directly set current template which triggers the effect
+                setCurrentTemplate(preset.prompt_template);
+
+                // Also force immediate basePrompt format to ensure responsiveness even before effect
+                // (though Effect is fast, this double-check doesn't hurt logic coherence)
+                let p = preset.prompt_template;
+                if (p.includes('{{DURATION}}')) {
+                    p = p.replace('{{DURATION}}', duration.toString());
+                } else if (!p.includes('EXACT DURATION')) {
+                    p += `\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${duration} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.\n- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE.`;
+                }
+                setBasePrompt(p);
+            }
+        }
+        setShowPresets(false);
+    };
 
     // Drawing Logic
     const getPoint = (e: React.MouseEvent | React.TouchEvent) => {
@@ -276,8 +355,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
 
             // 3. Get session for Auth
             const { data: { session } } = await supabase.auth.getSession();
-            console.log('[Living Background] Session status:', !!session);
-            console.log('[Living Background] Access token present:', !!session?.access_token);
 
             // 4. Call Living Backgrounds API
             setGenerationProgress(10);
@@ -298,8 +375,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                console.error('[Living Background] API Error:', errorData);
-                console.error('[Living Background] Status:', response.status);
                 throw new Error(errorData.error || errorData.message || `Generation failed (${response.status})`);
             }
 
@@ -309,8 +384,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
             // 4. Poll for status
             if (data.taskId) {
                 let completed = false;
-                let attempts = 0;
-                const maxAttempts = 90; // 3 minutes max (2s intervals)
 
                 while (!completed) {
                     await new Promise(r => setTimeout(r, 2000));
@@ -328,13 +401,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                         // Progress simulation while processing
                         setGenerationProgress(prev => Math.min(95, prev + 1.5));
                     }
-                    attempts++;
-                }
-
-                // Removed timeout check to allow infinite waiting
-                if (!completed) {
-                    // This block is technically unreachable now unless we break the loop differently
-                    console.warn('Loop exited without completion');
                 }
             }
         } catch (error: any) {
@@ -348,16 +414,10 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
     return (
         <div className="fixed inset-0 top-16 bg-transparent flex flex-col overflow-hidden">
 
-
-
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col md:flex-row relative items-center justify-center px-4 md:px-20 pt-4 md:pt-16 pb-12 min-h-0 overflow-hidden">
 
-
                 {/* Floating Left Toolbar */}
-                {/* Floating Left Toolbar */}
-                {/* Floating Left Toolbar */}
-                {/* Floating Left Toolbar - Mobile: Relative Top, Desktop: Absolute Left */}
                 <div className="relative md:absolute z-50 flex gap-4 transition-all duration-300 flex-col md:flex-row md:left-6 md:top-1/2 md:-translate-y-1/2 md:translate-x-0 items-center mb-4 md:mb-0">
                     {/* Tool Buttons */}
                     <div className="flex flex-row md:flex-col gap-2">
@@ -419,53 +479,26 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                         cursor: pointer;
                     }
                     
-                    /* Track Styles - Webkit */
-                    .slider-vertical::-webkit-slider-runnable-track {
-                        width: 100%;
-                        height: 2px;
-                        background: transparent; /* Handled by input background */
-                        border-radius: 2px;
-                        border: none;
-                    }
-
-                    /* Track Styles - Firefox */
-                    .slider-vertical::-moz-range-track {
-                        width: 100%;
-                        height: 2px;
-                        background: transparent;
-                        border-radius: 2px;
-                        border: none;
-                    }
+                    /* Track Styles */
+                    .slider-vertical::-webkit-slider-runnable-track { width: 100%; height: 2px; background: transparent; border-radius: 2px; border: none; }
+                    .slider-vertical::-moz-range-track { width: 100%; height: 2px; background: transparent; border-radius: 2px; border: none; }
                     
-                    /* Thumb Styles - Webkit */
+                    /* Thumb Styles */
                     .slider-vertical::-webkit-slider-thumb {
-                        -webkit-appearance: none;
-                        appearance: none;
-                        width: 16px; /* Slightly larger thumb for contrast */
-                        height: 16px;
-                        border-radius: 50%;
-                        background: white;
-                        border: 2px solid #f97316;
+                        -webkit-appearance: none; appearance: none;
+                        width: 16px; height: 16px; border-radius: 50%;
+                        background: white; border: 2px solid #f97316;
                         box-shadow: 0 0 5px rgba(0,0,0,0.5);
-                        margin-top: -7px; /* Center on 2px track */
+                        margin-top: -7px;
                         transition: transform 0.1s;
                         z-index: 10;
                     }
-                    
-                    /* Thumb Styles - Firefox */
                     .slider-vertical::-moz-range-thumb {
-                        width: 16px;
-                        height: 16px;
-                        border-radius: 50%;
-                        background: white;
-                        border: 2px solid #f97316;
+                        width: 16px; height: 16px; border-radius: 50%;
+                        background: white; border: 2px solid #f97316;
                         transition: transform 0.1s;
                     }
-                    
-                    .slider-vertical::-webkit-slider-thumb:hover {
-                        transform: scale(1.1);
-                        box-shadow: 0 0 8px rgba(249, 115, 22, 0.6);
-                    }
+                    .slider-vertical::-webkit-slider-thumb:hover { transform: scale(1.1); box-shadow: 0 0 8px rgba(249, 115, 22, 0.6); }
                 `}</style>
 
                 {/* Center Canvas */}
@@ -638,7 +671,7 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                         </div>
 
                         {/* Control Badges */}
-                        <div className="flex items-center justify-between px-2 pb-1">
+                        <div className="flex items-center justify-between px-2 pb-1 relative">
                             <div className="flex items-center gap-2">
                                 <div className="flex bg-transparent p-1">
                                     <button
@@ -655,6 +688,71 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                                     </button>
                                 </div>
 
+                                {/* PRESETS BUTTON */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowPresets(!showPresets)}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border border-white/5 flex items-center gap-1 ${showPresets ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
+                                    >
+                                        <Sparkles className="w-3 h-3" />
+                                        {selectedPresetId !== 'default' ? (presets.find(p => p.id === selectedPresetId)?.name.toUpperCase() || 'BACKGROUNDS') : 'BACKGROUNDS'}
+                                    </button>
+
+                                    {/* PRESETS POPUP */}
+                                    <AnimatePresence>
+                                        {showPresets && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 10 }}
+                                                className="absolute bottom-full left-0 mb-2 w-72 bg-zinc-900 border border-white/10 rounded-xl p-2 shadow-xl z-50 max-h-[400px] overflow-y-auto custom-scrollbar"
+                                            >
+                                                <div className="space-y-1">
+                                                    <button
+                                                        onClick={() => handlePresetSelect('default')}
+                                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex flex-col gap-0.5 ${selectedPresetId === 'default' ? 'bg-white text-black' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}
+                                                    >
+                                                        <span className="font-bold">Yours (Default)</span>
+                                                        <span className={`text-[9px] ${selectedPresetId === 'default' ? 'text-zinc-600' : 'text-zinc-500'}`}>Use your configured instructions</span>
+                                                    </button>
+
+                                                    {presets.map(preset => (
+                                                        <button
+                                                            key={preset.id}
+                                                            onClick={() => openPreview(preset)}
+                                                            className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex gap-3 ${selectedPresetId === preset.id ? 'bg-white text-black' : 'text-zinc-400 hover:bg-white/5 hover:text-white bg-black/20'}`}
+                                                        >
+                                                            {/* Video Thumbnail */}
+                                                            <div className="w-16 h-16 shrink-0 bg-black rounded overflow-hidden relative border border-white/10">
+                                                                {preset.preview_video_url ? (
+                                                                    <video
+                                                                        src={preset.preview_video_url}
+                                                                        className="w-full h-full object-cover"
+                                                                        muted
+                                                                        loop
+                                                                        autoPlay
+                                                                        playsInline
+                                                                    />
+                                                                ) : (
+                                                                    <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-600">
+                                                                        <Sparkles className="w-4 h-4" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="flex flex-col gap-1 py-1 min-w-0">
+                                                                <span className="font-bold truncate">{preset.name}</span>
+                                                                {preset.description && (
+                                                                    <span className={`text-[9px] line-clamp-2 leading-tight ${selectedPresetId === preset.id ? 'text-zinc-600' : 'text-zinc-500'}`}>{preset.description}</span>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -665,7 +763,6 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                                     VIEW FULL PROMPT
                                 </button>
 
-                                {/* GUIDE button moved here */}
                                 <button
                                     onClick={() => router.push('/guide/living-backgrounds')}
                                     className="text-[9px] font-black text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-widest flex items-center gap-1"
@@ -718,6 +815,70 @@ export function LivingBackgroundEditor({ image, onBack }: LivingBackgroundEditor
                     </AnimatePresence>
                 </div>
             </div>
+            {/* PRESET PREVIEW MODAL */}
+            <AnimatePresence>
+                {previewPreset && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                        onClick={(e) => { if (e.target === e.currentTarget) setPreviewPreset(null); }}
+                    >
+                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative flex flex-col gap-4">
+                            <button
+                                onClick={() => setPreviewPreset(null)}
+                                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+
+                            <h3 className="text-xl font-bold text-white">{previewPreset.name}</h3>
+
+                            <div className="w-full aspect-video bg-black rounded-xl overflow-hidden border border-white/10 relative">
+                                {previewPreset.preview_video_url ? (
+                                    <video
+                                        src={previewPreset.preview_video_url}
+                                        className="w-full h-full object-cover"
+                                        autoPlay
+                                        loop
+                                        muted
+                                        controls
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-600">
+                                        <span className="text-xs">No preview video</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-3 bg-white/5 rounded-lg border border-white/5">
+                                <p className="text-xs text-zinc-400 mb-1 font-bold uppercase tracking-wider">Prompt</p>
+                                <p className="text-sm text-zinc-200 leading-relaxed font-mono">{previewPreset.prompt_template}</p>
+                            </div>
+
+                            {previewPreset.description && (
+                                <p className="text-sm text-zinc-500 italic">{previewPreset.description}</p>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                                <Button
+                                    onClick={() => setPreviewPreset(null)}
+                                    className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-lg h-12 font-bold"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={() => confirmPresetSelection(previewPreset)}
+                                    className="flex-1 bg-white hover:bg-zinc-200 text-black rounded-lg h-12 font-bold flex items-center justify-center gap-2"
+                                >
+                                    Use This Background
+                                </Button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div >
     );
 }

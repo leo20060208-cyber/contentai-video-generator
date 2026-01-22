@@ -11,8 +11,9 @@
 html {
   background: black;
   /* Hide scrollbar for standard browsers if desired, or just style it */
-  scrollbar-width: thin;
-  scrollbar-color: #27272a #000000;
+  /* Hide scrollbar for standard browsers */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 body {
@@ -21,23 +22,11 @@ body {
   min-height: 100vh;
 }
 
-/* Chrome/Safari/Edge Scrollbar Styling */
+/* Hide scrollbar for Chrome, Safari and Opera */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #000000;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #333333;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555555;
+  display: none;
+  width: 0px;
+  background: transparent;
 }
 
 @layer utilities {

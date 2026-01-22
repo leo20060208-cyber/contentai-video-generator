@@ -77,9 +77,26 @@ export async function POST(request: Request) {
         console.log('');
 
         // 2. Deduct Credits
-        const deducted = await deductCredits(userId, REQUIRED_COST, `Image Refine/Gen (${tier === 'pro' ? 'Pro' : 'Normal'})`);
-        if (!deducted) {
-            return NextResponse.json({ error: 'Failed to process credits' }, { status: 500 });
+        // 2. Deduct Credits
+        const deductionResult = await deductCredits(userId, REQUIRED_COST, `Image Refine/Gen (${tier === 'pro' ? 'Pro' : 'Normal'})`);
+
+        if (!deductionResult.success) {
+            // 2b. If deduction failed, check WHY to give better error
+            const { data: profile } = await supabase.from('profiles').select('credits').eq('id', userId).single();
+            const current = profile?.credits || 0;
+
+            console.error(`[API] Credit deduction failed. User has ${current}, needed ${REQUIRED_COST}. Details:`, deductionResult.error);
+
+            if (current < REQUIRED_COST) {
+                return NextResponse.json({
+                    error: `Insufficient credits. You have ${current} credits, but this generation costs ${REQUIRED_COST}.`,
+                    code: 'INSUFFICIENT_CREDITS'
+                }, { status: 402 });
+            }
+
+            // Return the specific system error
+            const errorMsg = deductionResult.error?.message || deductionResult.error?.details || JSON.stringify(deductionResult.error) || 'Unknown error';
+            return NextResponse.json({ error: `Failed to process credits transaction: ${errorMsg}` }, { status: 500 });
         }
 
         // Call Wavespeed (Nano Banana)

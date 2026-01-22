@@ -1,0 +1,58 @@
+﻿[dotenv@17.2.3] injecting env (15) from .env.local -- tip: ­ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+=== DIAGN├ôSTICO DE PRECIOS Y CR├ëDITOS EN STRIPE ===
+
+Total de precios activos: 5
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+
+Product: Credit Top-up (75 Credits)
+  Product ID: prod_Tp0Um4QGCcxUsb
+  Price ID: price_1SrMTX3pHdaDhch33m3L4jKj
+  Amount: 3.5 EUR
+  Interval: one_time
+  Price Metadata: {}
+  Product Metadata: {}
+  >> CREDITS: ÔØî NO CONFIGURADO
+
+Product: Single Video (75 Credits)
+  Product ID: prod_Tp0U9vDAqTEqxP
+  Price ID: price_1SrMTW3pHdaDhch3yIPQP2WZ
+  Amount: 5 EUR
+  Interval: one_time
+  Price Metadata: {}
+  Product Metadata: {}
+  >> CREDITS: ÔØî NO CONFIGURADO
+
+Product: Elite
+  Product ID: prod_TkNqf4iNeNW4jt
+  Price ID: price_1Smt4S3pHdaDhch3JQZ2Sd99
+  Amount: 59 EUR
+  Interval: month
+  Price Metadata: {}
+  Product Metadata: {}
+  >> CREDITS: ÔØî NO CONFIGURADO
+
+Product: Pro
+  Product ID: prod_TkNph8L18ppFLG
+  Price ID: price_1Smt4A3pHdaDhch3FI9DCmnU
+  Amount: 34 EUR
+  Interval: month
+  Price Metadata: {}
+  Product Metadata: {}
+  >> CREDITS: ÔØî NO CONFIGURADO
+
+Product: Starter
+  Product ID: prod_TkNpabBzx8A1Wk
+  Price ID: price_1Smt3w3pHdaDhch3uYpZJJ4g
+  Amount: 19 EUR
+  Interval: month
+  Price Metadata: {}
+  Product Metadata: {}
+  >> CREDITS: ÔØî NO CONFIGURADO
+
+ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+
+COMPARACI├ôN CON config.ts:
+  Starter expected priceId: price_1Smt3w3pHdaDhch3uYpZJJ4g
+  Pro expected priceId: price_1Smt4A3pHdaDhch3FI9DCmnU
+  Elite expected priceId: price_1Smt4S3pHdaDhch3JQZ2Sd99

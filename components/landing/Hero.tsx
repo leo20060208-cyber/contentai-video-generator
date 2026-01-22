@@ -120,13 +120,11 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
             </div>
 
             {/* Layout Container */}
-            <div className="flex flex-col w-full gap-2 pb-12">
+            <div className="w-full max-w-[1200px] mx-auto pb-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                {/* TOP ROW: Two Main Cards Layout - Video vs Image */}
-                <div className="flex flex-col md:flex-row w-full gap-2 h-[80vh]">
-
-                    {/* Card 1: Recreate Video */}
-                    <div className="w-full md:w-1/2 flex-1 relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10">
+                    {/* 1. Recreate Video */}
+                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
                         {/* Background Content */}
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                             {heroVideo ? (
@@ -142,19 +140,15 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                 <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center" />
                             )}
                         </div>
-
                         {/* Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-
                         {/* Content / Controls */}
                         <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            {/* Minimalist Rectangular Button */}
                             <a href="/create-yours" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
                                 Create Video
                             </a>
                         </div>
-
-                        {/* Bottom Tray - Thinner/Minimal */}
+                        {/* Bottom Tray */}
                         <div className="absolute bottom-4 left-4 right-4 z-20">
                             <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
                                 <div className="flex flex-col">
@@ -165,8 +159,8 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                         </div>
                     </div>
 
-                    {/* Card 2: Recreate Image */}
-                    <div className="w-full md:w-1/2 flex-1 relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10">
+                    {/* 2. Recreate Image */}
+                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
                         {/* Background Content */}
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                             {heroImage ? (
@@ -190,19 +184,15 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                 <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop')] bg-cover bg-center" />
                             )}
                         </div>
-
                         {/* Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-
                         {/* Content / Controls */}
                         <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            {/* Minimalist Rectangular Button */}
                             <a href="/create-image" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
                                 Create Image
                             </a>
                         </div>
-
-                        {/* Bottom Tray - Thinner/Minimal */}
+                        {/* Bottom Tray */}
                         <div className="absolute bottom-4 left-4 right-4 z-20">
                             <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
                                 <div className="flex flex-col">
@@ -213,13 +203,9 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                         </div>
                     </div>
 
-                </div>
-
-                {/* BOTTOM ROWS: Magic Video Generation Cards */}
-                {magicVideoConfig && (
-                    <div className="flex flex-col w-full gap-2">
-                        {/* 1. Living Backgrounds */}
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[21/9]">
+                    {/* 3. Living Backgrounds */}
+                    {magicVideoConfig && (
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
                             <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                                 {magicVideoConfig.livingBackgrounds?.mediaUrl && (
                                     magicVideoConfig.livingBackgrounds.mediaType === 'video' ? (
@@ -246,9 +232,11 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                        {/* 2. Director's Cut */}
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[21/9]">
+                    {/* 4. Director's Cut */}
+                    {magicVideoConfig && (
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
                             <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                                 {magicVideoConfig.directorsCut?.mediaUrl && (
                                     magicVideoConfig.directorsCut.mediaType === 'video' ? (
@@ -275,41 +263,9 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                 </div>
                             </div>
                         </div>
+                    )}
 
-                        {/* 3. Instant Product Clips (Locked/Coming Soon) */}
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[21/9] opacity-80">
-                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                                {magicVideoConfig.instantClips?.mediaUrl && (
-                                    magicVideoConfig.instantClips.mediaType === 'video' ? (
-                                        <video src={magicVideoConfig.instantClips.mediaUrl} className="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-500" autoPlay loop muted playsInline />
-                                    ) : (
-                                        <img src={magicVideoConfig.instantClips.mediaUrl} className="w-full h-full object-cover opacity-40 group-hover:opacity-60 transition-opacity duration-500" />
-                                    )
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-                            <div className="absolute inset-0 flex items-center justify-center z-30 translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                <div className="bg-white text-black px-6 py-3 font-black text-[10px] tracking-[0.2em] uppercase shadow-2xl">
-                                    COMING SOON
-                                </div>
-                            </div>
-                            <div className="absolute bottom-4 left-4 right-4 z-20">
-                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <h3 className="text-white/40 font-bold uppercase tracking-tight text-sm">
-                                            {magicVideoConfig.instantClips?.title || 'Instant Product Clips'}
-                                        </h3>
-                                        <p className="text-zinc-600 text-[10px] font-medium uppercase tracking-wider">
-                                            {magicVideoConfig.instantClips?.description || 'Magic is cooking...'}
-                                        </p>
-                                    </div>
-                                    <Sparkles className="w-4 h-4 text-zinc-700" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
+                </div>
             </div>
         </section>
     );
