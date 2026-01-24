@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { getActiveProducts } from '@/lib/stripe/config';
 import PricingClient, { PricingProduct } from '@/components/pricing/PricingClient';
+import { FaqSection } from '@/components/pricing/FaqSection';
 import { STRIPE_PLANS } from '@/lib/stripe/config';
 
 // Map for fallback descriptions and icons if Stripe metadata is missing
@@ -10,8 +11,8 @@ const planDescriptions: Record<string, any> = {
         features: [
             '400 credits/month',
             '~13 Magic Videos (5s)',
-            'OR ~5 Standard Videos',
-            '~66 photos/month',
+            'OR ~5 Video Editing',
+            '~66 Image Editing',
             'Library access',
             'HD export quality',
         ],
@@ -22,8 +23,8 @@ const planDescriptions: Record<string, any> = {
         features: [
             '875 credits/month',
             '~29 Magic Videos (5s)',
-            'OR ~11 Standard Videos',
-            '~145 photos/month',
+            'OR ~11 Video Editing',
+            '~145 Image Editing',
             'Priority rendering',
             'HD & 4K export quality',
         ],
@@ -34,8 +35,8 @@ const planDescriptions: Record<string, any> = {
         features: [
             '1600 credits/month',
             '~53 Magic Videos (5s)',
-            'OR ~21 Standard Videos',
-            '~266 photos/month',
+            'OR ~21 Video Editing',
+            '~266 Image Editing',
             'Top priority rendering',
             'Early access features',
         ],
@@ -56,9 +57,9 @@ export default async function PricingPage() {
             const uiDef = planDescriptions[p.name] || {};
             return {
                 ...p,
-                description: p.description || uiDef.description || 'Flexible plan',
+                description: (p as any).description || uiDef.description || 'Flexible plan',
                 features: (p.features && p.features.length > 0) ? p.features : (uiDef.features || []),
-                popular: p.popular || uiDef.popular || false
+                popular: (p as any).popular || uiDef.popular || false
             };
         });
 
@@ -114,6 +115,9 @@ export default async function PricingPage() {
             </div>
         }>
             <PricingClient plans={products} />
+            <div className="pb-10">
+                <FaqSection />
+            </div>
         </Suspense>
     );
 }

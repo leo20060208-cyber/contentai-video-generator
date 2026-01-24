@@ -158,7 +158,7 @@ export default function PricingClient({ plans }: PricingClientProps) {
     };
 
     // Helper to determine single video price ID (Dynamic lookup from plans if available)
-    const singleVideoPlan = plans.find(p => p.name.includes('Single Video') || p.id.includes('price_1SrMTW3pHdaDhch3yIPQP2WZ'));
+    const singleVideoPlan = plans.find(p => p.name.includes('Single Video') || p.id.includes('price_1St48e9qh0qVkdaIIWfG3T5Q'));
     const topUpPlan = plans.find(p => p.name.includes('Credit Top-up') || p.id.includes('price_1SrMTX3pHdaDhch33m3L4jKj'));
 
     // Filter out 'one_time' plans from the main grid
@@ -291,48 +291,53 @@ export default function PricingClient({ plans }: PricingClientProps) {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl mx-auto mb-12">
-                    {/* Single Video Card - Dynamic ID */}
+                    {/* Add Credits Card (Subscribers Only) */}
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true }}
-                        className="rounded-2xl p-6 bg-zinc-900/30 border border-white/5 flex flex-col md:flex-row items-center gap-6 hover:bg-zinc-900/50 transition-colors"
+                        className={`rounded-2xl p-6 relative flex flex-col items-center justify-center gap-6 hover:bg-zinc-900/50 transition-colors ${profile?.subscription_status !== 'active' ? 'bg-zinc-900/20 border border-white/5 opacity-75 grayscale-[0.5]' : 'bg-zinc-900/30 border border-yellow-500/20'}`}
                     >
-                        <div className="flex-1 text-center md:text-left">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-semibold mb-3 border border-blue-500/10">
-                                <CreditCard className="w-3 h-3" />
-                                Pay As You Go
+                        {profile?.subscription_status !== 'active' && (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-2xl border border-white/5">
+                                <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900/90 border border-white/10 rounded-lg shadow-xl">
+                                    <LockIcon className="w-4 h-4 text-zinc-400" />
+                                    <span className="text-xs font-bold text-zinc-300">Subscribers Only</span>
+                                </div>
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-1.5">Single Video</h3>
-                            <p className="text-sm text-zinc-400 mb-4 text-xs">
-                                Need just one video? Get full access without a monthly commitment.
+                        )}
+
+                        <div className="flex items-center gap-2 mb-1">
+                            <Sparkles className="w-4 h-4 text-yellow-500" />
+                            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Subscriber Exclusive</h4>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-2 text-center">
+                            <div className="w-16 h-16 rounded-2xl bg-yellow-500/10 flex items-center justify-center mb-2">
+                                <Coins className="w-8 h-8 text-yellow-500" />
+                            </div>
+                            <h3 className="text-xl font-bold text-white">Add 75 Credits</h3>
+                            <p className="text-xs text-zinc-400 max-w-[200px]">
+                                Need a quick top-up? Instantly add credits to your account.
                             </p>
-                            <div className="flex flex-wrap gap-3 justify-center md:justify-start text-xs text-zinc-500 mb-4">
-                                <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5 text-blue-500" /> 75 Credits</span>
-                                <span className="flex items-center gap-1"><Check className="w-3.5 h-3.5 text-blue-500" /> Commercial Rights</span>
-                            </div>
+                        </div>
+
+                        <div className="w-full mt-2 relative z-30">
                             <Button
                                 variant="outline"
-                                size="sm"
-                                className="min-w-[140px] border-blue-500/20 hover:bg-blue-500/10 hover:text-blue-400 text-xs h-9"
-                                onClick={() => handlePurchase(singleVideoPlan || {
-                                    name: 'Single Video',
-                                    id: 'price_1SrMTW3pHdaDhch3yIPQP2WZ', // Fallback
+                                className={`w-full border-yellow-500/20 hover:bg-yellow-500/10 hover:text-yellow-400 text-xs h-10 ${profile?.subscription_status !== 'active' ? 'pointer-events-none' : ''}`}
+                                onClick={() => handlePurchase(topUpPlan || {
+                                    name: 'Instant Topup',
+                                    id: 'price_1SrMTX3pHdaDhch33m3L4jKj', // Fallback
                                     credits: 75,
                                     interval: 'one_time'
                                 })}
-                                disabled={!!isLoading}
+                                disabled={!!isLoading || profile?.subscription_status !== 'active'}
                             >
-                                {isLoading === 'Single Video' ? (
+                                {isLoading === 'Instant Topup' ? (
                                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                ) : `Buy 1 Video • €${singleVideoPlan?.amount || 5}`}
+                                ) : `Buy Now • €${topUpPlan?.amount || 3.50}`}
                             </Button>
-                        </div>
-                        <div className="w-full md:w-auto flex-shrink-0">
-                            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500/20 to-transparent border border-blue-500/20 flex items-center justify-center relative mx-auto">
-                                <div className="absolute inset-0 rounded-full animate-pulse bg-blue-500/5"></div>
-                                <Zap className="w-8 h-8 text-blue-500" />
-                            </div>
                         </div>
                     </motion.div>
 
@@ -377,57 +382,113 @@ export default function PricingClient({ plans }: PricingClientProps) {
                     </motion.div>
                 </div>
 
-                {/* Subscriber Add-ons */}
+
+
+                {/* All Features & Costs */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    className="max-w-4xl mx-auto mb-8 relative"
+                    className="max-w-5xl mx-auto mb-16"
                 >
-                    <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/5 via-transparent to-purple-500/5 rounded-2xl blur-xl -z-10"></div>
+                    <div className="bg-zinc-900/30 border border-white/5 rounded-2xl p-6 md:p-8 backdrop-blur-sm">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="p-2.5 bg-purple-500/10 rounded-xl border border-purple-500/10">
+                                <Info className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-white">Platform Capabilities</h3>
+                                <p className="text-zinc-500 text-xs mt-0.5">Transparent credit costs for all features</p>
+                            </div>
+                        </div>
 
-                    <div className={`border border-white/10 bg-zinc-900/40 backdrop-blur-sm rounded-2xl p-6 relative ${profile?.subscription_status !== 'active' ? 'opacity-75 grayscale-[0.5]' : ''}`}>
-                        {profile?.subscription_status !== 'active' && (
-                            <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-2xl border border-white/5">
-                                <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900/90 border border-white/10 rounded-lg shadow-xl">
-                                    <LockIcon className="w-4 h-4 text-zinc-400" />
-                                    <span className="text-xs font-bold text-zinc-300">Subscribers Only</span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {/* Image Generation */}
+                            <div className="p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center">
+                                        <ImageIcon className="w-4 h-4 text-pink-400" />
+                                    </div>
+                                    <div className="font-semibold text-white text-sm">Image Editing</div>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">Standard (Flux Schnell)</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">6 credits</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">Pro (Flux Pro/Ultra)</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">18 credits</span>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-white/5">
+                                        <p className="text-[10px] text-zinc-500 mb-2">
+                                            High-fidelity image generation for marketing and social media.
+                                        </p>
+                                        <div className="text-[10px] font-semibold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
+                                            Powered by Nano Banana Pro
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        )}
 
-                        <div className="flex items-center gap-2 mb-4 justify-center">
-                            <Sparkles className="w-4 h-4 text-yellow-500" />
-                            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Subscriber Exclusives</h4>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* Instant Credits */}
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-zinc-900 border border-yellow-500/20 hover:border-yellow-500/40 transition-colors group">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                                        <Coins className="w-5 h-5 text-yellow-500 group-hover:scale-110 transition-transform" />
+                            {/* Magic Video */}
+                            <div className="p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                                        <Sparkles className="w-4 h-4 text-orange-400" />
                                     </div>
-                                    <div>
-                                        <h5 className="text-white font-bold text-sm">Add 75 Credits</h5>
-                                        <p className="text-zinc-500 text-[10px]">Instant top-up</p>
-                                    </div>
+                                    <div className="font-semibold text-white text-sm">Magic Video</div>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-lg font-bold text-white mb-1">€{topUpPlan?.amount || 3.50}</p>
-                                    <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        disabled={profile?.subscription_status !== 'active'}
-                                        className="h-7 text-xs bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-none disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onClick={() => handlePurchase(topUpPlan || {
-                                            name: 'Instant Topup',
-                                            id: 'price_1SrMTX3pHdaDhch33m3L4jKj', // Fallback
-                                            credits: 75,
-                                            interval: 'one_time'
-                                        })}
-                                    >
-                                        Buy Now
-                                    </Button>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">5 seconds</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">30 credits</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">10 seconds</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">55 credits</span>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-white/5">
+                                        <div className="text-[10px] font-semibold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
+                                            Powered by Sora & Kling AI
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+
+                            {/* Standard Video */}
+                            <div className="p-5 rounded-xl bg-zinc-900/50 border border-white/5 hover:border-white/10 transition-colors">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                                        <Zap className="w-4 h-4 text-blue-400" />
+                                    </div>
+                                    <div className="font-semibold text-white text-sm">Video Editing</div>
+                                </div>
+                                <div className="space-y-3">
+
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">10 seconds</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">75 credits</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">15 seconds</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">75 credits</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-zinc-400">20 seconds</span>
+                                        <span className="font-mono text-zinc-200 bg-white/5 px-2 py-0.5 rounded">130 credits</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-xs border-t border-dashed border-white/10 pt-2 mt-1">
+                                        <span className="text-zinc-500 italic">Every +5 seconds</span>
+                                        <span className="font-mono text-zinc-400">+30 credits</span>
+                                    </div>
+                                    <div className="mt-4 pt-3 border-t border-white/5">
+                                        <div className="text-[10px] font-semibold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                                            Powered by Kling o1
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                         </div>
@@ -438,7 +499,7 @@ export default function PricingClient({ plans }: PricingClientProps) {
                     isOpen={isBusinessModalOpen}
                     onClose={() => setIsBusinessModalOpen(false)}
                 />
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

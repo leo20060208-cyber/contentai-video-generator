@@ -141,18 +141,18 @@ export default function WhatWeDoPage() {
     const data = content || defaultContent;
 
     return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 pt-52 relative overflow-hidden">
+        <div className="min-h-screen flex flex-col items-center justify-start p-4 md:p-8 pt-32 md:pt-48 relative overflow-hidden">
 
             {/* Page Title */}
             <motion.h1
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-4xl md:text-5xl font-black text-white mb-8 text-center tracking-tight"
+                className="text-4xl md:text-5xl font-black text-white mb-12 text-center tracking-tight"
             >
                 WHAT WE DO
             </motion.h1>
 
-            <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-x-1 gap-y-0 max-w-[1800px] mx-auto z-10 w-full">
+            <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-x-4 gap-y-16 max-w-[1800px] mx-auto z-10 w-full">
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex justify-center">
                     <StepCard steps={data.createVideoSteps} title={data.createVideoTitle} showFooter plusInfoUrl="/guide/video-editing" />
                 </motion.div>

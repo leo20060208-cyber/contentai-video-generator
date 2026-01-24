@@ -40,6 +40,20 @@ export function Navbar() {
             <div className="hidden lg:flex items-center gap-3">
               <div className="h-4 w-px bg-white/10" />
 
+              {/* MAGIC GROUP */}
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">MAGIC</span>
+                <div className="h-4 w-px bg-white/20" />
+                <Link
+                  href="/magic-video"
+                  className={`text-sm font-medium transition-all ${pathname.startsWith('/magic-video') ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Video Generation
+                </Link>
+              </div>
+
+              <div className="h-4 w-px bg-white/20" />
+
               {/* VIDEO GROUP */}
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black bg-orange-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">VIDEO</span>
@@ -77,20 +91,6 @@ export function Navbar() {
                   className={`text-sm font-medium transition-all ${pathname === '/images' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
                   Library
-                </Link>
-              </div>
-
-              <div className="h-4 w-px bg-white/20" />
-
-              {/* MAGIC GROUP */}
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">MAGIC</span>
-                <div className="h-4 w-px bg-white/20" />
-                <Link
-                  href="/magic-video"
-                  className={`text-sm font-medium transition-all ${pathname.startsWith('/magic-video') ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  Video Generation
                 </Link>
               </div>
             </div>

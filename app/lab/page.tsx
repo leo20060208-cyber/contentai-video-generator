@@ -23,13 +23,15 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { CollectionsManager } from '@/components/lab/CollectionsManager';
 import { MagicVideoManager } from '@/components/lab/MagicVideoManager';
+
 import { PromptPresetsManager } from '@/components/lab/PromptPresetsManager';
+import { FaqsManager } from '@/components/lab/FaqsManager';
 
 export default function LabPage() {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic' | 'presets'>('templates');
+    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic' | 'presets' | 'faqs'>('templates');
 
     // Auth State
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -140,6 +142,12 @@ export default function LabPage() {
                         className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'presets' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
                     >
                         Presets
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('faqs')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'faqs' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+                    >
+                        FAQs
                     </button>
                 </div>
 
@@ -278,6 +286,17 @@ export default function LabPage() {
                             exit={{ opacity: 0, y: -20 }}
                         >
                             <PromptPresetsManager />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'faqs' && (
+                        <motion.div
+                            key="faqs"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <FaqsManager />
                         </motion.div>
                     )}
                 </AnimatePresence>

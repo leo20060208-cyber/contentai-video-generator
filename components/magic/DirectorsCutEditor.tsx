@@ -287,7 +287,10 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
                         <div className="flex flex-col gap-1.5">
                             <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">Start</span>
                             <div
-                                onClick={() => setSelectedFrame({ type: 'start' })}
+                                onClick={() => {
+                                    setSelectedFrame({ type: 'start' });
+                                    if (!startImage) document.getElementById('start-upload')?.click();
+                                }}
                                 className={`relative w-16 h-16 rounded-xl border transition-all cursor-pointer overflow-hidden ${selectedFrame.type === 'start' ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'border-white/5 hover:border-white/10'}`}
                             >
                                 {startImage ? (
@@ -331,7 +334,10 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
                         <div className="flex flex-col gap-1.5">
                             <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest px-1">End</span>
                             <div
-                                onClick={() => setSelectedFrame({ type: 'end' })}
+                                onClick={() => {
+                                    setSelectedFrame({ type: 'end' });
+                                    if (!endImage) document.getElementById('end-upload')?.click();
+                                }}
                                 className={`relative w-16 h-16 rounded-xl border transition-all cursor-pointer overflow-hidden ${selectedFrame.type === 'end' ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'border-white/5 hover:border-white/10'}`}
                             >
                                 {endImage ? (
