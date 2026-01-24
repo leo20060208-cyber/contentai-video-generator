@@ -325,18 +325,10 @@ export default function PricingClient({ plans }: PricingClientProps) {
                         <div className="w-full mt-2 relative z-30">
                             <Button
                                 variant="outline"
-                                className={`w-full border-yellow-500/20 hover:bg-yellow-500/10 hover:text-yellow-400 text-xs h-10 ${profile?.subscription_status !== 'active' ? 'pointer-events-none' : ''}`}
-                                onClick={() => handlePurchase(topUpPlan || {
-                                    name: 'Instant Topup',
-                                    id: 'price_1SrMTX3pHdaDhch33m3L4jKj', // Fallback
-                                    credits: 75,
-                                    interval: 'one_time'
-                                })}
-                                disabled={!!isLoading || profile?.subscription_status !== 'active'}
+                                className={`w-full border-yellow-500/20 text-yellow-500/50 text-xs h-10 cursor-not-allowed`}
+                                disabled={true}
                             >
-                                {isLoading === 'Instant Topup' ? (
-                                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                ) : `Buy Now • €${topUpPlan?.amount || 3.50}`}
+                                COMING SOON
                             </Button>
                         </div>
                     </motion.div>

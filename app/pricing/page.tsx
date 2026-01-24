@@ -44,7 +44,7 @@ const planDescriptions: Record<string, any> = {
     }
 };
 
-export const dynamic = 'force-dynamic'; // Ensure we fetch fresh data on every request
+export const revalidate = 3600; // Cache for 1 hour
 
 export default async function PricingPage() {
     let products: PricingProduct[] = [];
