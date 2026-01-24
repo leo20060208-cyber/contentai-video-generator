@@ -212,7 +212,12 @@ export default function LabPage() {
                             {/* ... Template Uploader & List ... */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-1">
-                                    <TemplateUploader onUploadComplete={fetchTemplates} onClose={() => { setEditingTemplate(null); setIsEditModalOpen(false); }} initialData={editingTemplate} />
+                                    <TemplateUploader
+                                        isOpen={isEditModalOpen}
+                                        onUploadComplete={fetchTemplates}
+                                        onClose={() => { setEditingTemplate(null); setIsEditModalOpen(false); }}
+                                        initialData={editingTemplate}
+                                    />
                                 </div>
                                 <div className="lg:col-span-2">
                                     <div className="bg-zinc-900 border border-white/10 rounded-xl overflow-hidden">

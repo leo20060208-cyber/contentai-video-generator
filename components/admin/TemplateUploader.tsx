@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Upload, X, Loader2, Plus, DollarSign, Zap, MousePointer2, Check, Sparkles, Clock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -130,6 +130,47 @@ export function TemplateUploader({
     const [productSlots, setProductSlots] = useState<ProductSlotData[]>(
         initialData?.product_slots || []
     );
+
+    // Sync state with initialData when it changes (for editing)
+    useEffect(() => {
+        if (initialData) {
+            setTitle(initialData.title || '');
+            setCategory(initialData.category || 'VISUAL');
+            setAllowedTiers(initialData.allowed_tiers || ['normal', 'pro']);
+            setGenerationMethod('video_to_video'); // Default or derive if stored
+            setAiModel(initialData.ai_model || 'wavespeed-kling-o1');
+            setTemplateType(initialData.type || ((initialData.id && !initialData.before_video_url) ? 'image' : 'video'));
+
+            // Files/URLs
+            setExistingBeforeUrl(initialData.before_video_url || initialData.before_image_url || null);
+            setExistingAfterUrl(initialData.after_video_url || initialData.after_image_url || null);
+            setExistingProductImageUrl(initialData.product_image_url || null);
+            setExistingProductOutlineImageUrl(initialData.product_outline_image_url || null);
+            setExistingCleanBackgroundUrl(initialData.clean_background_url || null);
+            setReplacedObjectMask(initialData.replaced_object_mask_url || null);
+
+            setTransformationPrompt(initialData.description || '');
+            setIsTrending(initialData.is_trending || false);
+
+            setRequiredImageCount(initialData.required_image_count || 1);
+            setImageDescriptions(initialData.image_descriptions || []);
+            setImageInstructions(initialData.image_instructions || '');
+            setProductSlots(initialData.product_slots || []);
+
+            // Reset new file uploads
+            setBeforeVideo(null);
+            setAfterVideo(null);
+            setBeforeImage(null);
+            setAfterImage(null);
+            setProductImage(null);
+            setProductOutlineImage(null);
+        } else {
+            // Reset to defaults if closed/cleared (optional, but good practice)
+            setTitle('');
+            // ... strict reset might annoy user if they close accidental, so maybe only reset if strictly needed.
+            // But for "Add New" we usually rely on component unmount or manual reset.
+        }
+    }, [initialData]);
 
     const extractThumbnail = (file: File): Promise<{ blob: Blob | null, duration: number }> => {
         return new Promise((resolve) => {
