@@ -68,6 +68,33 @@ export default function LabPage() {
         checkAuth();
     }, [router]);
 
+    // Fetch Templates
+    const fetchTemplates = async () => {
+        setLoading(true);
+        try {
+            if (!isSupabaseConfigured) {
+                setTemplates([]);
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from('templates')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setTemplates(data || []);
+        } catch (error: any) {
+            console.error('Error fetching templates:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchTemplates();
+    }, []);
+
     if (authLoading) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center">
@@ -98,32 +125,7 @@ export default function LabPage() {
         );
     }
 
-    // Fetch Templates
-    const fetchTemplates = async () => {
-        setLoading(true);
-        try {
-            if (!isSupabaseConfigured) {
-                setTemplates([]);
-                return;
-            }
 
-            const { data, error } = await supabase
-                .from('templates')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setTemplates(data || []);
-        } catch (error: any) {
-            console.error('Error fetching templates:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchTemplates();
-    }, []);
 
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to delete this template?')) return;
@@ -189,6 +191,12 @@ export default function LabPage() {
                         className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'faqs' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
                     >
                         FAQs
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('inquiries')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'inquiries' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
+                    >
+                        Inquiries
                     </button>
                 </div>
 
