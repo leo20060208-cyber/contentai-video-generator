@@ -718,27 +718,12 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Product Layers</h3>
                                 <div className="relative">
-                                    <button
-                                        onClick={() => setShowAddOptions(!showAddOptions)}
-                                        className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1"
+                                    <label
+                                        className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer"
                                     >
                                         <Plus className="w-3 h-3" /> Add
-                                    </button>
-
-                                    {showAddOptions && (
-                                        <div className="absolute top-full right-0 mt-1 w-32 bg-zinc-900 border border-white/10 rounded-sm shadow-xl z-20 flex flex-col p-1">
-                                            <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-sm cursor-pointer text-[10px] text-zinc-300">
-                                                <ImageIcon className="w-3 h-3" /> Image
-                                                <input type="file" onChange={(e) => { handleProductUpload(e); setShowAddOptions(false); }} className="hidden" accept="image/*" />
-                                            </label>
-                                            <button
-                                                onClick={() => { setShowSavedMasksModal(true); setShowAddOptions(false); }}
-                                                className="flex items-center gap-2 px-2 py-1.5 hover:bg-white/10 rounded-sm cursor-pointer text-[10px] text-zinc-300 w-full text-left"
-                                            >
-                                                <Layers className="w-3 h-3" /> Saved Mask
-                                            </button>
-                                        </div>
-                                    )}
+                                        <input type="file" onChange={(e) => { handleProductUpload(e); setShowAddOptions(false); }} className="hidden" accept="image/*" />
+                                    </label>
                                 </div>
                             </div>
                             <div className="space-y-1">

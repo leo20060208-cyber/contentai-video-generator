@@ -311,12 +311,29 @@ export function TemplateUploader({
         if (maskUrl) {
             setReplacedObjectMask(maskUrl);
             try {
-                const res = await fetch(maskUrl);
-                const blob = await res.blob();
+                // Try direct fetch first
+                let blob;
+                try {
+                    const res = await fetch(maskUrl);
+                    if (!res.ok) throw new Error('Direct fetch failed');
+                    blob = await res.blob();
+                } catch (corsError) {
+                    console.warn('Direct fetch failed (likely CORS), trying proxy...', corsError);
+                    // Fallback to proxy
+                    const res = await fetch('/api/proxy-blob', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: maskUrl })
+                    });
+                    if (!res.ok) throw new Error('Proxy fetch failed');
+                    blob = await res.blob();
+                }
+
                 setMaskBlob(blob);
                 alert('✅ Object mask saved successfully!');
             } catch (e) {
                 console.error("Error fetching mask blob", e);
+                alert('⚠️ Could not save mask data (CORS/Proxy error). You can still proceed, but the mask might not be uploaded to your storage.');
             }
         }
     };

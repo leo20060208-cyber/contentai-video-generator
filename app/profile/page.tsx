@@ -18,7 +18,7 @@ function Tabs({ activeTab, onTabChange }: { activeTab: string, onTabChange: (tab
     const tabs = [
         { id: 'videos', label: 'My Videos', icon: Film },
         { id: 'images', label: 'My Images', icon: ImageIcon },
-        { id: 'masks', label: 'My Masks', icon: Sparkles },
+        // { id: 'masks', label: 'My Masks', icon: Sparkles }, // Removed
         { id: 'saved', label: 'Saved', icon: Heart },
         { id: 'subscription', label: 'Subscription', icon: CreditCard },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -226,8 +226,22 @@ export default function ProfilePage() {
                 finalImageUrl = data.resultUrl; // This is a Replicate URL (temporary)
 
                 // 3. We need to save this RESULT to our storage permanently (since Replicate URLs expire)
-                const savedRes = await fetch(finalImageUrl);
-                const savedBlob = await savedRes.blob();
+                let savedBlob: Blob;
+                try {
+                    const savedRes = await fetch(finalImageUrl);
+                    if (!savedRes.ok) throw new Error('Direct fetch failed');
+                    savedBlob = await savedRes.blob();
+                } catch (corsError) {
+                    console.warn('Direct fetch failed (CORS), using proxy...', corsError);
+                    const savedRes = await fetch('/api/proxy-blob', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: finalImageUrl })
+                    });
+                    if (!savedRes.ok) throw new Error('Proxy fetch failed');
+                    savedBlob = await savedRes.blob();
+                }
+
                 const savedFile = new File([savedBlob], `mask_${Date.now()}.png`, { type: 'image/png' });
 
                 // Upload processed mask to permanent storage

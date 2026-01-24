@@ -301,6 +301,35 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         }
     };
 
+    const handleDirectLayerAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const uploadedUrl = ev.target?.result as string;
+            const newLayer: ProductLayer = {
+                id: crypto.randomUUID(),
+                url: uploadedUrl,
+                type: 'product',
+                x: 0,
+                y: 0,
+                scale: 1,
+                rotation: 0,
+                zIndex: layers.length + 1,
+                maskPoints: [],
+                maskColor: MASK_COLORS[layers.length % MASK_COLORS.length],
+                details: [],
+                prompt: ''
+            };
+            setLayers([...layers, newLayer]);
+            setSelectedLayerId(newLayer.id);
+            setActiveTool('move');
+        };
+        reader.readAsDataURL(file);
+        e.target.value = ''; // Reset input
+    };
+
     const handleSavedMaskSelect = (maskUrl: string) => {
         // Add as layer
         const newLayer: ProductLayer = {
@@ -864,7 +893,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                         <div className="p-4 border-b border-white/5">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Additional Layers</h3>
-                                <button onClick={() => setIsUploadingProduct(true)} className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1"><Plus className="w-3 h-3" /> Add</button>
+                                <label className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer">
+                                    <Plus className="w-3 h-3" /> Add
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleDirectLayerAdd} />
+                                </label>
                             </div>
                             <div className="space-y-1">
                                 {layers.map((layer, i) => (
@@ -1445,66 +1477,20 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
 
 
-                {/* Add Layer Modal (Reused) */}
-                <AnimatePresence>
-                    {isUploadingProduct && (
-                        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                            <motion.div
-                                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-                                className="bg-zinc-950 border border-zinc-800 rounded-lg w-full max-w-xs overflow-hidden"
-                            >
-                                <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
-                                    <h3 className="text-[10px] font-bold text-white uppercase tracking-widest">Add Element</h3>
-                                    <button onClick={() => { setIsUploadingProduct(false); setTempUploadImage(null); }}><X className="w-3 h-3 text-zinc-500 hover:text-white" /></button>
-                                </div>
 
-                                <div className="p-3">
-                                    {!tempUploadImage ? (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                onClick={() => setUploadType('product')}
-                                                className="relative aspect-square rounded-sm border border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900 transition-all flex flex-col items-center justify-center gap-2 group"
-                                            >
-                                                <ImageIcon className="w-5 h-5 text-zinc-600 group-hover:text-zinc-300" />
-                                                <span className="text-[9px] uppercase tracking-wider text-zinc-600 group-hover:text-zinc-300">Product</span>
-                                                <input type="file" onChange={(e) => { setUploadType('product'); handleUpload(e, setTempUploadImage); }} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
-                                            </button>
-                                            <button
-                                                onClick={() => { setUploadType('mask'); setShowMaskSelectModal(true); }}
-                                                className="relative aspect-square rounded-sm border border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900 transition-all flex flex-col items-center justify-center gap-2 group"
-                                            >
-                                                <Eraser className="w-5 h-5 text-zinc-600 group-hover:text-zinc-300" />
-                                                <span className="text-[9px] uppercase tracking-wider text-zinc-600 group-hover:text-zinc-300">Mask</span>
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <div className="relative aspect-square bg-black border border-zinc-800 rounded-sm p-2 flex items-center justify-center bg-[url('/transparent-grid.png')]">
-                                                <img src={tempUploadImage} className="max-w-full max-h-full object-contain" />
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button onClick={addLayer} className="flex-1 bg-white text-black hover:bg-zinc-200 font-bold tracking-wider uppercase text-[10px] h-8">
-                                                    Add
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
 
                 {/* Mask Selection Modal */}
                 <AnimatePresence>
-                    {showMaskSelectModal && (
-                        <SavedMasksModal
-                            isOpen={showMaskSelectModal}
-                            onClose={() => setShowMaskSelectModal(false)}
-                            onSelect={handleSavedMaskSelect}
-                        />
-                    )}
-                </AnimatePresence>
+                    {
+                        showMaskSelectModal && (
+                            <SavedMasksModal
+                                isOpen={showMaskSelectModal}
+                                onClose={() => setShowMaskSelectModal(false)}
+                                onSelect={handleSavedMaskSelect}
+                            />
+                        )
+                    }
+                </AnimatePresence >
 
             </div >
         </div >
