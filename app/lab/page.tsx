@@ -26,16 +26,22 @@ import { MagicVideoManager } from '@/components/lab/MagicVideoManager';
 
 import { PromptPresetsManager } from '@/components/lab/PromptPresetsManager';
 import { FaqsManager } from '@/components/lab/FaqsManager';
+import { InquiriesManager } from '@/components/lab/InquiriesManager';
+
+import { useRouter } from 'next/navigation';
+import { Lock } from 'lucide-react';
 
 export default function LabPage() {
+    const router = useRouter();
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic' | 'presets' | 'faqs'>('templates');
+    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic' | 'presets' | 'faqs' | 'inquiries'>('templates');
 
     // Auth State
     const [userEmail, setUserEmail] = useState<string | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
+    const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
     // Edit State
     const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
@@ -46,16 +52,51 @@ export default function LabPage() {
         const checkAuth = async () => {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
-                setUserEmail(user?.email || null);
+                if (!user || user.email !== 'leo20060208@gmail.com') {
+                    setIsAuthorized(false);
+                } else {
+                    setIsAuthorized(true);
+                    setUserEmail(user.email);
+                }
             } catch (error) {
                 console.error('Auth check failed:', error);
-                setUserEmail(null);
+                setIsAuthorized(false);
             } finally {
                 setAuthLoading(false);
             }
         };
         checkAuth();
-    }, []);
+    }, [router]);
+
+    if (authLoading) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-white animate-spin" />
+            </div>
+        );
+    }
+
+    if (!isAuthorized) {
+        return (
+            <div className="min-h-screen bg-black flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-zinc-900 border border-red-500/20 rounded-2xl p-8 text-center">
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+                        <Lock className="w-8 h-8 text-red-500" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-2">Access Denied</h1>
+                    <p className="text-zinc-400 mb-8">
+                        You do not have permission to access the ContentAI Lab. This area is restricted to administrators only.
+                    </p>
+                    <Button
+                        onClick={() => router.push('/')}
+                        className="w-full bg-white text-black hover:bg-zinc-200"
+                    >
+                        Return Home
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     // Fetch Templates
     const fetchTemplates = async () => {
@@ -297,6 +338,18 @@ export default function LabPage() {
                             exit={{ opacity: 0, y: -20 }}
                         >
                             <FaqsManager />
+                        </motion.div>
+                    )}
+
+
+                    {activeTab === 'inquiries' && (
+                        <motion.div
+                            key="inquiries"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <InquiriesManager />
                         </motion.div>
                     )}
                 </AnimatePresence>

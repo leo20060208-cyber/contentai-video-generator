@@ -14,13 +14,28 @@ export function BusinessContactModal({ isOpen, onClose }: BusinessContactModalPr
     const [step, setStep] = useState<'form' | 'success'>('form');
     const [isLoading, setIsLoading] = useState(false);
 
+    const [form, setForm] = useState({ email: '', phone: '', message: '' });
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setIsLoading(false);
-        setStep('success');
+
+        try {
+            const { error } = await import('@/lib/supabase').then(m => m.supabase.from('business_inquiries').insert({
+                email: form.email,
+                phone: form.phone,
+                message: form.message
+            }));
+
+            if (error) throw error;
+
+            setStep('success');
+        } catch (error) {
+            console.error('Error submitting inquiry:', error);
+            alert('Something went wrong. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -69,6 +84,8 @@ export function BusinessContactModal({ isOpen, onClose }: BusinessContactModalPr
                                                     type="email"
                                                     required
                                                     placeholder="WORK EMAIL"
+                                                    value={form.email}
+                                                    onChange={e => setForm({ ...form, email: e.target.value })}
                                                     className="w-full pb-2 bg-transparent border-b border-zinc-800 text-white placeholder-zinc-700 text-sm focus:outline-none focus:border-white transition-colors rounded-none"
                                                 />
                                             </div>
@@ -77,6 +94,8 @@ export function BusinessContactModal({ isOpen, onClose }: BusinessContactModalPr
                                                 <input
                                                     type="tel"
                                                     placeholder="PHONE (OPTIONAL)"
+                                                    value={form.phone}
+                                                    onChange={e => setForm({ ...form, phone: e.target.value })}
                                                     className="w-full pb-2 bg-transparent border-b border-zinc-800 text-white placeholder-zinc-700 text-sm focus:outline-none focus:border-white transition-colors rounded-none"
                                                 />
                                             </div>
@@ -85,6 +104,8 @@ export function BusinessContactModal({ isOpen, onClose }: BusinessContactModalPr
                                                 <textarea
                                                     rows={1}
                                                     placeholder="PROJECT DETAILS"
+                                                    value={form.message}
+                                                    onChange={e => setForm({ ...form, message: e.target.value })}
                                                     className="w-full pb-2 bg-transparent border-b border-zinc-800 text-white placeholder-zinc-700 text-sm focus:outline-none focus:border-white transition-colors resize-none rounded-none"
                                                 />
                                             </div>
