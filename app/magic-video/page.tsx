@@ -61,23 +61,7 @@ export default function MagicVideoPage() {
             try {
                 // Fetch Magic Video Hub content
                 const magicData = await getSectionContent('magic_video_hub');
-
-                // Fetch Video Editing content (from what_we_do_v2 or similar, where the onboarding popup gets it)
-                const whatWeDoData = await getSectionContent('what_we_do_v2');
-                let videoEditingMedia = '';
-                let videoEditingType: 'image' | 'video' = 'image';
-
-                // Attempt to grab the preview used in the Onboarding Popup/PrePage for Video Editing
-                if (whatWeDoData && whatWeDoData.createVideoSteps && whatWeDoData.createVideoSteps[0]) {
-                    const step = whatWeDoData.createVideoSteps[0];
-                    if (step.image) {
-                        videoEditingMedia = step.image;
-                        // Simple heuristic check for video type if not explicitly provided
-                        if (videoEditingMedia.match(/\.(mp4|webm|mov)$/i)) {
-                            videoEditingType = 'video';
-                        }
-                    }
-                }
+                console.log("Magic Data Loaded:", magicData);
 
                 setConfig(prev => ({
                     ...prev,
@@ -96,8 +80,12 @@ export default function MagicVideoPage() {
                     },
                     videoEditing: {
                         ...prev.videoEditing,
-                        mediaUrl: videoEditingMedia,
-                        mediaType: videoEditingType,
+                        ...(magicData?.recreateVideo || {}),
+                        // Remap from recreateVideo
+                        mediaUrl: magicData?.recreateVideo?.mediaUrl || prev.videoEditing.mediaUrl,
+                        mediaType: magicData?.recreateVideo?.mediaType || prev.videoEditing.mediaType,
+                        title: magicData?.recreateVideo?.title || prev.videoEditing.title,
+                        description: magicData?.recreateVideo?.description || prev.videoEditing.description,
                     }
                 }));
 

@@ -28,21 +28,22 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
     const currentCategory = selectedCategory ?? internalCategory;
 
     // Use initial data directly, no need for effect to fetch it
-    const { heroVideo, heroImage, libraryContent, magicVideoConfig: rawMagicConfig } = initialData;
+    const { heroVideo, heroImage, libraryContent, magicVideoConfig } = initialData;
 
-    // Apply the overrides immediately
-    const magicVideoConfig = rawMagicConfig ? {
-        ...rawMagicConfig,
-        livingBackgrounds: {
-            ...rawMagicConfig.livingBackgrounds,
-            description: 'POWERED BY KLING AI'
-        },
-        directorsCut: {
-            ...rawMagicConfig.directorsCut,
-            title: 'Image to Video',
-            description: 'POWERED BY SORA 2'
-        }
-    } : null;
+    // Helper to determine media url
+    const getMediaUrl = (item: any) => {
+        if (!item) return null;
+        return item.after_video_url || item.after_image_url || item.video_url || item.url || item.mediaUrl;
+    };
+
+    // Helper for media type check
+    const isVideo = (item: any) => {
+        if (!item) return false;
+        const url = getMediaUrl(item);
+        if (!url) return false;
+        if (item.mediaType === 'video') return true;
+        return url.match(/\.(mp4|webm|mov)$/i) || item.after_video_url;
+    };
 
     useEffect(() => {
         if (categories.length > 0) {
@@ -62,6 +63,24 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
         } else {
             setInternalCategory(newCategory);
         }
+    };
+
+    // Card 1 Data
+    const card1 = magicVideoConfig?.recreateVideo || {
+        mediaUrl: heroVideo ? (heroVideo.after_video_url || heroVideo.video_url) : null,
+        mediaType: 'video',
+        title: 'Video Editing',
+        description: 'Powered by Kling.ai',
+        link: '/create-yours'
+    };
+
+    // Card 2 Data
+    const card2 = magicVideoConfig?.recreateImage || {
+        mediaUrl: heroImage ? (heroImage.after_image_url || heroImage.url) : null,
+        mediaType: 'image',
+        title: 'Image Editing',
+        description: 'Powered by Nano Banana Pro',
+        link: '/create-image'
     };
 
     return (
@@ -123,13 +142,12 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
             <div className="w-full max-w-[1200px] mx-auto pb-12">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                    {/* 1. Recreate Video */}
-                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
-                        {/* Background Content */}
+                    {/* 1. Recreate Video / Video Editing */}
+                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                            {heroVideo ? (
+                            {getMediaUrl(card1) ? (
                                 <video
-                                    src={heroVideo.after_video_url || heroVideo.video_url}
+                                    src={getMediaUrl(card1)}
                                     className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
                                     autoPlay
                                     loop
@@ -140,33 +158,29 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                 <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center" />
                             )}
                         </div>
-                        {/* Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                        {/* Content / Controls */}
                         <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <a href="/create-yours" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                Create Video
+                            <a href={card1.link || "/create-yours"} className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                {card1.title || "Create Video"}
                             </a>
                         </div>
-                        {/* Bottom Tray */}
                         <div className="absolute bottom-4 left-4 right-4 z-20">
                             <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
                                 <div className="flex flex-col">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">Video Editing</h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">Powered by Kling.ai</p>
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">{card1.title || "Video Editing"}</h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">{card1.description || "Powered by Kling.ai"}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* 2. Recreate Image */}
-                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
-                        {/* Background Content */}
+                    {/* 2. Recreate Image / Image Editing */}
+                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                            {heroImage ? (
-                                (heroImage.after_video_url || heroImage.url?.match(/\.(mp4|webm|mov)$/i) || heroImage.after_image_url?.match(/\.(mp4|webm|mov)$/i)) ? (
+                            {getMediaUrl(card2) ? (
+                                (isVideo(card2)) ? (
                                     <video
-                                        src={heroImage.after_video_url || heroImage.after_image_url || heroImage.url}
+                                        src={getMediaUrl(card2)}
                                         className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
                                         autoPlay
                                         loop
@@ -175,7 +189,7 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                     />
                                 ) : (
                                     <img
-                                        src={heroImage.after_image_url || heroImage.url}
+                                        src={getMediaUrl(card2)}
                                         className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
                                         alt="Hero Image"
                                     />
@@ -184,20 +198,17 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                                 <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop')] bg-cover bg-center" />
                             )}
                         </div>
-                        {/* Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                        {/* Content / Controls */}
                         <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <a href="/create-image" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                Create Image
+                            <a href={card2.link || "/create-image"} className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                {card2.title || "Create Image"}
                             </a>
                         </div>
-                        {/* Bottom Tray */}
                         <div className="absolute bottom-4 left-4 right-4 z-20">
                             <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
                                 <div className="flex flex-col">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">Image Editing</h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">Powered by Nano Banana Pro</p>
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">{card2.title || "Image Editing"}</h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">{card2.description || "Powered by Nano Banana Pro"}</p>
                                 </div>
                             </div>
                         </div>
@@ -205,7 +216,7 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
 
                     {/* 3. Living Backgrounds */}
                     {magicVideoConfig && (
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
                             <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                                 {magicVideoConfig.livingBackgrounds?.mediaUrl && (
                                     magicVideoConfig.livingBackgrounds.mediaType === 'video' ? (
@@ -236,7 +247,7 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
 
                     {/* 4. Director's Cut */}
                     {magicVideoConfig && (
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-square">
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
                             <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                                 {magicVideoConfig.directorsCut?.mediaUrl && (
                                     magicVideoConfig.directorsCut.mediaType === 'video' ? (

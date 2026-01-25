@@ -18,6 +18,8 @@ interface MagicVideoConfig {
     livingBackgrounds: MagicCard;
     directorsCut: MagicCard;
     instantClips: MagicCard;
+    recreateVideo: MagicCard;
+    recreateImage: MagicCard;
 }
 
 const defaultConfig: MagicVideoConfig = {
@@ -26,14 +28,14 @@ const defaultConfig: MagicVideoConfig = {
         mediaUrl: '',
         link: '/magic-video/living-backgrounds',
         title: 'Living Backgrounds',
-        description: 'Animate products with high-end motion'
+        description: 'POWERED BY KLING AI'
     },
     directorsCut: {
         mediaType: 'image',
         mediaUrl: '',
         link: '/magic-video/directors-cut',
-        title: "Director's Cut",
-        description: 'Professional scene-to-scene transitions'
+        title: "Image to Video",
+        description: 'POWERED BY SORA 2'
     },
     instantClips: {
         mediaType: 'image',
@@ -41,6 +43,20 @@ const defaultConfig: MagicVideoConfig = {
         link: '/magic-video/instant-clips',
         title: 'Instant Product Clips',
         description: 'Magic is cooking...'
+    },
+    recreateVideo: {
+        mediaType: 'image',
+        mediaUrl: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=2000&auto=format&fit=crop',
+        link: '/create-yours',
+        title: 'Video Editing',
+        description: 'Powered by Kling.ai'
+    },
+    recreateImage: {
+        mediaType: 'image',
+        mediaUrl: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop',
+        link: '/create-image',
+        title: 'Image Editing',
+        description: 'Powered by Nano Banana Pro'
     }
 };
 
@@ -61,7 +77,17 @@ export function MagicVideoManager() {
         try {
             const data = await getSectionContent('magic_video_hub');
             if (data) {
-                setConfig(prev => ({ ...prev, ...data }));
+                // Merge data with default config to ensure all keys exist
+                setConfig(prev => ({
+                    ...defaultConfig, // Ensure defaults are present
+                    ...data,          // Overwrite with saved data
+                    // Ensure nested objects are merged correctly if needed
+                    recreateVideo: { ...defaultConfig.recreateVideo, ...(data.recreateVideo || {}) },
+                    recreateImage: { ...defaultConfig.recreateImage, ...(data.recreateImage || {}) },
+                    livingBackgrounds: { ...defaultConfig.livingBackgrounds, ...(data.livingBackgrounds || {}) },
+                    directorsCut: { ...defaultConfig.directorsCut, ...(data.directorsCut || {}) },
+                    instantClips: { ...defaultConfig.instantClips, ...(data.instantClips || {}) },
+                }));
             }
         } catch (error) {
             console.error('Failed to load magic video config:', error);
@@ -222,19 +248,25 @@ export function MagicVideoManager() {
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileUpload} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Top Wide */}
-                <div className="md:col-span-2">
-                    {renderCard('livingBackgrounds', 'Living Backgrounds (Top Card)')}
+                <div className="col-span-1">
+                    {renderCard('recreateVideo', 'Recreate Video (Card 1)')}
+                </div>
+                <div className="col-span-1">
+                    {renderCard('recreateImage', 'Recreate Image (Card 2)')}
+                </div>
+                {/* Top Wide - previously Living Backgrounds, now maybe reuse layout or adjust */}
+                <div className="md:col-span-1">
+                    {renderCard('livingBackgrounds', 'Living Backgrounds (Card 3)')}
+                </div>
+                <div className="col-span-1">
+                    {renderCard('directorsCut', "Director's Cut (Card 4)")}
                 </div>
 
-                {/* Left */}
-                <div className="col-span-1">
-                    {renderCard('directorsCut', "Director's Cut (Bottom Left)")}
+                <div className="col-span-1 md:col-span-2">
+                    <h3 className="text-white font-bold mb-4 mt-4">Other Magic Cards (Not on Hero)</h3>
                 </div>
-
-                {/* Right */}
                 <div className="col-span-1">
-                    {renderCard('instantClips', 'Instant Product Clips (Bottom Right)')}
+                    {renderCard('instantClips', 'Instant Product Clips')}
                 </div>
             </div>
         </div>

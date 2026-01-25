@@ -32,17 +32,14 @@ async function getSectionContent(sectionKey: string) {
 
 async function getLandingPageData() {
   try {
-    const [vid, img, lib, libContent, magicConfig] = await Promise.all([
-      getHeroTemplate('video'),
-      getHeroTemplate('image'),
-      getHeroTemplate('library'),
+    const [libContent, magicConfig] = await Promise.all([
       getSectionContent('what_we_do_v2'),
       getSectionContent('magic_video_hub')
     ]);
 
     return {
-      heroVideo: vid,
-      heroImage: img,
+      heroVideo: null,
+      heroImage: null,
       libraryContent: libContent,
       magicVideoConfig: magicConfig
     };
