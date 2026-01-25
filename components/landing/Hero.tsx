@@ -20,8 +20,6 @@ interface HeroProps {
 }
 
 export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroProps) {
-    const { categories, loading } = useCategories();
-    const [businessRows, setBusinessRows] = useState<string[][]>([]);
     const [internalCategory, setInternalCategory] = useState('All');
 
     // Use prop if provided, otherwise internal state
@@ -44,17 +42,6 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
         if (item.mediaType === 'video') return true;
         return url.match(/\.(mp4|webm|mov)$/i) || item.after_video_url;
     };
-
-    useEffect(() => {
-        if (categories.length > 0) {
-            // Split categories into rows of 4
-            const rows: string[][] = [];
-            for (let i = 0; i < categories.length; i += 4) {
-                rows.push(categories.slice(i, i + 4).map(c => c.name));
-            }
-            setBusinessRows(rows);
-        }
-    }, [categories]);
 
     const handleBusinessClick = (business: string) => {
         const newCategory = business === currentCategory ? 'All' : business;
@@ -142,7 +129,69 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
             <div className="w-full max-w-[1200px] mx-auto pb-12">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                    {/* 1. Recreate Video / Video Editing */}
+                    {/* 1. Living Backgrounds */}
+                    {magicVideoConfig && (
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
+                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                                {magicVideoConfig.livingBackgrounds?.mediaUrl && (
+                                    magicVideoConfig.livingBackgrounds.mediaType === 'video' ? (
+                                        <video src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
+                                    ) : (
+                                        <img src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
+                                    )
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <Link href="/magic-video/living-backgrounds" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                    {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
+                                </Link>
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 z-20">
+                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
+                                        {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
+                                    </h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
+                                        {magicVideoConfig.livingBackgrounds?.description || 'POWERED BY KLING AI'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2. Director's Cut */}
+                    {magicVideoConfig && (
+                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
+                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
+                                {magicVideoConfig.directorsCut?.mediaUrl && (
+                                    magicVideoConfig.directorsCut.mediaType === 'video' ? (
+                                        <video src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
+                                    ) : (
+                                        <img src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
+                                    )
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <Link href="/magic-video/directors-cut" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                    {magicVideoConfig.directorsCut?.title || "Image to Video"}
+                                </Link>
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 z-20">
+                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
+                                        {magicVideoConfig.directorsCut?.title || "Image to Video"}
+                                    </h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
+                                        {magicVideoConfig.directorsCut?.description || 'POWERED BY SORA 2'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 3. Recreate Video / Video Editing */}
                     <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                             {getMediaUrl(card1) ? (
@@ -174,7 +223,7 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                         </div>
                     </div>
 
-                    {/* 2. Recreate Image / Image Editing */}
+                    {/* 4. Recreate Image / Image Editing */}
                     <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
                         <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
                             {getMediaUrl(card2) ? (
@@ -213,68 +262,6 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                             </div>
                         </div>
                     </div>
-
-                    {/* 3. Living Backgrounds */}
-                    {magicVideoConfig && (
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
-                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                                {magicVideoConfig.livingBackgrounds?.mediaUrl && (
-                                    magicVideoConfig.livingBackgrounds.mediaType === 'video' ? (
-                                        <video src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
-                                    ) : (
-                                        <img src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
-                                    )
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <Link href="/magic-video/living-backgrounds" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                    {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
-                                </Link>
-                            </div>
-                            <div className="absolute bottom-4 left-4 right-4 z-20">
-                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
-                                        {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
-                                    </h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
-                                        {magicVideoConfig.livingBackgrounds?.description || 'POWERED BY KLING AI'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 4. Director's Cut */}
-                    {magicVideoConfig && (
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
-                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                                {magicVideoConfig.directorsCut?.mediaUrl && (
-                                    magicVideoConfig.directorsCut.mediaType === 'video' ? (
-                                        <video src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
-                                    ) : (
-                                        <img src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
-                                    )
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <Link href="/magic-video/directors-cut" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                    {magicVideoConfig.directorsCut?.title || "Image to Video"}
-                                </Link>
-                            </div>
-                            <div className="absolute bottom-4 left-4 right-4 z-20">
-                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
-                                        {magicVideoConfig.directorsCut?.title || "Image to Video"}
-                                    </h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
-                                        {magicVideoConfig.directorsCut?.description || 'POWERED BY SORA 2'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                 </div>
             </div>

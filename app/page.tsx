@@ -2,8 +2,8 @@ import { Hero } from '@/components/landing/Hero';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
-// Revalidate every 10 minutes
-export const revalidate = 600;
+// Revalidate immediately for fresh content
+export const revalidate = 0;
 
 // Server-side safe Supabase client for public data
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
