@@ -212,6 +212,19 @@ export default function LabPage() {
                             {/* ... Template Uploader & List ... */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-1">
+                                    <div
+                                        onClick={() => { setEditingTemplate(null); setIsEditModalOpen(true); }}
+                                        className="bg-zinc-900 border border-white/10 rounded-xl p-8 flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-zinc-800 transition-colors group min-h-[300px]"
+                                    >
+                                        <div className="w-16 h-16 rounded-full bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+                                            <Plus className="w-8 h-8 text-orange-500" />
+                                        </div>
+                                        <div className="text-center">
+                                            <h3 className="text-xl font-bold text-white mb-2">New Template</h3>
+                                            <p className="text-sm text-zinc-500">Create a new video or image template from scratch</p>
+                                        </div>
+                                    </div>
+
                                     <TemplateUploader
                                         isOpen={isEditModalOpen}
                                         onUploadComplete={fetchTemplates}
