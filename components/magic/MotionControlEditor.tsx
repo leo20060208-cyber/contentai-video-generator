@@ -186,10 +186,10 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                     .from('videos')
                     .upload(fileName, blob, { contentType: type });
                 if (error) throw error;
-                const { data: { publicUrl } } = supabase.storage
+                const { data: publicUrlData } = supabase.storage
                     .from('videos')
                     .getPublicUrl(fileName);
-                return publicUrl;
+                return publicUrlData.publicUrl;
             };
 
             setGenerationProgress(5);
@@ -264,8 +264,8 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
     };
 
     return (
-        <div className="fixed inset-0 top-16 bg-transparent flex overflow-hidden">
-            <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar">
+        <div className="fixed inset-0 top-16 bg-transparent flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden lg:gap-0">
+            <div className="w-full lg:flex-1 flex flex-col lg:overflow-y-auto overflow-x-hidden custom-scrollbar shrink-0 lg:shrink">
                 <div className="min-h-full flex flex-col items-center pt-12 p-8 gap-12">
 
                     {/* Aspect Ratio / Format Selector */}
@@ -291,7 +291,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                     </div>
 
                     {/* Image Slots */}
-                    <div className="flex gap-8 items-center justify-center overflow-y-auto w-full custom-scrollbar py-4">
+                    <div className="flex flex-col md:flex-row gap-8 items-center justify-center overflow-y-auto w-full custom-scrollbar py-4">
                         <div className="flex flex-col gap-2">
                             <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center">Reference Video (Motion)</span>
                             <div
@@ -350,7 +350,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                     {/* Bottom Panel */}
                     <div className="relative z-50 shrink-0 w-auto self-center mt-12 pb-12">
                         <div className="max-w-5xl w-full">
-                            <div className="flex items-center justify-between gap-12">
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-12">
 
                                 {/* Quality / Duration Selector */}
                                 <div className="flex gap-4">
@@ -411,16 +411,16 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
             </div>
 
             {/* Unified Library Section */}
-            <div className="w-[850px] bg-transparent flex flex-col overflow-hidden">
+            <div className="w-full lg:w-[850px] bg-transparent flex flex-col lg:overflow-hidden shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 h-auto lg:h-full">
                 <div className="flex-1 overflow-y-auto custom-scrollbar pt-12 pb-12 px-12">
                     {/* Library Header: Aligned with Format Bar */}
                     <div className="flex justify-center mb-4">
                         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">MOTION LIBRARY</span>
                     </div>
 
-                    <div className="flex gap-6 items-start mt-12">
+                    <div className="flex flex-col md:flex-row gap-6 items-start mt-12">
                         {/* Reference Column */}
-                        <div className="w-1/3 flex flex-col gap-6">
+                        <div className="w-full md:w-1/3 grid grid-cols-3 md:flex md:flex-col gap-4 md:gap-6">
                             {/* Add Yours Card */}
                             <div
                                 onClick={() => document.getElementById('mc-start-upload')?.click()}
@@ -429,7 +429,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                                 <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
                                     <Plus className="w-5 h-5 text-zinc-500 group-hover:text-orange-500" />
                                 </div>
-                                <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest group-hover:text-orange-500 transition-colors">Add yours</span>
+                                <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest group-hover:text-orange-500 transition-colors text-center">Add yours</span>
                             </div>
 
                             {/* Reference Presets */}
@@ -470,7 +470,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                         </div>
 
                         {/* Presets Columns */}
-                        <div className="w-2/3 grid grid-cols-2 gap-6">
+                        <div className="w-full md:w-2/3 grid grid-cols-2 gap-6">
                             {presets.map((item) => (
                                 <div
                                     key={item.id}
