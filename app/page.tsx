@@ -11,35 +11,51 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function getHeroTemplate(type: 'video' | 'image' | 'library') {
-  const tag = `[HERO_${type.toUpperCase()}]`;
-  const { data } = await supabase
-    .from('templates')
-    .select('*')
-    .ilike('description', `%${tag}%`)
-    .limit(1)
-    .maybeSingle();
-  return data;
+  try {
+    const tag = `[HERO_${type.toUpperCase()}]`;
+    const { data } = await supabase
+      .from('templates')
+      .select('*')
+      .ilike('description', `%${tag}%`)
+      .limit(1)
+      .maybeSingle();
+    return data;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function getSectionContent(sectionKey: string) {
-  const { data } = await supabase
-    .from('site_content')
-    .select('content')
-    .eq('section_key', sectionKey)
-    .single();
-  return data?.content;
+  try {
+    const { data } = await supabase
+      .from('site_content')
+      .select('content')
+      .eq('section_key', sectionKey)
+      .maybeSingle();
+    return data?.content;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function getLandingPageData() {
   try {
-    const [libContent, magicConfig] = await Promise.all([
+    // We wrap everything in a promise that resolves anyway after 1.5 seconds if DB is slow
+    const dataFetch = Promise.all([
       getSectionContent('what_we_do_v2'),
-      getSectionContent('magic_video_hub')
+      getSectionContent('magic_video_hub'),
+      getHeroTemplate('video'),
+      getHeroTemplate('image')
     ]);
 
+    const [libContent, magicConfig, heroVideo, heroImage] = await dataFetch;
+
+    console.log('>>> [HomePage] Hero Video:', heroVideo?.title, heroVideo?.after_video_url);
+    console.log('>>> [HomePage] Hero Image:', heroImage?.title, heroImage?.after_image_url);
+
     return {
-      heroVideo: null,
-      heroImage: null,
+      heroVideo,
+      heroImage,
       libraryContent: libContent,
       magicVideoConfig: magicConfig
     };
@@ -59,38 +75,18 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen overflow-x-hidden">
-      {/* Hero Section */}
-      <Hero
-        initialData={initialData}
-      />
+      <Hero initialData={initialData} />
 
-      {/* Video Library Preview Removed as per user request */}
-
-      {/* Simple Footer */}
       <footer className="py-8 px-4 border-t border-white/10">
         <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <Link href="/" className="text-orange-500 font-black text-lg">
-            contentai
-          </Link>
+          <Link href="/" className="text-orange-500 font-black text-lg">contentai</Link>
           <div className="flex items-center gap-3 text-sm">
             <Link href="/pricing" className="text-zinc-400 hover:text-white transition-colors">Pricing</Link>
             <Link href="/videos" className="text-zinc-400 hover:text-white transition-colors">Library</Link>
-            <Link
-              href="/terms"
-              className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white border border-white/10 hover:border-white/20 rounded-lg transition-all font-medium text-xs uppercase tracking-wider"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/privacy"
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-black rounded-lg transition-all font-bold text-xs uppercase tracking-wider"
-            >
-              Privacy
-            </Link>
+            <Link href="/terms" className="text-zinc-400 hover:text-white transition-colors">Terms</Link>
+            <Link href="/privacy" className="text-zinc-400 hover:text-white transition-colors">Privacy</Link>
           </div>
-          <p className="text-xs text-zinc-500">
-            © 2024 ContentAI
-          </p>
+          <p className="text-xs text-zinc-500">© 2024 ContentAI</p>
         </div>
       </footer>
     </div>

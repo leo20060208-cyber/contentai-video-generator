@@ -28,7 +28,12 @@ interface PromptPreset {
     preview_video_url?: string | null;
 }
 
-export function PromptPresetsManager() {
+interface PromptPresetsManagerProps {
+    initialCategory?: string;
+    isReelFormat?: boolean;
+}
+
+export function PromptPresetsManager({ initialCategory, isReelFormat }: PromptPresetsManagerProps) {
     const [presets, setPresets] = useState<PromptPreset[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,7 +41,7 @@ export function PromptPresetsManager() {
 
     // Form State
     const [formData, setFormData] = useState<Partial<PromptPreset>>({
-        category: 'living_background',
+        category: initialCategory || 'living_background',
         name: '',
         description: '',
         prompt_template: '',
@@ -45,7 +50,7 @@ export function PromptPresetsManager() {
     });
     const [uploadingVideo, setUploadingVideo] = useState(false);
 
-    const categories = ['living_background', 'transition'];
+    const categories = ['living_background', 'transition', 'motion_control', 'motion_reference'];
 
     useEffect(() => {
         fetchPresets();
@@ -59,7 +64,11 @@ export function PromptPresetsManager() {
             .order('created_at', { ascending: true });
 
         if (!error && data) {
-            setPresets(data);
+            if (initialCategory) {
+                setPresets(data.filter(p => p.category === initialCategory));
+            } else {
+                setPresets(data);
+            }
         }
         setLoading(false);
     };
@@ -106,7 +115,7 @@ export function PromptPresetsManager() {
             setEditingId(null);
             setIsCreating(false);
             setFormData({
-                category: 'living_background',
+                category: initialCategory || 'living_background',
                 name: '',
                 description: '',
                 prompt_template: '',
@@ -227,7 +236,7 @@ export function PromptPresetsManager() {
                                     </div>
                                     <div className="text-xs text-zinc-500 line-clamp-2">{preset.description || 'No description'}</div>
                                     {preset.preview_video_url && (
-                                        <div className="mt-2 rounded-md overflow-hidden bg-black aspect-video relative group/video">
+                                        <div className={`mt-2 rounded-md overflow-hidden bg-black relative group/video ${isReelFormat || preset.category === 'motion_control' ? 'aspect-[9/16]' : 'aspect-video'}`}>
                                             <video src={preset.preview_video_url} className="w-full h-full object-cover" muted loop onMouseOver={e => e.currentTarget.play()} onMouseOut={e => e.currentTarget.pause()} />
                                         </div>
                                     )}
@@ -286,7 +295,7 @@ export function PromptPresetsManager() {
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Preview Video</label>
                                 <div className="border border-white/10 rounded-lg p-4 bg-zinc-950">
                                     {formData.preview_video_url ? (
-                                        <div className="relative aspect-video bg-black rounded-lg overflow-hidden group">
+                                        <div className={`relative bg-black rounded-lg overflow-hidden group ${isReelFormat || formData.category === 'motion_control' ? 'aspect-[9/16] w-32' : 'aspect-video'}`}>
                                             <video src={formData.preview_video_url} className="w-full h-full object-cover" controls />
                                             <button
                                                 onClick={() => setFormData({ ...formData, preview_video_url: null })}
@@ -296,13 +305,13 @@ export function PromptPresetsManager() {
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center py-8 text-zinc-500 border-2 border-dashed border-white/10 rounded-lg hover:border-white/20 transition-colors relative cursor-pointer">
+                                        <div className={`flex flex-col items-center justify-center py-8 text-zinc-500 border-2 border-dashed border-white/10 rounded-lg hover:border-white/20 transition-colors relative cursor-pointer ${isReelFormat || formData.category === 'motion_control' ? 'aspect-[9/16] w-32' : ''}`}>
                                             {uploadingVideo ? (
                                                 <Loader2 className="w-8 h-8 animate-spin mb-2" />
                                             ) : (
                                                 <>
                                                     <Upload className="w-8 h-8 mb-2" />
-                                                    <span className="text-sm">Click to upload video</span>
+                                                    <span className="text-sm text-center px-2">{uploadingVideo ? 'Wait...' : (isReelFormat ? 'Upload Reel' : 'Click to upload video')}</span>
                                                 </>
                                             )}
                                             <input

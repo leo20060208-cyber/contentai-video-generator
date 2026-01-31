@@ -8,5 +8,10 @@ ON CONFLICT (section_key) DO NOTHING;
 
 -- Create Yours Video default prompt  
 INSERT INTO site_content (section_key, content) VALUES
-('create_yours_video_default_prompt', '{"prompt": "Transform this video while maintaining the core action, movement, and camera work. Replace the specified product seamlessly into the scene, matching lighting, perspective, and physics perfectly."}')
+('create_yours_video_default_prompt', '{"prompt": "Transform this video while maintaining the core action, movement, and camera work. Replace the specified element with the reference provided while ensuring consistent lighting and physics."}') 
+ON CONFLICT (section_key) DO NOTHING;
+
+-- Motion Control specific default prompt (used in MotionControlEditor.tsx)
+INSERT INTO site_content (section_key, content) VALUES
+('motion_control_default_prompt', '{"prompt": "Create a smooth, cinematic motion control video. Maintain consistency in lighting, style, and subject matter. Ensure natural movement and physics throughout the transformation."}') 
 ON CONFLICT (section_key) DO NOTHING;

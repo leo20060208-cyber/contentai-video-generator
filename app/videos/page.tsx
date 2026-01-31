@@ -363,17 +363,7 @@ export default function VideosPage() {
                     transition={{ delay: 0.1 }}
                     className="mb-10"
                 >
-                    {/* Search */}
-                    <div className="relative max-w-lg mx-auto mb-6">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                        <input
-                            type="text"
-                            placeholder="Search templates..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-14 pr-6 py-2 rounded-full bg-transparent border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:border-orange-500/50 transition-all text-base"
-                        />
-                    </div>
+
 
                     {/* Category Pills & Toggle */}
                     <div className="flex flex-col md:flex-row items-center justify-center gap-6">
@@ -418,6 +408,11 @@ export default function VideosPage() {
 
                 {/* Video Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Collections First */}
+                    {collections.map(collection => (
+                        <CollectionCard key={collection.id} collection={collection} basePath="/videos" />
+                    ))}
+
                     {filteredVideos.map((video, index) => (
                         <motion.div
                             key={video.id}
@@ -448,7 +443,7 @@ export default function VideosPage() {
                                 <Search className="w-10 h-10 text-zinc-500" />
                             </div>
                             <h3 className="text-2xl font-bold text-white mb-2">No videos found</h3>
-                            <p className="text-zinc-400">Try a different search or category</p>
+                            <p className="text-zinc-400">Try selecting a different category</p>
                         </motion.div>
                     )
                 }

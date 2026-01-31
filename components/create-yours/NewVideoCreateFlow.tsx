@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Upload, Sparkles, Plus, Layers, Image as ImageIcon, Video, Play, Pause, Wand2, Search, Check, Info, Brush, Eraser, Move, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -683,9 +684,18 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
             {/* Header */}
             <div className="flex items-center justify-between shrink-0 px-4 py-2">
-                <h1 className="text-xl font-medium text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-zinc-400" /> AI Video Studio
-                </h1>
+                <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-medium text-white flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-zinc-400" /> AI Video Studio
+                    </h1>
+                    <Link
+                        href="/videos"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition-all backdrop-blur-sm"
+                    >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Library</span>
+                    </Link>
+                </div>
                 <div className="flex gap-2">
                     {generatedVideo && (
                         <div className="flex bg-white/5 rounded-sm p-1 gap-1 border border-white/10">

@@ -127,141 +127,105 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
 
             {/* Layout Container */}
             <div className="w-full max-w-[1200px] mx-auto pb-12">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
 
-                    {/* 1. Living Backgrounds */}
-                    {magicVideoConfig && (
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
+                    {/* Card Rendering Helper */}
+                    {[
+                        {
+                            id: 'motion-control',
+                            title: magicVideoConfig?.motionControl?.title || 'Motion Control',
+                            description: 'POWERED BY KLING AI',
+                            link: '/magic-video/motion-control',
+                            mediaUrl: magicVideoConfig?.motionControl?.mediaUrl,
+                            mediaType: magicVideoConfig?.motionControl?.mediaType || 'image',
+                            colSpan: 'md:col-span-2',
+                            fallbackImage: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop'
+                        },
+                        {
+                            id: 'video-editing',
+                            title: card1.title || "Video Editing",
+                            description: card1.description || "Powered by Kling.ai",
+                            link: card1.link || "/create-yours",
+                            mediaUrl: getMediaUrl(card1),
+                            mediaType: isVideo(card1) ? 'video' : 'image',
+                            colSpan: 'md:col-span-2',
+                            fallbackImage: 'https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=2000&auto=format&fit=crop'
+                        },
+                        {
+                            id: 'image-editing',
+                            title: card2.title || "Image Editing",
+                            description: card2.description || "Powered by Nano Banana Pro",
+                            link: card2.link || "/create-image",
+                            mediaUrl: getMediaUrl(card2),
+                            mediaType: isVideo(card2) ? 'video' : 'image',
+                            colSpan: 'md:col-span-2',
+                            fallbackImage: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop'
+                        },
+                        {
+                            id: 'living-bg',
+                            title: magicVideoConfig?.livingBackgrounds?.title || 'Living Backgrounds',
+                            description: magicVideoConfig?.livingBackgrounds?.description || 'POWERED BY KLING AI',
+                            link: '/magic-video/living-backgrounds',
+                            mediaUrl: magicVideoConfig?.livingBackgrounds?.mediaUrl,
+                            mediaType: magicVideoConfig?.livingBackgrounds?.mediaType || 'video',
+                            colSpan: 'md:col-span-2 md:col-start-2',
+                            fallbackImage: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?q=80&w=2070&auto=format&fit=crop'
+                        },
+                        {
+                            id: 'directors-cut',
+                            title: magicVideoConfig?.directorsCut?.title || "Image to Video",
+                            description: magicVideoConfig?.directorsCut?.description || 'POWERED BY SORA 2',
+                            link: '/magic-video/directors-cut',
+                            mediaUrl: magicVideoConfig?.directorsCut?.mediaUrl,
+                            mediaType: magicVideoConfig?.directorsCut?.mediaType || 'video',
+                            colSpan: 'md:col-span-2',
+                            fallbackImage: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop'
+                        }
+                    ].map((card, idx) => (
+                        <div key={card.id || idx} className={`w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4] ${card.colSpan}`}>
                             <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                                {magicVideoConfig.livingBackgrounds?.mediaUrl && (
-                                    magicVideoConfig.livingBackgrounds.mediaType === 'video' ? (
-                                        <video src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
+                                {card.mediaUrl ? (
+                                    card.mediaType === 'video' ? (
+                                        <video
+                                            src={card.mediaUrl}
+                                            className="w-full h-full object-cover transition-opacity duration-500"
+                                            autoPlay
+                                            loop
+                                            muted
+                                            playsInline
+                                        />
                                     ) : (
-                                        <img src={magicVideoConfig.livingBackgrounds.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
+                                        <img
+                                            src={card.mediaUrl}
+                                            className="w-full h-full object-cover transition-opacity duration-500"
+                                            alt={card.title}
+                                        />
                                     )
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <Link href="/magic-video/living-backgrounds" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                    {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
-                                </Link>
-                            </div>
-                            <div className="absolute bottom-4 left-4 right-4 z-20">
-                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
-                                        {magicVideoConfig.livingBackgrounds?.title || 'Living Backgrounds'}
-                                    </h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
-                                        {magicVideoConfig.livingBackgrounds?.description || 'POWERED BY KLING AI'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 2. Director's Cut */}
-                    {magicVideoConfig && (
-                        <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
-                            <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                                {magicVideoConfig.directorsCut?.mediaUrl && (
-                                    magicVideoConfig.directorsCut.mediaType === 'video' ? (
-                                        <video src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" autoPlay loop muted playsInline />
-                                    ) : (
-                                        <img src={magicVideoConfig.directorsCut.mediaUrl} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500" />
-                                    )
-                                )}
-                            </div>
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                <Link href="/magic-video/directors-cut" className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                    {magicVideoConfig.directorsCut?.title || "Image to Video"}
-                                </Link>
-                            </div>
-                            <div className="absolute bottom-4 left-4 right-4 z-20">
-                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
-                                        {magicVideoConfig.directorsCut?.title || "Image to Video"}
-                                    </h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
-                                        {magicVideoConfig.directorsCut?.description || 'POWERED BY SORA 2'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 3. Recreate Video / Video Editing */}
-                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
-                        <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                            {getMediaUrl(card1) ? (
-                                <video
-                                    src={getMediaUrl(card1)}
-                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                                    autoPlay
-                                    loop
-                                    muted
-                                    playsInline
-                                />
-                            ) : (
-                                <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center" />
-                            )}
-                        </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                        <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <a href={card1.link || "/create-yours"} className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                {card1.title || "Create Video"}
-                            </a>
-                        </div>
-                        <div className="absolute bottom-4 left-4 right-4 z-20">
-                            <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">{card1.title || "Video Editing"}</h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">{card1.description || "Powered by Kling.ai"}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 4. Recreate Image / Image Editing */}
-                    <div className="w-full relative group rounded-xl overflow-hidden bg-zinc-900 border border-white/10 aspect-[3/4]">
-                        <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-zinc-950 flex items-center justify-center">
-                            {getMediaUrl(card2) ? (
-                                (isVideo(card2)) ? (
-                                    <video
-                                        src={getMediaUrl(card2)}
-                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                                        autoPlay
-                                        loop
-                                        muted
-                                        playsInline
-                                    />
                                 ) : (
-                                    <img
-                                        src={getMediaUrl(card2)}
-                                        className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                                        alt="Hero Image"
+                                    <div
+                                        className="w-full h-full opacity-50 bg-cover bg-center"
+                                        style={{ backgroundImage: `url('${card.fallbackImage}')` }}
                                     />
-                                )
-                            ) : (
-                                <div className="w-full h-full opacity-50 bg-[url('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&w=1974&auto=format&fit=crop')] bg-cover bg-center" />
-                            )}
-                        </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
-                        <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <a href={card2.link || "/create-image"} className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
-                                {card2.title || "Create Image"}
-                            </a>
-                        </div>
-                        <div className="absolute bottom-4 left-4 right-4 z-20">
-                            <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4 flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">{card2.title || "Image Editing"}</h3>
-                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">{card2.description || "Powered by Nano Banana Pro"}</p>
+                                )}
+                            </div>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
+                            <div className="absolute inset-0 flex items-center justify-center z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                <Link href={card.link} className="px-10 py-4 bg-white hover:bg-zinc-200 text-black font-semibold tracking-widest uppercase text-xs transition-all hover:scale-105 shadow-2xl">
+                                    {card.title}
+                                </Link>
+                            </div>
+                            <div className="absolute bottom-4 left-4 right-4 z-20">
+                                <div className="w-full bg-black/60 backdrop-blur-xl border border-white/5 rounded-lg px-6 py-4">
+                                    <h3 className="text-white font-bold uppercase tracking-tight text-sm">
+                                        {card.title}
+                                    </h3>
+                                    <p className="text-zinc-400 text-[10px] font-medium uppercase tracking-wider">
+                                        {card.description}
+                                    </p>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    ))}
 
                 </div>
             </div>

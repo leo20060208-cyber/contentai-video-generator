@@ -23,12 +23,12 @@ interface WhatWeDoContent {
     createImageSteps: Step[];
     recreateImageTitle?: string;
     recreateImageSteps: Step[];
-    // Magic Video Generation
     livingBackgroundsTitle?: string;
     livingBackgroundsSteps: Step[];
     directorsCutTitle?: string;
     directorsCutSteps: Step[];
-    // Library Sections
+    motionControlTitle?: string;
+    motionControlSteps: Step[];
     libraryVideoTitle?: string;
     libraryVideoSteps: Step[];
     libraryImageTitle?: string;
@@ -56,6 +56,8 @@ const defaultContent: WhatWeDoContent = {
     livingBackgroundsSteps: [defaultStep],
     directorsCutTitle: "DIRECTOR'S CUT",
     directorsCutSteps: [defaultStep],
+    motionControlTitle: 'MOTION CONTROL',
+    motionControlSteps: [defaultStep],
     libraryVideoTitle: 'Visit Video Library',
     libraryVideoSteps: [defaultStep],
     libraryImageTitle: 'Visit Image Library',
@@ -95,6 +97,8 @@ export function SiteContentEditor() {
                     livingBackgroundsSteps: data.livingBackgroundsSteps || [defaultStep],
                     directorsCutTitle: data.directorsCutTitle || defaultContent.directorsCutTitle,
                     directorsCutSteps: data.directorsCutSteps || [defaultStep],
+                    motionControlTitle: data.motionControlTitle || defaultContent.motionControlTitle,
+                    motionControlSteps: data.motionControlSteps || [defaultStep],
                     // Library
                     libraryVideoTitle: data.libraryVideoTitle || defaultContent.libraryVideoTitle,
                     libraryVideoSteps: data.libraryVideoSteps || [defaultStep],
@@ -209,6 +213,7 @@ export function SiteContentEditor() {
         { key: 'recreateImageSteps', label: 'Recreate Image Workflow' },
         { key: 'livingBackgroundsSteps', label: 'Living Backgrounds' },
         { key: 'directorsCutSteps', label: "Director's Cut" },
+        { key: 'motionControlSteps', label: 'Motion Control' },
         { key: 'libraryVideoSteps', label: 'Library Video Card' },
         { key: 'libraryImageSteps', label: 'Library Image Card' },
     ];
@@ -220,6 +225,7 @@ export function SiteContentEditor() {
         if (sectionKey === 'recreateImageSteps') return 'recreateImageTitle';
         if (sectionKey === 'livingBackgroundsSteps') return 'livingBackgroundsTitle';
         if (sectionKey === 'directorsCutSteps') return 'directorsCutTitle';
+        if (sectionKey === 'motionControlSteps') return 'motionControlTitle';
         if (sectionKey === 'libraryVideoSteps') return 'libraryVideoTitle';
         if (sectionKey === 'libraryImageSteps') return 'libraryImageTitle';
         return null;

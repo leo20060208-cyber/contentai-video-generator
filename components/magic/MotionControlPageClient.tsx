@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { DirectorsCutEditor } from '@/components/magic/DirectorsCutEditor';
+import { MotionControlEditor } from '@/components/magic/MotionControlEditor';
 import { OnboardingPopup } from '@/components/onboarding/OnboardingPopup';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
@@ -13,23 +13,23 @@ interface HeroMedia {
     url: string;
 }
 
-interface DirectorsCutPageClientProps {
+interface MotionControlPageClientProps {
     initialHeroMedia: HeroMedia | null;
     initialDefaultPrompt: string;
     initialPresets: any[];
 }
 
-export function DirectorsCutPageClient({
+export function MotionControlPageClient({
     initialHeroMedia,
     initialDefaultPrompt,
     initialPresets
-}: DirectorsCutPageClientProps) {
+}: MotionControlPageClientProps) {
     const [showEditor, setShowEditor] = useState(false);
 
     if (showEditor) {
         return (
             <ProtectedRoute>
-                <DirectorsCutEditor
+                <MotionControlEditor
                     onBack={() => setShowEditor(false)}
                     initialDefaultPrompt={initialDefaultPrompt}
                     initialPresets={initialPresets}
@@ -60,7 +60,7 @@ export function DirectorsCutPageClient({
                                 ) : (
                                     <img
                                         src={initialHeroMedia.url}
-                                        alt="Director's Cut Preview"
+                                        alt="Motion Control Preview"
                                         className="w-full h-full object-cover"
                                     />
                                 )
@@ -73,10 +73,10 @@ export function DirectorsCutPageClient({
 
                         {/* Title & Desc */}
                         <h1 className="text-3xl font-black text-white mb-2 tracking-tight uppercase">
-                            IMAGE TO VIDEO
+                            MOTION CONTROL
                         </h1>
                         <p className="text-zinc-400 text-sm mb-8 max-w-sm mx-auto leading-relaxed">
-                            Build clips with frames and transitions. Powered by Sora 2.
+                            Control the motion in your videos with precision. Powered by Kling AI.
                         </p>
 
                         {/* Upload Button */}
@@ -84,7 +84,7 @@ export function DirectorsCutPageClient({
                             className="w-full h-12 bg-white text-black hover:bg-zinc-200 font-bold text-base rounded-xl transition-all flex items-center justify-center gap-2"
                             onClick={() => setShowEditor(true)}
                         >
-                            Enter Director's Cut
+                            Enter Motion Control
                         </Button>
                     </div>
 
@@ -92,11 +92,11 @@ export function DirectorsCutPageClient({
 
                 {/* Onboarding Popup */}
                 <OnboardingPopup
-                    pageKey="directors-cut"
-                    stepsKey="directorsCutSteps"
-                    titleKey="directorsCutTitle"
-                    defaultTitle="DIRECTOR'S CUT"
-                    plusInfoUrl="/guide/directors-cut"
+                    pageKey="motion-control"
+                    stepsKey="motionControlSteps"
+                    titleKey="motionControlTitle"
+                    defaultTitle="MOTION CONTROL"
+                    plusInfoUrl="/guide/motion-control"
                 />
             </div>
         </ProtectedRoute>

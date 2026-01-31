@@ -36,7 +36,7 @@ export default function LabPage() {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic' | 'presets' | 'faqs' | 'inquiries'>('templates');
+    const [activeTab, setActiveTab] = useState<'templates' | 'collections' | 'content' | 'guides' | 'magic' | 'presets' | 'motion-presets' | 'motion-references' | 'faqs' | 'inquiries'>('templates');
 
     // Auth State
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -185,6 +185,18 @@ export default function LabPage() {
                         className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'presets' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
                     >
                         Presets
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('motion-presets')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'motion-presets' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:text-white'}`}
+                    >
+                        Motion Presets
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('motion-references')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'motion-references' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:text-white'}`}
+                    >
+                        Motion Refs
                     </button>
                     <button
                         onClick={() => setActiveTab('faqs')}
@@ -353,6 +365,28 @@ export default function LabPage() {
                             exit={{ opacity: 0, y: -20 }}
                         >
                             <PromptPresetsManager />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'motion-presets' && (
+                        <motion.div
+                            key="motion-presets"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <PromptPresetsManager initialCategory="motion_control" isReelFormat={true} />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'motion-references' && (
+                        <motion.div
+                            key="motion-references"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <PromptPresetsManager initialCategory="motion_reference" isReelFormat={true} />
                         </motion.div>
                     )}
 

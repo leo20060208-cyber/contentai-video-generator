@@ -456,17 +456,20 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
                         className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
                         onClick={(e) => { if (e.target === e.currentTarget) setPreviewPreset(null); }}
                     >
-                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative flex flex-col gap-4">
-                            <button
-                                onClick={() => setPreviewPreset(null)}
-                                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
+                        <div className="bg-transparent w-full max-w-3xl p-0 relative flex flex-col gap-4">
+                            {/* Close Button - Outside the video container for easier access or nicely integrated */}
+                            <div className="flex justify-end mb-2">
+                                <button
+                                    onClick={() => setPreviewPreset(null)}
+                                    className="bg-black/50 hover:bg-black/80 text-white p-2 rounded-full backdrop-blur-md transition-all"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
 
-                            <h3 className="text-xl font-bold text-white">{previewPreset.name}</h3>
 
-                            <div className="w-full aspect-video bg-black rounded-xl overflow-hidden border border-white/10 relative">
+                            {/* Video Container - No background, just the video */}
+                            <div className="w-full aspect-video rounded-xl overflow-hidden shadow-2xl relative">
                                 {previewPreset.preview_video_url ? (
                                     <video
                                         src={previewPreset.preview_video_url}
@@ -474,38 +477,31 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
                                         autoPlay
                                         loop
                                         muted
-                                        controls
+                                        playsInline // Important for consistency
                                     />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-600">
+                                    <div className="w-full h-full flex items-center justify-center bg-black/50 backdrop-blur-sm text-zinc-400 border border-white/10">
                                         <span className="text-xs">No preview video</span>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="p-3 bg-white/5 rounded-lg border border-white/5">
-                                <p className="text-xs text-zinc-400 mb-1 font-bold uppercase tracking-wider">Prompt</p>
-                                <p className="text-sm text-zinc-200 leading-relaxed font-mono">{previewPreset.prompt_template}</p>
-                            </div>
-
-                            {previewPreset.description && (
-                                <p className="text-sm text-zinc-500 italic">{previewPreset.description}</p>
-                            )}
-
-                            <div className="flex gap-2 pt-2">
-                                <Button
-                                    onClick={() => setPreviewPreset(null)}
-                                    className="flex-1 bg-white/10 hover:bg-white/20 text-white rounded-lg h-12 font-bold"
-                                >
-                                    Cancel
-                                </Button>
+                            {/* Minimal control bar below */}
+                            <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl p-4 flex items-center justify-between gap-4">
+                                <div className="flex flex-col">
+                                    <h3 className="text-lg font-bold text-white">{previewPreset.name}</h3>
+                                    {previewPreset.description && (
+                                        <p className="text-xs text-zinc-400">{previewPreset.description}</p>
+                                    )}
+                                </div>
                                 <Button
                                     onClick={() => confirmPresetSelection(previewPreset)}
-                                    className="flex-1 bg-white hover:bg-zinc-200 text-black rounded-lg h-12 font-bold flex items-center justify-center gap-2"
+                                    className="bg-white hover:bg-zinc-200 text-black rounded-lg px-6 py-2 font-bold whitespace-nowrap"
                                 >
-                                    Use This Transition
+                                    Use This
                                 </Button>
                             </div>
+
                         </div>
                     </motion.div>
                 )}
@@ -520,7 +516,7 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
                         exit={{ opacity: 0, scale: 0.95 }}
                         className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
                     >
-                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-2xl p-6 shadow-2xl relative">
+                        <div className="bg-zinc-900 border border-white/10 rounded-2xl w-full max-w-5xl p-6 shadow-2xl relative">
                             <button
                                 onClick={() => setShowFullPrompt(false)}
                                 className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"

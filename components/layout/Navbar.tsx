@@ -37,13 +37,12 @@ export function Navbar() {
             </Link>
 
             {/* Desktop Nav Items */}
-            <div className="hidden lg:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-4">
               <div className="h-4 w-px bg-white/10" />
 
-              {/* MAGIC GROUP */}
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">MAGIC</span>
-                <div className="h-4 w-px bg-white/20" />
+              {/* MAGIC Section */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-widest leading-none">MAGIC</span>
                 <Link
                   href="/magic-video"
                   className={`text-sm font-medium transition-all ${pathname.startsWith('/magic-video') ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
@@ -52,45 +51,29 @@ export function Navbar() {
                 </Link>
               </div>
 
-              <div className="h-4 w-px bg-white/20" />
+              <div className="h-4 w-px bg-white/10" />
 
-              {/* VIDEO GROUP */}
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black bg-orange-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">VIDEO</span>
-                <div className="h-4 w-px bg-white/20" />
+              {/* VIDEO Section */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black bg-orange-500 text-white px-1.5 py-0.5 rounded-sm tracking-widest leading-none">VIDEO</span>
                 <Link
                   href="/create-yours"
                   className={`text-sm font-medium transition-all ${pathname === '/create-yours' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
                   Video Editing
                 </Link>
-                <div className="h-4 w-px bg-white/20" />
-                <Link
-                  href="/videos"
-                  className={`text-sm font-medium transition-all ${pathname === '/videos' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  Library
-                </Link>
               </div>
 
-              <div className="h-4 w-px bg-white/20" />
+              <div className="h-4 w-px bg-white/10" />
 
-              {/* IMAGE GROUP */}
-              <div className="flex items-center gap-4">
-                <span className="text-[10px] font-black bg-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-wider">IMAGE</span>
-                <div className="h-4 w-px bg-white/20" />
+              {/* IMAGE Section */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black bg-purple-500 text-white px-1.5 py-0.5 rounded-sm tracking-widest leading-none">IMAGE</span>
                 <Link
                   href="/create-image"
                   className={`text-sm font-medium transition-all ${pathname === '/create-image' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
                   Image Editing
-                </Link>
-                <div className="h-4 w-px bg-white/20" />
-                <Link
-                  href="/images"
-                  className={`text-sm font-medium transition-all ${pathname === '/images' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  Library
                 </Link>
               </div>
             </div>
@@ -195,13 +178,6 @@ export function Navbar() {
                   >
                     Video Editing
                   </Link>
-                  <Link
-                    href="/videos"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
-                  >
-                    Library
-                  </Link>
                 </div>
               </div>
 
@@ -215,13 +191,6 @@ export function Navbar() {
                     className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
                   >
                     Image Editing
-                  </Link>
-                  <Link
-                    href="/images"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="text-sm text-zinc-400 hover:text-white transition-colors py-1"
-                  >
-                    Library
                   </Link>
                 </div>
               </div>

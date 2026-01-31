@@ -2,15 +2,27 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+    const url = request.nextUrl.pathname;
+    // console.log(`[Middleware] Request: ${url}`); // Temporary log
+
     let response = NextResponse.next({
         request: {
             headers: request.headers,
         },
     })
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+    // Skip auth check if environment variables are missing to prevent crash
+    if (!supabaseUrl || !supabaseAnonKey) {
+        console.warn('[Middleware] Skipping auth check: Missing environment variables.')
+        return response
+    }
+
     const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        supabaseUrl,
+        supabaseAnonKey,
         {
             cookies: {
                 get(name: string) {
@@ -58,37 +70,47 @@ export async function middleware(request: NextRequest) {
     try {
         const { data: { session }, error } = await supabase.auth.getSession()
 
-        // Handle refresh token errors by clearing cookies
+        // Handle refresh token errors by clearing main auth cookies
         if (error) {
             console.warn('[Middleware] Auth error:', error.message)
 
-            // Clear all Supabase auth cookies to force re-login
-            request.cookies.getAll().forEach(cookie => {
-                if (cookie.name.includes('sb-') && cookie.name.includes('-auth-token')) {
-                    response.cookies.delete(cookie.name)
-                }
-            })
+            // Clear main tokens
             response.cookies.delete('sb-access-token')
             response.cookies.delete('sb-refresh-token')
+
+            // Attempt to clear any other sb-* cookies safer
+            try {
+                const allCookies = request.cookies.getAll()
+                for (const cookie of allCookies) {
+                    if (cookie.name.startsWith('sb-')) {
+                        response.cookies.delete(cookie.name)
+                    }
+                }
+            } catch (e) {
+                console.warn('[Middleware] Failed to clear all sb cookies:', e)
+            }
         }
 
         return response
     } catch (error) {
-        // If there is an auth error (e.g. invalid refresh token), clear the cookies
-        // so the user is forced to re-login instead of getting stuck in a loop.
         console.error('Middleware auth error:', error)
+
         response.cookies.delete('sb-access-token')
         response.cookies.delete('sb-refresh-token')
-        // Also clear the combined cookie if it exists (Supabase v2 default)
-        // We iterate over potential supabase cookies to be safe
-        request.cookies.getAll().forEach(cookie => {
-            if (cookie.name.includes('sb-') && cookie.name.includes('-auth-token')) {
-                response.cookies.delete(cookie.name)
+
+        try {
+            const allCookies = request.cookies.getAll()
+            for (const cookie of allCookies) {
+                if (cookie.name.startsWith('sb-')) {
+                    response.cookies.set(cookie.name, '', { maxAge: 0 })
+                }
             }
-        })
+        } catch (e) {
+            // Ignore
+        }
+
         return response
     }
-
 }
 
 export const config = {

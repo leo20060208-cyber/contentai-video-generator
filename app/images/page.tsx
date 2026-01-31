@@ -172,17 +172,7 @@ export default function ImagesPage() {
                     transition={{ delay: 0.1 }}
                     className="mb-10"
                 >
-                    {/* Search */}
-                    <div className="relative max-w-lg mx-auto mb-6">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                        <input
-                            type="text"
-                            placeholder="Search templates..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-14 pr-6 py-2 rounded-full bg-transparent border border-zinc-800 text-white placeholder:text-zinc-500 focus:outline-none focus:border-purple-500/50 transition-all text-base"
-                        />
-                    </div>
+
 
                     {/* Category Pills & Toggle */}
                     <div className="flex flex-col md:flex-row items-center justify-center gap-6">
@@ -282,7 +272,7 @@ create policy "Users can insert their own images" on public.images for insert wi
                             <Search className="w-10 h-10 text-zinc-500" />
                         </div>
                         <h3 className="text-2xl font-bold text-white mb-2">No templates found</h3>
-                        <p className="text-zinc-400">Try a different search or category</p>
+                        <p className="text-zinc-400">Try selecting a different category</p>
                     </motion.div>
                 )}
 

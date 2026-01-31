@@ -22,13 +22,13 @@ export function PreUploadView({ type, onUpload }: PreUploadViewProps) {
         image: {
             stepsKey: 'createImageSteps',
             defaultTitle: 'IMAGE EDITING',
-            defaultDesc: 'Edit Images with consistent style and Character using up to 4 references',
+            defaultDesc: 'Change objects, perspectives, people, or backgrounds in images - whatever you want.',
             accept: 'image/*'
         },
         video: {
             stepsKey: 'createVideoSteps', // Assuming this key exists for video editing
             defaultTitle: 'VIDEO EDITING',
-            defaultDesc: 'Transform your footage into viral content with AI-powered editing',
+            defaultDesc: 'Change objects, perspectives, people, or backgrounds in videos - whatever you want.',
             accept: 'video/*'
         }
     }[type];

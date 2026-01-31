@@ -43,8 +43,8 @@ export default function TemplatesPage() {
 
             if (!response.ok) throw new Error('Failed to update');
 
-            // Refresh templates
-            fetchTemplates();
+            // Refresh data
+            fetchData();
             alert(`Template ${!currentStatus ? 'marked as' : 'removed from'} trending!`);
         } catch (error) {
             console.error('Error toggling trending:', error);
@@ -52,63 +52,86 @@ export default function TemplatesPage() {
         }
     };
 
-    // Fetch real templates from Supabase
-    useEffect(() => {
-        const fetchTemplates = async () => {
+    const [collections, setCollections] = useState<any[]>([]);
+    const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+
+    // Fetch real templates and collections from Supabase
+    const fetchData = async () => {
+        try {
             setLoading(true);
-            try {
-                // 1. Check for Offline Mode
-                if (!isSupabaseConfigured) {
-                    console.warn('⚠️ Templates Page: Offline Mode - using Mock Templates.');
-                    setTemplates(MOCK_TEMPLATES);
-                    return;
-                }
-
-                const { data, error } = await supabase
-                    .from('templates')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-
-                if (error) throw error;
-                setTemplates(data || []);
-            } catch (error: any) {
-                // Suppress generic "Failed to fetch" errors
-                const isNetworkError =
-                    error.message?.includes('fetch') ||
-                    error.message?.includes('network') ||
-                    (typeof error === 'string' && error.includes('fetch'));
-
-                if (isNetworkError) {
-                    console.warn('⚠️ Templates Page: Offline/Network Error - using Mock Templates.');
-                    setTemplates(MOCK_TEMPLATES);
-                } else {
-                    console.error('Error fetching templates:', error);
-                }
-            } finally {
-                setLoading(false);
+            if (!isSupabaseConfigured) {
+                setTemplates(MOCK_TEMPLATES);
+                return;
             }
-        };
 
-        fetchTemplates();
+            const [templatesRes, collectionsRes] = await Promise.all([
+                supabase.from('templates').select('*').order('created_at', { ascending: false }),
+                supabase.from('collections').select('*, collection_items(count)').order('created_at', { ascending: false })
+            ]);
+
+            if (templatesRes.error) throw templatesRes.error;
+            setTemplates(templatesRes.data || []);
+
+            if (!collectionsRes.error && collectionsRes.data) {
+                setCollections(collectionsRes.data.map(c => ({
+                    ...c,
+                    item_count: c.collection_items?.[0]?.count || 0
+                })));
+            }
+
+        } catch (error: any) {
+            console.error('Error fetching data:', error);
+            setTemplates(MOCK_TEMPLATES);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
     }, []);
+
+    // Fetch templates for a specific collection if selected
+    const [collectionTemplates, setCollectionTemplates] = useState<number[] | null>(null);
+    useEffect(() => {
+        if (!selectedCollectionId) {
+            setCollectionTemplates(null);
+            return;
+        }
+
+        async function fetchCollectionItems() {
+            const { data } = await supabase
+                .from('collection_items')
+                .select('template_id')
+                .eq('collection_id', selectedCollectionId);
+
+            if (data) {
+                setCollectionTemplates(data.map(item => item.template_id));
+            }
+        }
+        fetchCollectionItems();
+    }, [selectedCollectionId]);
 
     // Filter Logic
     const filteredTemplates = templates.filter(template => {
         const matchesSearch = template.title.toLowerCase().includes(searchQuery.toLowerCase());
 
+        let matchesCollection = true;
+        if (selectedCollectionId && collectionTemplates) {
+            matchesCollection = collectionTemplates.includes(template.id);
+        }
+
         let matchesCategory = true;
         if (selectedCategory !== 'all') {
             const categoryConfig = categories.find(c => c.id === selectedCategory);
-            // Match against the database category value (e.g., 'VISUAL', 'CLOTHING BRANDS')
-            // Or fallback to checking if the ID is roughly in the string for broader matching
-            if (categoryConfig?.value) {
+            if (categoryConfig && 'value' in categoryConfig && categoryConfig.value) {
                 matchesCategory = template.category === categoryConfig.value;
             } else {
-                matchesCategory = template.category.toLowerCase().includes(selectedCategory);
+                matchesCategory = template.category?.toLowerCase().includes(selectedCategory);
             }
         }
 
-        return matchesSearch && matchesCategory;
+        return matchesSearch && matchesCategory && matchesCollection;
     });
 
     return (
@@ -133,18 +156,47 @@ export default function TemplatesPage() {
                         </div>
                     </div>
 
-                    {/* Navigation */}
+                    {/* Collections Navigation */}
+                    {collections.length > 0 && (
+                        <div className="space-y-1">
+                            <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Curated Sets</h3>
+                            {collections.map((coll) => (
+                                <button
+                                    key={coll.id}
+                                    onClick={() => {
+                                        setSelectedCollectionId(selectedCollectionId === coll.id ? null : coll.id);
+                                        setSelectedCategory('all');
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${selectedCollectionId === coll.id
+                                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                        : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
+                                        }`}
+                                >
+                                    <div className="w-4 h-4 rounded overflow-hidden relative">
+                                        <img src={coll.cover_url} className="w-full h-full object-cover" />
+                                    </div>
+                                    <span className="truncate">{coll.title}</span>
+                                    <span className="ml-auto text-[10px] font-mono text-zinc-600">{coll.item_count}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Categories Navigation */}
                     <div className="space-y-1">
-                        <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Collections</h3>
+                        <h3 className="px-4 text-xs font-bold text-zinc-500 uppercase tracking-wider mb-4">Categories</h3>
 
                         {categories.map((cat) => {
                             const Icon = cat.icon;
-                            const isSelected = selectedCategory === cat.id;
+                            const isSelected = selectedCategory === cat.id && !selectedCollectionId;
 
                             return (
                                 <button
                                     key={cat.id}
-                                    onClick={() => setSelectedCategory(cat.id)}
+                                    onClick={() => {
+                                        setSelectedCategory(cat.id);
+                                        setSelectedCollectionId(null);
+                                    }}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 group ${isSelected
                                         ? 'bg-white/10 text-white border border-white/10'
                                         : 'text-zinc-400 hover:text-white hover:bg-white/5 border border-transparent'
@@ -152,12 +204,6 @@ export default function TemplatesPage() {
                                 >
                                     <Icon className={`w-4 h-4 ${isSelected ? 'text-primary' : 'text-zinc-500 group-hover:text-zinc-300'}`} />
                                     {cat.label}
-                                    {isSelected && (
-                                        <motion.div
-                                            layoutId="active-dot"
-                                            className="ml-auto w-1.5 h-1.5 rounded-full bg-primary"
-                                        />
-                                    )}
                                 </button>
                             );
                         })}

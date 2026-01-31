@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, ChevronRight, ChevronLeft, Sparkles, Wand2, Plus, Layers, Image as ImageIcon, MousePointer2, Eraser, Scissors, Coins, Brush, Eye, EyeOff, Search, User, Move, BookOpen, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -828,9 +829,18 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         <div className="w-full max-w-[1600px] mx-auto h-full flex flex-col gap-2 md:gap-4 overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between shrink-0 px-4 py-2">
-                <h1 className="text-xl font-medium text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-zinc-400" /> AI Image Studio
-                </h1>
+                <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-medium text-white flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-zinc-400" /> AI Image Studio
+                    </h1>
+                    <Link
+                        href="/images"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition-all backdrop-blur-sm"
+                    >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Library</span>
+                    </Link>
+                </div>
                 <div className="flex gap-2">
                     {(generatedImage || initialResultImage) && (
                         <div className="flex bg-white/5 rounded-sm p-1 gap-1 border border-white/10">

@@ -12,9 +12,9 @@ export default async function DirectorsCutPage() {
         { data: defaultPromptData },
         { data: presetsData }
     ] = await Promise.all([
-        supabase.from('site_content').select('content').eq('section_key', 'magic_video_hub').single(),
-        supabase.from('site_content').select('content').eq('section_key', 'directors_cut_default_prompt').single(),
-        supabase.from('prompt_presets').select('*').eq('category', 'transition').order('created_at', { ascending: false })
+        supabase.from('site_content').select('content').eq('section_key', 'magic_video_hub').maybeSingle().then(r => r.error ? { data: null } : r),
+        supabase.from('site_content').select('content').eq('section_key', 'directors_cut_default_prompt').maybeSingle().then(r => r.error ? { data: null } : r),
+        supabase.from('prompt_presets').select('*').eq('category', 'transition').order('created_at', { ascending: false }).then(r => r.error ? { data: [] } : r)
     ]);
 
     // Parse Hero Media

@@ -166,7 +166,7 @@ export function AppFeaturePopup() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     transition={{ duration: 0.3 }}
-                    className="fixed top-24 left-48 z-[9999] drop-shadow-2xl flex flex-col items-center gap-2"
+                    className="fixed top-24 left-1/2 -translate-x-1/2 md:left-48 md:translate-x-0 z-[9999] drop-shadow-2xl flex flex-col items-center gap-2"
                 >
                     {/* Scaled down version of StepCard */}
                     <div className="w-[280px] h-[400px]">

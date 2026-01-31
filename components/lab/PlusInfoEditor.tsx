@@ -101,6 +101,25 @@ const defaultContent: GuidesContent = {
                 </section>
             </div>`
         },
+        'motion-control': {
+            title: 'Motion Control Guide',
+            description: 'Precise AI camera control for your products',
+            videoUrl: '',
+            content: `<div class="space-y-12">
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Reference Video</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Upload a <strong>reference video</strong> that contains the motion you want to replicate. The AI will analyze the camera movement and subject interaction from this video.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">2</span> Target Image</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Upload your <strong>product photo</strong>. This is the content that will be animated. For best results, use high-quality images with good lighting that match the general vibe of the reference.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">3</span> Select Preset & Generate</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Choose a <strong>motion preset</strong> from the library on the right to stack additional camera effects, or leave it blank to just follow the reference video. Choose Quality and hit Generate.</p>
+                </section>
+            </div>`
+        },
         'instant-clips': {
             title: 'Instant Clips Guide',
             description: 'One-click product videos',
@@ -206,6 +225,7 @@ export function PlusInfoEditor() {
         { id: 'image-editing', label: 'Image Edit' },
         { id: 'living-backgrounds', label: 'Living BG' },
         { id: 'directors-cut', label: "Director's" },
+        { id: 'motion-control', label: 'Motion' },
         { id: 'instant-clips', label: 'Clips' },
         { id: 'terms', label: 'Terms' },
         { id: 'privacy', label: 'Privacy' },

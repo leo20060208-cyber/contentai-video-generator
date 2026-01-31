@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Loader2, Plus, Trash2, LayoutGrid, Image as ImageIcon, Video, X, Check, Upload } from 'lucide-react';
+import { Loader2, Plus, Trash2, LayoutGrid, Image as ImageIcon, Video, X, Check, Upload, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Template } from '@/lib/db/videos';
 
@@ -48,19 +48,24 @@ export function CollectionsManager() {
     }, [selectedTemplates, selectedCoverId]);
 
     async function fetchCollections() {
-        setLoading(true);
-        const { data, error } = await supabase
-            .from('collections')
-            .select('*, collection_items(count)')
-            .order('created_at', { ascending: false });
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('collections')
+                .select('*, collection_items(count)')
+                .order('created_at', { ascending: false });
 
-        if (!error && data) {
-            setCollections(data.map(c => ({
-                ...c,
-                item_count: c.collection_items?.[0]?.count || 0
-            })));
+            if (!error && data) {
+                setCollections(data.map(c => ({
+                    ...c,
+                    item_count: c.collection_items?.[0]?.count || 0
+                })));
+            }
+        } catch (e) {
+            console.error('Failed to fetch collections:', e);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     async function fetchTemplatesForSelection() {
@@ -82,7 +87,27 @@ export function CollectionsManager() {
         }
     }
 
-    async function handleCreate() {
+    const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+
+    async function handleEdit(collection: Collection) {
+        setEditingCollection(collection);
+        setNewTitle(collection.title);
+        setNewType(collection.type);
+
+        // Fetch current items for this collection
+        const { data } = await supabase
+            .from('collection_items')
+            .select('template_id')
+            .eq('collection_id', collection.id);
+
+        if (data) {
+            setSelectedTemplates(data.map(item => item.template_id));
+        }
+
+        setIsCreateModalOpen(true);
+    }
+
+    async function handleSave() {
         if (!newTitle) return;
         setCreating(true);
 
@@ -91,28 +116,46 @@ export function CollectionsManager() {
         const coverTemplate = availableTemplates.find(t => t.id === coverTemplateId);
         const coverUrl = coverTemplate?.after_image_url || coverTemplate?.before_image_url || '';
 
-        // 1. Create Collection
-        const { data: collection, error } = await supabase
-            .from('collections')
-            .insert([{
-                title: newTitle,
-                type: newType,
-                cover_url: coverUrl,
-                user_id: (await supabase.auth.getUser()).data.user?.id
-            }])
-            .select()
-            .single();
+        let collectionId = editingCollection?.id;
 
-        if (error || !collection) {
-            console.error('Error creating collection:', error);
-            setCreating(false);
-            return;
+        if (editingCollection) {
+            // Update Existing
+            await supabase
+                .from('collections')
+                .update({
+                    title: newTitle,
+                    type: newType,
+                    cover_url: coverUrl || editingCollection.cover_url
+                })
+                .eq('id', editingCollection.id);
+
+            // Clear existing items to re-insert in new order
+            await supabase.from('collection_items').delete().eq('collection_id', editingCollection.id);
+        } else {
+            // Create New
+            const { data: collection, error } = await supabase
+                .from('collections')
+                .insert([{
+                    title: newTitle,
+                    type: newType,
+                    cover_url: coverUrl,
+                    user_id: (await supabase.auth.getUser()).data.user?.id
+                }])
+                .select()
+                .single();
+
+            if (error || !collection) {
+                console.error('Error creating collection:', error);
+                setCreating(false);
+                return;
+            }
+            collectionId = collection.id;
         }
 
         // 2. Add Items
-        if (selectedTemplates.length > 0) {
+        if (selectedTemplates.length > 0 && collectionId) {
             const items = selectedTemplates.map((tid, index) => ({
-                collection_id: collection.id,
+                collection_id: collectionId,
                 template_id: tid,
                 order_index: index
             }));
@@ -125,6 +168,7 @@ export function CollectionsManager() {
         }
 
         setIsCreateModalOpen(false);
+        setEditingCollection(null);
         setNewTitle('');
         setSelectedTemplates([]);
         setSelectedCoverId(null);
@@ -146,7 +190,12 @@ export function CollectionsManager() {
                     Collections
                 </h2>
                 <button
-                    onClick={() => setIsCreateModalOpen(true)}
+                    onClick={() => {
+                        setEditingCollection(null);
+                        setNewTitle('');
+                        setSelectedTemplates([]);
+                        setIsCreateModalOpen(true);
+                    }}
                     className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium text-sm"
                 >
                     <Plus className="w-4 h-4" /> New Collection
@@ -163,9 +212,14 @@ export function CollectionsManager() {
                                 <div className={`p-2 rounded-md ${c.type === 'video' ? 'bg-blue-500/10 text-blue-400' : 'bg-pink-500/10 text-pink-400'}`}>
                                     {c.type === 'video' ? <Video className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                                 </div>
-                                <button onClick={() => handleDelete(c.id)} className="text-zinc-600 hover:text-red-400 pb-2 pl-2">
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleEdit(c)} className="text-zinc-600 hover:text-white transition-colors pb-2 pl-2">
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDelete(c.id)} className="text-zinc-600 hover:text-red-400 Transition-colors pb-2 pl-2">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                             <h3 className="text-white font-medium truncate">{c.title}</h3>
                             <p className="text-zinc-500 text-xs mt-1">{c.item_count} items</p>
@@ -194,7 +248,10 @@ export function CollectionsManager() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-                        onClick={() => setIsCreateModalOpen(false)}
+                        onClick={() => {
+                            setIsCreateModalOpen(false);
+                            setEditingCollection(null);
+                        }}
                     >
                         <motion.div
                             initial={{ scale: 0.95, opacity: 0 }}
@@ -204,8 +261,13 @@ export function CollectionsManager() {
                             className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl"
                         >
                             <div className="p-4 border-b border-zinc-800 flex justify-between items-center">
-                                <h3 className="text-lg font-bold text-white">New Collection</h3>
-                                <button onClick={() => setIsCreateModalOpen(false)}><X className="text-zinc-500 hover:text-white" /></button>
+                                <h3 className="text-lg font-bold text-white">
+                                    {editingCollection ? 'Edit Collection' : 'New Collection'}
+                                </h3>
+                                <button onClick={() => {
+                                    setIsCreateModalOpen(false);
+                                    setEditingCollection(null);
+                                }}><X className="text-zinc-500 hover:text-white" /></button>
                             </div>
 
                             <div className="p-6 overflow-y-auto flex-1 space-y-6">
@@ -313,18 +375,21 @@ export function CollectionsManager() {
 
                             <div className="p-4 border-t border-zinc-800 bg-zinc-900/50 flex justify-end gap-3">
                                 <button
-                                    onClick={() => setIsCreateModalOpen(false)}
+                                    onClick={() => {
+                                        setIsCreateModalOpen(false);
+                                        setEditingCollection(null);
+                                    }}
                                     className="px-4 py-2 rounded-lg text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={handleCreate}
+                                    onClick={handleSave}
                                     disabled={!newTitle || selectedTemplates.length === 0 || creating}
                                     className="px-6 py-2 rounded-lg text-sm font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                                 >
                                     {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-                                    Create Collection
+                                    {editingCollection ? 'Save Changes' : 'Create Collection'}
                                 </button>
                             </div>
                         </motion.div>

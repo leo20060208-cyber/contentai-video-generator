@@ -23,7 +23,7 @@ export async function getSectionContent(sectionKey: string) {
         .from('site_content')
         .select('content')
         .eq('section_key', sectionKey)
-        .single();
+        .maybeSingle();
 
     if (error) {
         // PGRST116 means no rows found (expected for new sections)

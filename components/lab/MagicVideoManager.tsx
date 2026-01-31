@@ -20,6 +20,7 @@ interface MagicVideoConfig {
     instantClips: MagicCard;
     recreateVideo: MagicCard;
     recreateImage: MagicCard;
+    motionControl: MagicCard;
 }
 
 const defaultConfig: MagicVideoConfig = {
@@ -57,6 +58,13 @@ const defaultConfig: MagicVideoConfig = {
         link: '/create-image',
         title: 'Image Editing',
         description: 'Powered by Nano Banana Pro'
+    },
+    motionControl: {
+        mediaType: 'video',
+        mediaUrl: '',
+        link: '/magic-video/motion-control',
+        title: 'Motion Control',
+        description: 'ULTIMATE CAMERA PRECISION'
     }
 };
 
@@ -87,6 +95,7 @@ export function MagicVideoManager() {
                     livingBackgrounds: { ...defaultConfig.livingBackgrounds, ...(data.livingBackgrounds || {}) },
                     directorsCut: { ...defaultConfig.directorsCut, ...(data.directorsCut || {}) },
                     instantClips: { ...defaultConfig.instantClips, ...(data.instantClips || {}) },
+                    motionControl: { ...defaultConfig.motionControl, ...(data.motionControl || {}) },
                 }));
             }
         } catch (error) {
@@ -267,6 +276,9 @@ export function MagicVideoManager() {
                 </div>
                 <div className="col-span-1">
                     {renderCard('instantClips', 'Instant Product Clips')}
+                </div>
+                <div className="col-span-1">
+                    {renderCard('motionControl', 'Motion Control (Hero Popup)')}
                 </div>
             </div>
         </div>
