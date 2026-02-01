@@ -1116,26 +1116,24 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                 />
                             </div>
 
-                            {/* View Full Prompt Toggle - Only in CHANGE mode */}
-                            {editMode === 'change' && (
-                                <div className="pt-2">
-                                    <details className="group">
-                                        <summary className="flex items-center gap-2 cursor-pointer text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors select-none list-none">
-                                            <div className="flex items-center gap-1">
-                                                <span className="group-open:rotate-90 transition-transform">▶</span>
-                                                View Full Prompt
-                                            </div>
-                                        </summary>
-                                        <div className="mt-2 animate-in slide-in-from-top-1 fade-in duration-200">
-                                            <textarea
-                                                value={prompt}
-                                                onChange={(e) => setPrompt(e.target.value)}
-                                                className="w-full h-32 bg-zinc-950/30 border border-white/5 rounded-sm p-2 text-[9px] text-zinc-500 focus:text-zinc-300 resize-none outline-none font-mono"
-                                            />
+                            {/* View Full Prompt Toggle */}
+                            <div className="pt-2">
+                                <details className="group">
+                                    <summary className="flex items-center gap-2 cursor-pointer text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors select-none list-none">
+                                        <div className="flex items-center gap-1">
+                                            <span className="group-open:rotate-90 transition-transform">▶</span>
+                                            View Full Prompt
                                         </div>
-                                    </details>
-                                </div>
-                            )}
+                                    </summary>
+                                    <div className="mt-2 animate-in slide-in-from-top-1 fade-in duration-200">
+                                        <textarea
+                                            value={prompt}
+                                            onChange={(e) => setPrompt(e.target.value)}
+                                            className="w-full h-32 bg-zinc-950/30 border border-white/5 rounded-sm p-2 text-[9px] text-zinc-500 focus:text-zinc-300 resize-none outline-none font-mono"
+                                        />
+                                    </div>
+                                </details>
+                            </div>
                         </div>
                     </div>
 

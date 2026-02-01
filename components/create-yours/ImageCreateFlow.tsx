@@ -178,7 +178,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         }
 
         if (editMode === 'chat') {
-            setPrompt(additionalDetails);
+            const dimensionReq = (dimensions.width > 0 && dimensions.height > 0)
+                ? `\n\nSTRICT REQUIREMENT: The output MUST have the exact same dimensions (${dimensions.width}x${dimensions.height}) and framing as the reference image. Do not crop or zoom.`
+                : '';
+            setPrompt(additionalDetails + dimensionReq);
             return;
         }
 
@@ -234,6 +237,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
         if (additionalDetails.trim()) {
             insertions += `\nADDITIONAL NOTES: ${additionalDetails.trim()}\n`;
+        }
+
+        if (dimensions.width > 0 && dimensions.height > 0) {
+            insertions += `\nSTRICT DIMENSION REQUIREMENT: Output MUST be exactly ${dimensions.width}x${dimensions.height}. Preserve all composition and framing.\n`;
         }
 
         // --- CONSTRUCT FINAL PROMPT USING TEMPLATE ---
@@ -1326,22 +1333,20 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                 />
                             </div>
 
-                            {/* Collapsible Full Prompt Preview - Only in CHANGE mode */}
-                            {editMode === 'change' && (
-                                <div className="pt-2">
-                                    <details className="group">
-                                        <summary className="text-[9px] text-zinc-500 cursor-pointer hover:text-zinc-400 list-none flex items-center gap-1">
-                                            <ChevronRight className="w-3 h-3 group-open:rotate-90 transition-transform" />
-                                            View Full Prompt
-                                        </summary>
-                                        <textarea
-                                            value={prompt}
-                                            onChange={(e) => setPrompt(e.target.value)}
-                                            className="w-full h-24 mt-2 bg-black/20 border border-white/10 rounded-sm p-3 text-[9px] text-zinc-500 resize-none outline-none focus:border-white/20 font-mono"
-                                        />
-                                    </details>
-                                </div>
-                            )}
+                            {/* Collapsible Full Prompt Preview */}
+                            <div className="pt-2">
+                                <details className="group">
+                                    <summary className="text-[9px] text-zinc-500 cursor-pointer hover:text-zinc-400 list-none flex items-center gap-1">
+                                        <ChevronRight className="w-3 h-3 group-open:rotate-90 transition-transform" />
+                                        View Full Prompt
+                                    </summary>
+                                    <textarea
+                                        value={prompt}
+                                        onChange={(e) => setPrompt(e.target.value)}
+                                        className="w-full h-24 mt-2 bg-black/20 border border-white/10 rounded-sm p-3 text-[9px] text-zinc-500 resize-none outline-none focus:border-white/20 font-mono"
+                                    />
+                                </details>
+                            </div>
                         </div>
                     </div>
 
