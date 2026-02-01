@@ -132,7 +132,10 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
     // Construct Prompt (Auto)
     useEffect(() => {
         if (editMode === 'chat') {
-            setPrompt(additionalDetails);
+            const aspectStr = (videoRef.current?.videoWidth && videoRef.current?.videoHeight)
+                ? `\n\nDimensions: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`
+                : '';
+            setPrompt(additionalDetails + aspectStr);
             return;
         }
 
@@ -721,7 +724,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                 body: JSON.stringify({
                     video: uploadedVideoUrl, // Send URL!
                     images: imagesPayload, // Send URLs!
-                    prompt: `${usedPrompt}\n\nSTRICT REQUIREMENT: The output MUST maintain the exact same framing, perspective, and aspect ratio as the source video. Do not crop or zoom. Preserve the original composition perfectly.`,
+                    prompt: usedPrompt,
                     model: 'kwaivgi/kling-video-o1/video-edit',
                     duration: Math.ceil(videoDuration),
                     aspect_ratio: aspectRatio,

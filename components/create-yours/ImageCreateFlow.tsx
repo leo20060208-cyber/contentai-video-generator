@@ -179,7 +179,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
         if (editMode === 'chat') {
             const dimensionReq = (dimensions.width > 0 && dimensions.height > 0)
-                ? `\n\nSTRICT REQUIREMENT: The output MUST have the exact same dimensions (${dimensions.width}x${dimensions.height}) and framing as the reference image. Do not crop or zoom.`
+                ? `\n\nDimensions: ${dimensions.width}x${dimensions.height}`
                 : '';
             setPrompt(additionalDetails + dimensionReq);
             return;
@@ -813,7 +813,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                 },
                 body: JSON.stringify({
                     images: imagesPayload, // Now URLs
-                    prompt: `${usedPrompt}\n\nSTRICT REQUIREMENT: The output MUST have the exact same aspect ratio and framing as the reference image. Do not crop, zoom, or pad the image. Preserve the original composition perfectly. Dimensions: ${actualDimensions.width}x${actualDimensions.height}.`,
+                    prompt: usedPrompt,
                     maskImage: maskDataUrl || undefined, // Now URL
                     dimensions: actualDimensions.width > 0 ? actualDimensions : undefined,
                     userId: user?.id,
