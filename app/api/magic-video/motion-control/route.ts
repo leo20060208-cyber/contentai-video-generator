@@ -49,7 +49,8 @@ export async function POST(request: NextRequest) {
             prompt,
             duration = 5,
             quality = 'normal',
-            aspectRatio = '16:9'
+            aspectRatio = '16:9',
+            characterOrientation = 'video'
         } = body;
 
         if (!startVideo || !prompt) {
@@ -90,7 +91,8 @@ export async function POST(request: NextRequest) {
             duration: durationToCharge,
             aspect_ratio: aspectRatio,
             frames_per_second: 24,
-            cfg_scale: 8.0
+            cfg_scale: 8.0,
+            character_orientation: characterOrientation
         };
 
         // Call Wavespeed API

@@ -36,6 +36,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
     const [imageDimensions, setImageDimensions] = useState<{ width: number, height: number } | null>(null);
     const [qualityMode, setQualityMode] = useState<'normal' | 'pro'>('normal');
     const [aspectRatio, setAspectRatio] = useState<'free' | '16:9' | '9:16' | '1:1'>('free');
+    const [characterOrientation, setCharacterOrientation] = useState<'video' | 'image'>('video');
 
     const [userPrompt, setUserPrompt] = useState('');
     const [basePrompt, setBasePrompt] = useState('Create a smooth, cinematic motion control video. Maintain consistency in lighting, style, and subject matter.');
@@ -210,7 +211,8 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                     endImage: endUrl,
                     prompt: fullPromptPreview,
                     duration: Math.ceil(videoDuration),
-                    quality: qualityMode
+                    quality: qualityMode,
+                    characterOrientation
                 })
             });
 
@@ -230,7 +232,8 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
             if (data.taskId) {
                 let completed = false;
                 let attempts = 0;
-                while (!completed && attempts < 90) {
+                // Timeout increased to ~60 minutes (1800 * 2s) to effectively remove timeout
+                while (!completed && attempts < 1800) {
                     await new Promise(r => setTimeout(r, 2000));
                     const statusRes = await fetch(`/api/magic-video/status/${data.taskId}`);
                     const statusData = await statusRes.json();
@@ -245,7 +248,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                     }
                     attempts++;
                 }
-                if (!completed) throw new Error('Generation timed out');
+                if (!completed) throw new Error('Generation timed out. The video might still appear in your gallery later.');
             }
         } catch (e: any) {
             console.error(e);
@@ -257,10 +260,10 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
 
     const getContainerClasses = () => {
         const base = "relative rounded-2xl border border-white/10 hover:border-orange-500/50 bg-zinc-900/50 cursor-pointer overflow-hidden group transition-all flex items-center justify-center";
-        if (aspectRatio === '16:9') return `${base} w-[500px] aspect-video`;
-        if (aspectRatio === '9:16') return `${base} h-[500px] aspect-[9/16]`;
-        if (aspectRatio === '1:1') return `${base} w-[450px] aspect-square`;
-        return `${base} w-[450px] min-h-[450px] aspect-square`;
+        if (aspectRatio === '16:9') return `${base} w-[380px] aspect-video`;
+        if (aspectRatio === '9:16') return `${base} h-[380px] aspect-[9/16]`;
+        if (aspectRatio === '1:1') return `${base} w-[340px] aspect-square`;
+        return `${base} w-[340px] min-h-[340px] aspect-square`;
     };
 
     return (
@@ -376,6 +379,8 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
                                     </button>
                                 </div>
 
+
+
                                 {/* Generate Button - RECTANGULAR & LOGIC */}
                                 <button
                                     onClick={handleGenerate}
@@ -411,7 +416,7 @@ export function MotionControlEditor({ onBack, initialDefaultPrompt, initialPrese
             </div>
 
             {/* Unified Library Section */}
-            <div className="w-full lg:w-[850px] bg-transparent flex flex-col lg:overflow-hidden shrink-0 border-t lg:border-t-0 lg:border-l border-white/10 h-auto lg:h-full">
+            <div className="w-full lg:w-[850px] bg-transparent flex flex-col lg:overflow-hidden shrink-0 h-auto lg:h-full">
                 <div className="flex-1 overflow-y-auto custom-scrollbar pt-12 pb-12 px-12">
                     {/* Library Header: Aligned with Format Bar */}
                     <div className="flex justify-center mb-4">

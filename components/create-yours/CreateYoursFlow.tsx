@@ -267,8 +267,8 @@ The final result must look like the same video, with the same movements and ligh
     };
 
     const handleGenerate = async () => {
-        if (!videoFile || products.length === 0) {
-            alert('Please upload a video and add at least one product.');
+        if (!videoFile || (products.length === 0 && !prompt)) {
+            alert('Please upload a video and add at least one product or instruction.');
             return;
         }
 
@@ -524,6 +524,7 @@ The final result must look like the same video, with the same movements and ligh
 
     // Pricing Logic
     const getCreditsCost = () => {
+        if (videoDuration < 3) return 45;
         if (videoDuration <= 5) return 75; // Small buffer logic
         if (videoDuration <= 10) return 75;
         if (videoDuration <= 15) return 95;

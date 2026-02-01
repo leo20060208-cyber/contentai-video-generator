@@ -126,6 +126,26 @@ const defaultContent = {
             image: "/images/what-we-do/recreate-template-video-3.png",
             ctaText: "Create Cut"
         }
+    ],
+    motionControlSteps: [
+        {
+            title: "Upload Reference",
+            description: "Upload a video showing the motion you want to replicate.",
+            image: "/images/what-we-do/recreate-template-video-1.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Target Image",
+            description: "Upload your product or character to animate.",
+            image: "/images/what-we-do/recreate-template-video-2.png",
+            ctaText: "Next"
+        },
+        {
+            title: "Motion Transfer",
+            description: "AI applies the reference motion to your subject.",
+            image: "/images/what-we-do/recreate-template-video-3.png",
+            ctaText: "Try Motion Control"
+        }
     ]
 };
 
@@ -134,7 +154,14 @@ export default function WhatWeDoPage() {
 
     useEffect(() => {
         getSectionContent('what_we_do_v2').then((data) => {
-            if (data) setContent(data);
+            if (data) {
+                // Merge with defaults to ensure motionControlSteps exists
+                setContent({
+                    ...defaultContent,
+                    ...data,
+                    motionControlSteps: data.motionControlSteps || defaultContent.motionControlSteps
+                });
+            }
         });
     }, []);
 
@@ -152,24 +179,21 @@ export default function WhatWeDoPage() {
                 WHAT WE DO
             </motion.h1>
 
-            <div className="grid md:grid-cols-3 xl:grid-cols-6 gap-x-4 gap-y-16 max-w-[1800px] mx-auto z-10 w-full">
+            <div className="grid md:grid-cols-3 xl:grid-cols-5 gap-x-4 gap-y-16 max-w-[1800px] mx-auto z-10 w-full">
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex justify-center">
                     <StepCard steps={data.createVideoSteps} title={data.createVideoTitle} showFooter plusInfoUrl="/guide/video-editing" />
                 </motion.div>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex justify-center">
-                    <StepCard steps={data.recreateVideoSteps} title={data.recreateVideoTitle} showFooter plusInfoUrl="/guide/videos-library" />
-                </motion.div>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="flex justify-center">
                     <StepCard steps={data.createImageSteps} title={data.createImageTitle} showFooter plusInfoUrl="/guide/image-editing" />
                 </motion.div>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex justify-center">
-                    <StepCard steps={data.recreateImageSteps} title={data.recreateImageTitle} showFooter plusInfoUrl="/guide/images-library" />
-                </motion.div>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="flex justify-center">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="flex justify-center">
                     <StepCard steps={data.livingBackgroundsSteps} title={data.livingBackgroundsTitle || "LIVING BACKGROUNDS"} showFooter plusInfoUrl="/guide/living-backgrounds" />
                 </motion.div>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }} className="flex justify-center">
-                    <StepCard steps={data.directorsCutSteps} title={data.directorsCutTitle || "DIRECTOR'S CUT"} showFooter plusInfoUrl="/guide/directors-cut" />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="flex justify-center">
+                    <StepCard steps={data.directorsCutSteps} title={data.directorsCutTitle || "IMAGE TO VIDEO"} showFooter plusInfoUrl="/guide/directors-cut" />
+                </motion.div>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="flex justify-center">
+                    <StepCard steps={data.motionControlSteps} title={data.motionControlTitle || "MOTION CONTROL"} showFooter plusInfoUrl="/guide/motion-control" />
                 </motion.div>
             </div>
         </div>

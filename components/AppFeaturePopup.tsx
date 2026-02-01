@@ -29,26 +29,6 @@ const defaultContent = {
             ctaText: "Start Creating"
         }
     ],
-    recreateVideoSteps: [
-        {
-            title: "Recreate Template Video",
-            description: "Browse our curated library of high-performing viral video templates.",
-            image: "/images/what-we-do/recreate-template-video-1.png",
-            ctaText: "Next"
-        },
-        {
-            title: "Insert Product",
-            description: "Seamlessly integrate your product into the narrative with one click.",
-            image: "/images/what-we-do/recreate-template-video-2.png",
-            ctaText: "Next"
-        },
-        {
-            title: "Generate Magic",
-            description: "Watch as your product becomes the star of a proven viral format.",
-            image: "/images/what-we-do/recreate-template-video-3.png",
-            ctaText: "Browse Templates"
-        }
-    ],
     createImageSteps: [
         {
             title: "IMAGE EDITING",
@@ -69,24 +49,24 @@ const defaultContent = {
             ctaText: "Create Image"
         }
     ],
-    recreateImageSteps: [
+    motionControlSteps: [
         {
-            title: "Image Editing",
-            description: "Edit materials and details in any interior.",
-            image: "/images/what-we-do/recreate-template-image-1.png",
+            title: "MOTION CONTROL",
+            description: "Upload a reference video showing the motion you want to replicate.",
+            image: "/images/what-we-do/recreate-template-video-1.png",
             ctaText: "Next"
         },
         {
-            title: "Nano Banana Pro",
-            description: "Powered by Nano Banana Pro",
-            image: "/images/what-we-do/recreate-template-image-2.png",
+            title: "Target Image",
+            description: "Upload your product or subject image to animate with the reference motion.",
+            image: "/images/what-we-do/recreate-template-video-2.png",
             ctaText: "Next"
         },
         {
-            title: "Try Edits Now",
-            description: "Push your creativity to the limit",
-            image: "/images/what-we-do/recreate-template-image-3.png",
-            ctaText: "Try Now"
+            title: "Generate",
+            description: "AI combines your image with the reference motion to create dynamic videos.",
+            image: "/images/what-we-do/recreate-template-video-3.png",
+            ctaText: "Try Motion Control"
         }
     ]
 };
@@ -119,18 +99,14 @@ export function AppFeaturePopup() {
             targetSteps = data.createVideoSteps;
             targetTitle = "VIDEO EDITING";
             key = "popup_dismissed_create_video_v3";
-        } else if (pathname === '/videos') {
-            targetSteps = data.recreateVideoSteps;
-            targetTitle = "VIDEOS LIBRARY";
-            key = "popup_dismissed_videos_library_v3";
+        } else if (pathname === '/magic-video/motion-control') {
+            targetSteps = data.motionControlSteps;
+            targetTitle = "MOTION CONTROL";
+            key = "popup_dismissed_motion_control_v3";
         } else if (pathname === '/create-image') {
             targetSteps = data.createImageSteps;
             targetTitle = "IMAGE EDITING";
             key = "popup_dismissed_create_image_v3";
-        } else if (pathname === '/images') {
-            targetSteps = data.recreateImageSteps;
-            targetTitle = "IMAGES LIBRARY";
-            key = "popup_dismissed_images_library_v3";
         }
 
         if (targetSteps && key) {
@@ -177,10 +153,9 @@ export function AppFeaturePopup() {
                             className="h-full border-zinc-800 shadow-2xl shadow-black/80"
                             plusInfoUrl={
                                 pathname === '/create-yours' ? '/guide/video-editing' :
-                                    pathname === '/videos' ? '/guide/videos-library' :
+                                    pathname === '/magic-video/motion-control' ? '/guide/motion-control' :
                                         pathname === '/create-image' ? '/guide/image-editing' :
-                                            pathname === '/images' ? '/guide/images-library' :
-                                                undefined
+                                            undefined
                             }
                         />
                     </div>

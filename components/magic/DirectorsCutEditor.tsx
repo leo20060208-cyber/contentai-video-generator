@@ -238,7 +238,7 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
             if (data.taskId) {
                 let completed = false;
                 let attempts = 0;
-                const maxAttempts = 90; // 3 minutes max
+                const maxAttempts = 1800; // ~60 minutes max
 
                 while (!completed && attempts < maxAttempts) {
                     await new Promise(r => setTimeout(r, 2000));

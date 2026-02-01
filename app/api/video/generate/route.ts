@@ -66,7 +66,9 @@ export async function POST(request: Request) {
         const vidDuration = duration || 5;
         let cost = 75;
 
-        if (vidDuration <= 15) {
+        if (vidDuration < 3) {
+            cost = 45;
+        } else if (vidDuration <= 15) {
             cost = 75;
         } else if (vidDuration <= 20) {
             cost = 130;

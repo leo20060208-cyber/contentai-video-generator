@@ -28,6 +28,7 @@ import {
     Loader2,
     ChevronLeft,
     ChevronRight,
+    Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -325,6 +326,25 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
 
         return () => clearInterval(interval);
     }, [genState, keepAudio, template]);
+
+
+    const handleDownload = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download failed", error);
+            window.open(url, '_blank');
+        }
+    };
 
 
     // --- HANDLERS ---
@@ -697,9 +717,20 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                             ) : viewMode === 'result' ? (
                                 <div className="w-full h-full flex items-center justify-center">
                                     {template.before_video_url ? (
-                                        <div className="max-w-4xl w-full h-[50vh] md:h-[65vh] relative rounded-sm overflow-hidden">
+                                        <div className="max-w-4xl w-full h-[50vh] md:h-[65vh] relative rounded-sm overflow-hidden group">
                                             {(genState.videoUrl || template?.after_video_url) ? (
-                                                <video src={genState.videoUrl || template.after_video_url!} controls autoPlay loop className="w-full h-full object-contain bg-black" />
+                                                <>
+                                                    <video src={genState.videoUrl || template.after_video_url!} controls autoPlay loop className="w-full h-full object-contain bg-black" />
+                                                    <div className="absolute bottom-6 right-6 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => handleDownload((genState.videoUrl || template.after_video_url)!, `recreate-video-${Date.now()}.mp4`)}
+                                                            className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-lg border border-white/20 transition-all flex items-center gap-2 text-xs font-bold shadow-2xl"
+                                                        >
+                                                            <Download className="w-4 h-4" />
+                                                            Download Video
+                                                        </button>
+                                                    </div>
+                                                </>
                                             ) : (
                                                 <div className="w-full h-full bg-black flex items-center justify-center">
                                                     <span className="text-zinc-500">No result video</span>

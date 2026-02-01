@@ -125,10 +125,10 @@ const defaultContent: Record<string, any> = {
         `
     },
     "directors-cut": {
-        "title": "Director's Cut",
-        "description": "Create cinematic transitions between multiple scenes.",
-        "videoUrl": "",
-        "content": `
+        title: "Director's Cut",
+        description: "Create cinematic transitions between multiple scenes.",
+        videoUrl: "",
+        content: `
             <div class="space-y-12">
                 <section>
                     <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Select Start & End Frames</h2>
@@ -150,6 +150,27 @@ const defaultContent: Record<string, any> = {
                         <li><strong>Story sequences</strong>: Create multi-shot narratives</li>
                         <li><strong>Brand reveals</strong>: Build anticipation with staged reveals</li>
                     </ul>
+                </section>
+            </div>
+        `
+    },
+    "motion-control": {
+        title: "Motion Control",
+        description: "Control the exact movement of your character using reference videos.",
+        videoUrl: "",
+        content: `
+            <div class="space-y-12">
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">1</span> Choose Reference Video</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Upload a video that contains the <strong>movement</strong> you want to replicate. This acts as the skeleton for your generated video.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">2</span> Set Target Image</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">Upload an image of the <strong>character or subject</strong> you want to animate. The AI will apply the motion from the reference video to this character.</p>
+                </section>
+                <section>
+                    <h2 class="text-2xl font-semibold text-white mb-2 flex items-center"><span class="w-8 h-8 rounded-full bg-transparent border border-orange-500 text-white flex items-center justify-center text-sm mr-3">3</span> Generate</h2>
+                    <p class="text-zinc-400 leading-relaxed pl-11">The AI will fuse the two inputs, creating a new video where your character performs the reference motion.</p>
                 </section>
             </div>
         `

@@ -164,7 +164,7 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                         {
                             id: 'living-bg',
                             title: magicVideoConfig?.livingBackgrounds?.title || 'Living Backgrounds',
-                            description: magicVideoConfig?.livingBackgrounds?.description || 'POWERED BY KLING AI',
+                            description: 'POWERED BY KLING AI', // Force this description
                             link: '/magic-video/living-backgrounds',
                             mediaUrl: magicVideoConfig?.livingBackgrounds?.mediaUrl,
                             mediaType: magicVideoConfig?.livingBackgrounds?.mediaType || 'video',
@@ -174,7 +174,7 @@ export function Hero({ selectedCategory, onCategoryChange, initialData }: HeroPr
                         {
                             id: 'directors-cut',
                             title: magicVideoConfig?.directorsCut?.title || "Image to Video",
-                            description: magicVideoConfig?.directorsCut?.description || 'POWERED BY SORA 2',
+                            description: 'POWERED BY SORA 2', // Force this description
                             link: '/magic-video/directors-cut',
                             mediaUrl: magicVideoConfig?.directorsCut?.mediaUrl,
                             mediaType: magicVideoConfig?.directorsCut?.mediaType || 'video',

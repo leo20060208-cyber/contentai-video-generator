@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Upload, X, Sparkles, Loader2, Music, Clapperboard, Play, BookOpen } from 'lucide-react';
+import { Upload, X, Sparkles, Loader2, Music, Clapperboard, Play, BookOpen, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -24,8 +24,27 @@ export function InstantClipsEditor({ onBack }: InstantClipsEditorProps) {
     const [selectedStyle, setSelectedStyle] = useState('cinematic');
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
+    const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
 
     const { deductCreditsOptimistic } = useAuth();
+
+    const handleDownload = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download failed", error);
+            window.open(url, '_blank');
+        }
+    };
 
     const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -67,16 +86,15 @@ export function InstantClipsEditor({ onBack }: InstantClipsEditorProps) {
             if (data.taskId) {
                 let completed = false;
                 let attempts = 0;
-                while (!completed && attempts < 60) {
+                while (!completed && attempts < 1800) {
                     await new Promise(r => setTimeout(r, 2000));
                     const statusRes = await fetch(`/api/video/status?taskId=${data.taskId}`);
                     const statusData = await statusRes.json();
 
-                    if (statusData.status === 'completed') {
+                    if (statusData.status === 'completed' && statusData.videoUrl) {
                         completed = true;
                         setGenerationProgress(100);
-                        alert('Instant Clip generated and saved!');
-                        onBack();
+                        setGeneratedVideoUrl(statusData.videoUrl);
                     } else {
                         setGenerationProgress(prev => Math.min(95, prev + 5));
                     }
@@ -170,6 +188,50 @@ export function InstantClipsEditor({ onBack }: InstantClipsEditorProps) {
                     </div>
                 </div>
             </div>
+            {/* Result Overlay */}
+            <AnimatePresence>
+                {generatedVideoUrl && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+                    >
+                        <button
+                            onClick={() => setGeneratedVideoUrl(null)}
+                            className="absolute top-6 right-6 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
+                        >
+                            <X className="w-6 h-6 text-white/50 group-hover:text-white" />
+                        </button>
+
+                        <div className="relative w-full max-w-[400px] aspect-[9/16] bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/10">
+                            <video
+                                src={generatedVideoUrl}
+                                controls
+                                autoPlay
+                                loop
+                                className="w-full h-full object-contain"
+                            />
+                        </div>
+
+                        <div className="mt-8 flex items-center gap-4">
+                            <button
+                                onClick={() => handleDownload(generatedVideoUrl, `instant-clip-${Date.now()}.mp4`)}
+                                className="px-6 py-3 bg-white text-black rounded-xl font-bold hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                            >
+                                <Download className="w-5 h-5" />
+                                Download Video
+                            </button>
+                            <button
+                                onClick={() => onBack()}
+                                className="px-6 py-3 bg-white/10 text-white rounded-xl font-bold hover:bg-white/20 transition-colors"
+                            >
+                                Back to Gallery
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

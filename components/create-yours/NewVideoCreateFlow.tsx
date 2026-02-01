@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Upload, Sparkles, Plus, Layers, Image as ImageIcon, Video, Play, Pause, Wand2, Search, Check, Info, Brush, Eraser, Move, BookOpen } from 'lucide-react';
+import { X, Upload, Sparkles, Plus, Layers, Image as ImageIcon, Video, Play, Pause, Wand2, Search, Check, Info, Brush, Eraser, Move, BookOpen, ImagePlus, ChevronRight, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -78,6 +78,12 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
     // Prompt
     const [prompt, setPrompt] = useState('');
     const [productSubstitutions, setProductSubstitutions] = useState<string[]>([]);
+    const [additionalDetails, setAdditionalDetails] = useState('');
+    const [editMode, setEditMode] = useState<'change' | 'chat'>('change');
+    const [chatHistory, setChatHistory] = useState<{ type: 'user' | 'result', content: string, images?: string[] }[]>([]);
+    const [chatImages, setChatImages] = useState<string[]>([]);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const chatImageInputRef = useRef<HTMLInputElement>(null);
 
     // Generation Status
     const [isGenerating, setIsGenerating] = useState(false);
@@ -85,6 +91,13 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
     const [taskId, setTaskId] = useState<string | null>(null);
     const [genStatus, setGenStatus] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'workspace' | 'result'>('workspace');
+
+    // Auto-scroll chat history
+    useEffect(() => {
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+    }, [chatHistory, isGenerating]);
     const [timer, setTimer] = useState(0);
 
     // Canvas Dimensions (from extracted frame)
@@ -118,6 +131,11 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
     // Construct Prompt (Auto)
     useEffect(() => {
+        if (editMode === 'chat') {
+            setPrompt(additionalDetails);
+            return;
+        }
+
         let instructions = "";
 
         if (layers.length > 0) {
@@ -155,6 +173,10 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
             instructions += "\nMODE: Full frame editing (Masking skipped). Modify the entire scene as needed based on instructions.\n";
         }
 
+        if (additionalDetails.trim()) {
+            instructions += `\nADDITIONAL NOTES: ${additionalDetails.trim()}\n`;
+        }
+
         // Construct final prompt using template
         let finalPrompt = defaultPrompt;
         const durationStr = `${Math.ceil(videoDuration) || 'X'}`;
@@ -176,7 +198,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         }
 
         if (prompt !== finalPrompt) setPrompt(finalPrompt);
-    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask, videoDuration, prompt, defaultPrompt]);
+    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask, videoDuration, prompt, defaultPrompt, additionalDetails]);
 
     // Timer Logic
     useEffect(() => {
@@ -442,7 +464,9 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
     // --- GENERATION ---
 
+    // Pricing Logic
     const getCreditsCost = () => {
+        if (videoDuration < 3) return 45;
         if (videoDuration <= 9) return 75;
         if (videoDuration <= 14) return 95;
         if (videoDuration <= 19) return 130;
@@ -464,6 +488,23 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                 const blob = await res.blob();
                 body = blob;
                 contentType = blob.type;
+            } else if (typeof file === 'string' && file.startsWith('http')) {
+                // If already in our Supabase, don't re-upload
+                if (file.includes(supabaseUrl)) {
+                    return file;
+                }
+
+                try {
+                    console.log('[Create] Re-uploading remote URL to Supabase:', file);
+                    const res = await fetch(file);
+                    if (!res.ok) throw new Error(`Fetch failed with status ${res.status}`);
+                    const blob = await res.blob();
+                    body = blob;
+                    contentType = blob.type;
+                } catch (e) {
+                    console.warn('[Create] Could not fetch remote URL, returning as is:', e);
+                    return file;
+                }
             } else {
                 return file as string; // Already a URL
             }
@@ -487,9 +528,50 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         }
     };
 
+    const handleDownload = async (url: string, filename: string) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Download failed", error);
+            window.open(url, '_blank');
+        }
+    };
+
     const handleGenerate = async () => {
-        if (!videoFile || layers.length === 0) {
-            alert("Please upload a video and at least one product layer.");
+        const usedPrompt = editMode === 'chat' ? additionalDetails : prompt;
+
+        // Add to Chat History if in chat mode
+        if (editMode === 'chat' && (additionalDetails.trim() || chatImages.length > 0)) {
+            setChatHistory(prev => [...prev, {
+                type: 'user',
+                content: additionalDetails.trim(),
+                images: chatImages.length > 0 ? [...chatImages] : undefined
+            }]);
+            setAdditionalDetails('');
+            setChatImages([]);
+        }
+
+        if (!videoFile && !videoUrl) {
+            alert("Please upload a video or provide a reference.");
+            return;
+        }
+
+        if (editMode !== 'chat' && layers.length === 0) {
+            alert("Please add at least one product layer.");
+            return;
+        }
+
+        if (editMode === 'chat' && layers.length === 0 && !usedPrompt) {
+            alert("Please add a product or provide an instruction.");
             return;
         }
 
@@ -504,7 +586,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         try {
             // 1. Upload Base Video to Supabase Storage (Avoid Payload Limits)
             setGenStatus('Uploading video...');
-            const uploadedVideoUrl = await uploadToSupabase(videoFile, 'user-inputs');
+            const uploadedVideoUrl = await uploadToSupabase(videoFile || videoUrl!, 'user-inputs');
             if (!uploadedVideoUrl) throw new Error('Failed to upload video file');
             console.log('[Create] Video uploaded to:', uploadedVideoUrl);
 
@@ -577,6 +659,14 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                 if (pUrl) imagesPayload.push(pUrl);
             }
 
+            // Add supplementary chat images if present
+            if (editMode === 'chat' && chatImages.length > 0) {
+                for (const img of chatImages) {
+                    const cUrl = await uploadToSupabase(img, 'chat-images');
+                    if (cUrl) imagesPayload.push(cUrl);
+                }
+            }
+
             // 5. Submit
             setGenStatus('Submitting job...');
             const cost = getCreditsCost();
@@ -584,8 +674,21 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
             // Aspect Ratio
             let aspectRatio = '16:9';
-            if (videoH > videoW) aspectRatio = '9:16';
-            else if (videoH === videoW) aspectRatio = '1:1';
+            const ratioValue = videoW / videoH;
+
+            if (Math.abs(ratioValue - 1) < 0.1) aspectRatio = '1:1';
+            else if (ratioValue < 1) {
+                // Portrait
+                if (Math.abs(ratioValue - (9 / 16)) < 0.2) aspectRatio = '9:16';
+                else if (Math.abs(ratioValue - (3 / 4)) < 0.2) aspectRatio = '3:4';
+                else aspectRatio = '9:16'; // Default portrait
+            } else {
+                // Landscape
+                if (Math.abs(ratioValue - (16 / 9)) < 0.2) aspectRatio = '16:9';
+                else if (Math.abs(ratioValue - (4 / 3)) < 0.2) aspectRatio = '4:3';
+                else if (Math.abs(ratioValue - (21 / 9)) < 0.2) aspectRatio = '21:9';
+                else aspectRatio = '16:9'; // Default landscape
+            }
 
             // === DETAILED PAYLOAD LOG ===
             console.log('');
@@ -618,7 +721,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                 body: JSON.stringify({
                     video: uploadedVideoUrl, // Send URL!
                     images: imagesPayload, // Send URLs!
-                    prompt: prompt,
+                    prompt: `${usedPrompt}\n\nSTRICT REQUIREMENT: The output MUST maintain the exact same framing, perspective, and aspect ratio as the source video. Do not crop or zoom. Preserve the original composition perfectly.`,
                     model: 'kwaivgi/kling-video-o1/video-edit',
                     duration: Math.ceil(videoDuration),
                     aspect_ratio: aspectRatio,
@@ -663,6 +766,15 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                         setGeneratedVideo(url);
                         setViewMode('result');
                         setIsGenerating(false);
+
+                        // Add to Chat History
+                        setChatHistory(prev => [...prev, { type: 'result', content: url }]);
+
+                        // Iterative Editing: Update reference video in Chat Mode
+                        if (editMode === 'chat') {
+                            setVideoUrl(url);
+                            setVideoFile(null); // Clear file to use URL as source
+                        }
                         return;
                     }
                 } else if (data.data?.status === 'failed') {
@@ -711,6 +823,28 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
                 {/* LEFT SIDEBAR (Inputs) */}
                 <div className="w-full md:w-[280px] lg:w-[300px] xl:w-[340px] flex flex-col gap-0 shrink-0 h-[40%] md:h-full border border-white/10 rounded-sm overflow-hidden bg-zinc-900/50 backdrop-blur-sm transition-all duration-300">
+                    {/* Mode Tabs */}
+                    <div className="flex gap-1 border-b border-white/5 bg-black/20">
+                        <button
+                            onClick={() => setEditMode('change')}
+                            className={`flex-1 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${editMode === 'change'
+                                ? 'text-white border-b-2 border-orange-500 bg-white/5'
+                                : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                        >
+                            Change Objects
+                        </button>
+                        <button
+                            onClick={() => setEditMode('chat')}
+                            className={`flex-1 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${editMode === 'chat'
+                                ? 'text-white border-b-2 border-orange-500 bg-white/5'
+                                : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                        >
+                            Chat Mode
+                        </button>
+                    </div>
+
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
 
                         {/* 1. Base Video (Logic Only) */}
@@ -723,201 +857,285 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                             />
                         )}
 
-                        {/* 2. Layers */}
-                        <div className="p-4 border-b border-white/5">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Product Layers</h3>
-                                <div className="relative">
-                                    <label
-                                        className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer"
-                                    >
-                                        <Plus className="w-3 h-3" /> Add
-                                        <input type="file" onChange={(e) => { handleProductUpload(e); setShowAddOptions(false); }} className="hidden" accept="image/*" />
-                                    </label>
+                        {/* 2. Layers - Only in CHANGE mode */}
+                        {editMode === 'change' && (
+                            <div className="p-4 border-b border-white/5">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Product Layers</h3>
+                                    <div className="relative">
+                                        <label
+                                            className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer"
+                                        >
+                                            <Plus className="w-3 h-3" /> Add
+                                            <input type="file" onChange={(e) => { handleProductUpload(e); setShowAddOptions(false); }} className="hidden" accept="image/*" />
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="space-y-1">
-                                {layers.map((layer, i) => (
-                                    <div
-                                        key={layer.id}
-                                        className={`flex flex-col gap-1 p-2 rounded-sm border transition-colors cursor-pointer ${selectedLayerId === layer.id ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
-                                        onClick={() => setSelectedLayerId(layer.id)}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-8 rounded-full" style={{ backgroundColor: layer.maskColor }}></div>
-                                            <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-[10px] text-white truncate font-medium">{layer.name}</div>
-                                                <div className="text-[9px] text-zinc-500 truncate">Product {i + 1}</div>
+                                <div className="space-y-1">
+                                    {layers.map((layer, i) => (
+                                        <div
+                                            key={layer.id}
+                                            className={`flex flex-col gap-1 p-2 rounded-sm border transition-colors cursor-pointer ${selectedLayerId === layer.id ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                                            onClick={() => setSelectedLayerId(layer.id)}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-8 rounded-full" style={{ backgroundColor: layer.maskColor }}></div>
+                                                <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] text-white truncate font-medium">{layer.name}</div>
+                                                    <div className="text-[9px] text-zinc-500 truncate">Product {i + 1}</div>
+                                                </div>
+                                                <button onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
                                             </div>
-                                            <button onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
-                                        </div>
 
-                                        {/* Product Prompt */}
-                                        <div className="mt-2 px-1" onClick={(e) => e.stopPropagation()}>
-                                            <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
-                                            <textarea
-                                                value={layer.prompt}
-                                                onChange={(e) => {
-                                                    const newLayers = [...layers];
-                                                    newLayers[i].prompt = e.target.value;
-                                                    setLayers(newLayers);
-                                                }}
-                                                placeholder="Describe the product..."
-                                                className="w-full h-10 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
-                                            />
-                                        </div>
+                                            {/* Product Prompt */}
+                                            <div className="mt-2 px-1" onClick={(e) => e.stopPropagation()}>
+                                                <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
+                                                <textarea
+                                                    value={layer.prompt}
+                                                    onChange={(e) => {
+                                                        const newLayers = [...layers];
+                                                        newLayers[i].prompt = e.target.value;
+                                                        setLayers(newLayers);
+                                                    }}
+                                                    placeholder="Describe the product..."
+                                                    className="w-full h-10 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
+                                                />
+                                            </div>
 
-                                        {/* Details Section */}
-                                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures</span>
-                                                <div className="relative group/tooltip">
-                                                    <Info className="w-2.5 h-2.5 text-zinc-600" />
-                                                    <div className="absolute bottom-full right-0 mb-2 w-40 bg-black/90 border border-white/10 p-2 rounded-sm opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-10">
-                                                        <p className="text-[9px] text-zinc-400">Add close-up images to help the AI understand materials, logos, or textures.</p>
+                                            {/* Details Section */}
+                                            <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures</span>
+                                                    <div className="relative group/tooltip">
+                                                        <Info className="w-2.5 h-2.5 text-zinc-600" />
+                                                        <div className="absolute bottom-full right-0 mb-2 w-40 bg-black/90 border border-white/10 p-2 rounded-sm opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-10">
+                                                            <p className="text-[9px] text-zinc-400">Add close-up images to help the AI understand materials, logos, or textures.</p>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            {/* List of Details */}
-                                            {layer.details && layer.details.map((detail, dIndex) => (
-                                                <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
-                                                    <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
-                                                        <img src={detail.url} className="w-full h-full object-cover" />
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                const newDetails = layer.details.filter(d => d.id !== detail.id);
+                                                {/* List of Details */}
+                                                {layer.details && layer.details.map((detail, dIndex) => (
+                                                    <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
+                                                        <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
+                                                            <img src={detail.url} className="w-full h-full object-cover" />
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const newDetails = layer.details.filter(d => d.id !== detail.id);
+                                                                    setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
+                                                                }}
+                                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="w-3 h-3 text-white" />
+                                                            </button>
+                                                        </div>
+                                                        <textarea
+                                                            placeholder="Describe placement or texture..."
+                                                            className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none resize-none h-8 py-0.5 leading-tight"
+                                                            value={detail.description}
+                                                            onChange={(e) => {
+                                                                const newDetails = [...layer.details];
+                                                                newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
                                                                 setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
                                                             }}
-                                                            className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
-                                                        >
-                                                            <X className="w-3 h-3 text-white" />
-                                                        </button>
+                                                        />
                                                     </div>
-                                                    <textarea
-                                                        placeholder="Describe placement or texture..."
-                                                        className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none resize-none h-8 py-0.5 leading-tight"
-                                                        value={detail.description}
-                                                        onChange={(e) => {
-                                                            const newDetails = [...layer.details];
-                                                            newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
-                                                            setLayers(layers.map(l => l.id === layer.id ? { ...l, details: newDetails } : l));
-                                                        }}
-                                                    />
-                                                </div>
-                                            ))}
+                                                ))}
 
-                                            {/* Add Detail Button (File Input Wrapper) */}
-                                            <label
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setUploadType('detail');
-                                                    setDetailUploadTargetId(layer.id);
-                                                }}
-                                                className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors"
-                                            >
-                                                <Plus className="w-2.5 h-2.5 text-zinc-500" />
-                                                <span className="text-[9px] text-zinc-500">Add Detail Image</span>
-                                                <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
-                                            </label>
+                                                {/* Add Detail Button (File Input Wrapper) */}
+                                                <label
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setUploadType('detail');
+                                                        setDetailUploadTargetId(layer.id);
+                                                    }}
+                                                    className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors"
+                                                >
+                                                    <Plus className="w-2.5 h-2.5 text-zinc-500" />
+                                                    <span className="text-[9px] text-zinc-500">Add Detail Image</span>
+                                                    <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
+                                                </label>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
-                                {layers.length === 0 && <div className="text-[10px] text-zinc-600 italic px-1">No products added</div>}
+                                    ))}
+                                    {layers.length === 0 && <div className="text-[10px] text-zinc-600 italic px-1">No products added</div>}
+                                </div>
+
+                                {/* Skip Mask Option */}
+                                <div className="mt-3 flex items-center gap-2 px-1">
+                                    <button
+                                        onClick={() => setSkipMask(!skipMask)}
+                                        className={`w-3 h-3 rounded-[2px] border flex items-center justify-center transition-colors ${skipMask ? 'bg-purple-500 border-purple-500' : 'border-zinc-600 bg-transparent'}`}
+                                    >
+                                        {skipMask && <Check className="w-2.5 h-2.5 text-black" />}
+                                    </button>
+                                    <span className="text-[10px] text-zinc-400">Skip Masking (Edit Full Frame)</span>
+                                </div>
                             </div>
+                        )}
 
-                            {/* Skip Mask Option */}
-                            <div className="mt-3 flex items-center gap-2 px-1">
-                                <button
-                                    onClick={() => setSkipMask(!skipMask)}
-                                    className={`w-3 h-3 rounded-[2px] border flex items-center justify-center transition-colors ${skipMask ? 'bg-purple-500 border-purple-500' : 'border-zinc-600 bg-transparent'}`}
-                                >
-                                    {skipMask && <Check className="w-2.5 h-2.5 text-black" />}
-                                </button>
-                                <span className="text-[10px] text-zinc-400">Skip Masking (Edit Full Frame)</span>
-                            </div>
-                        </div>
+                        {/* 3. Editing Tools (Person Only) - Only in CHANGE mode */}
+                        {editMode === 'change' && (
+                            <div className="p-4 border-b border-white/5 space-y-4">
+                                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Tools</h3>
 
-                        {/* 3. Editing Tools (Person Only) */}
-                        <div className="p-4 border-b border-white/5 space-y-4">
-                            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Tools</h3>
-
-                            {/* Person / Face Swap Tool */}
-                            <div className="space-y-2">
-                                <label className="flex items-center justify-between text-[11px] text-zinc-300">
-                                    <span className="flex items-center gap-2"><Wand2 className="w-3 h-3 text-pink-400" /> Change Person (Face Swap)</span>
-                                    {personImage && <button onClick={() => setPersonImage(null)} className="text-zinc-600 hover:text-red-400 text-[10px]">Remove</button>}
-                                </label>
-                                {!personImage ? (
-                                    <label onClick={() => setUploadType('person')} className="flex items-center justify-center w-full h-10 border border-dashed border-white/20 rounded-sm bg-white/5 hover:bg-white/10 cursor-pointer text-[10px] text-zinc-500 gap-2 transition-colors">
-                                        <Plus className="w-3 h-3" /> Upload Person
-                                        <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
+                                {/* Person / Face Swap Tool */}
+                                <div className="space-y-2">
+                                    <label className="flex items-center justify-between text-[11px] text-zinc-300">
+                                        <span className="flex items-center gap-2"><Wand2 className="w-3 h-3 text-pink-400" /> Change Person (Face Swap)</span>
+                                        {personImage && <button onClick={() => setPersonImage(null)} className="text-zinc-600 hover:text-red-400 text-[10px]">Remove</button>}
                                     </label>
-                                ) : (
-                                    <div className="relative w-full h-20 bg-black/50 rounded-sm overflow-hidden border border-white/10">
-                                        <img src={personImage} className="w-full h-full object-contain opacity-80" />
-                                        <div className="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-sm">Person</div>
-                                    </div>
-                                )}
+                                    {!personImage ? (
+                                        <label onClick={() => setUploadType('person')} className="flex items-center justify-center w-full h-10 border border-dashed border-white/20 rounded-sm bg-white/5 hover:bg-white/10 cursor-pointer text-[10px] text-zinc-500 gap-2 transition-colors">
+                                            <Plus className="w-3 h-3" /> Upload Person
+                                            <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
+                                        </label>
+                                    ) : (
+                                        <div className="relative w-full h-20 bg-black/50 rounded-sm overflow-hidden border border-white/10">
+                                            <img src={personImage} className="w-full h-full object-contain opacity-80" />
+                                            <div className="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-sm">Person</div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* 4. Prompt */}
                         <div className="p-4 space-y-3">
                             <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between items-center">
                                 Prompt
-                                <span className="text-purple-500 flex items-center gap-1 text-[9px]"><Sparkles className="w-3 h-3" /> Auto-Generated</span>
+                                {editMode === 'change' && <span className="text-purple-500 flex items-center gap-1 text-[9px]"><Sparkles className="w-3 h-3" /> Auto-Generated</span>}
                             </h3>
+
+                            {/* Chat History Section */}
+                            {editMode === 'chat' && chatHistory.length > 0 && (
+                                <div
+                                    ref={chatContainerRef}
+                                    className="space-y-3 max-h-[250px] overflow-y-auto custom-scrollbar p-2 bg-black/10 rounded-sm border border-white/5 scroll-smooth"
+                                >
+                                    {chatHistory.map((item, idx) => (
+                                        <div key={idx} className={`flex ${item.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[80%] rounded-lg p-2 text-[10px] ${item.type === 'user'
+                                                ? 'bg-orange-500/10 border border-orange-500/30 text-zinc-200'
+                                                : 'bg-zinc-800 border border-white/10'
+                                                }`}>
+                                                {item.type === 'user' ? (
+                                                    <div className="space-y-2">
+                                                        {item.images && item.images.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {item.images.map((img, i) => (
+                                                                    <img key={i} src={img} className="w-16 h-16 object-cover rounded border border-white/10" />
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {item.content && <p>{item.content}</p>}
+                                                    </div>
+                                                ) : (
+                                                    <div className="relative group cursor-pointer" onClick={() => {
+                                                        setGeneratedVideo(item.content);
+                                                        setViewMode('result');
+                                                    }}>
+                                                        <video src={item.content} className="w-20 h-20 object-cover rounded-sm border border-white/10" />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-sm text-[8px] text-white">
+                                                            <Play className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {/* Loading State Bubble */}
+                                    {isGenerating && (
+                                        <div className="flex justify-start animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <div className="bg-zinc-800 border border-white/10 rounded-lg p-2 text-[10px] flex items-center gap-2">
+                                                <Loader2 className="w-3 h-3 animate-spin text-orange-500" />
+                                                <span className="text-zinc-400">Generating Magic Video...</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Additional Prompt Input */}
                             <div className="space-y-1">
-                                <label className="text-[9px] text-zinc-400">Add Additional Prompts</label>
-                                <textarea
-                                    placeholder="Add specific details or changes..."
-                                    className="w-full h-16 bg-zinc-950/50 border border-white/10 rounded-sm p-2 text-[10px] text-zinc-300 focus:text-white resize-none outline-none font-mono focus:border-white/20 transition-colors"
-                                    // In a real scenario, you'd likely want to append this to the main prompt or manage it separately.
-                                    // For now, I'll just let users edit the main prompt via this if they want, or we can treat 'prompt' as the full thing.
-                                    // User request implies they want to ADD to it. 
-                                    // Let's assume 'prompt' is the full state, and we might need a separate state for 'addition' if we want to keep them distinct.
-                                    // However, simpler is to just let this be the 'visible' edit area for now if the user just wants to add stuff.
-                                    // BUT, the request says "que el prompt entero no se vea... add aditional prompts y abajo view full prompt".
-                                    // So we probably want:
-                                    // 1. A small box for "Additional info".
-                                    // 2. A collapsed box for "Full Prompt" (which contains the huge auto-generated text).
+                                <div className="flex justify-between items-center px-1">
+                                    <label className="text-[9px] text-zinc-400 font-medium">Add Prompt</label>
+                                    {editMode === 'chat' && (
+                                        <button
+                                            onClick={() => chatImageInputRef.current?.click()}
+                                            className="p-1 text-zinc-400 hover:text-orange-500 transition-colors"
+                                            title="Add supplementary image"
+                                        >
+                                            <ImagePlus className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                                <input
+                                    type="file"
+                                    ref={chatImageInputRef}
+                                    className="hidden"
+                                    accept="image/*"
+                                    multiple
                                     onChange={(e) => {
-                                        // Simple append logic purely for UI demo, or just binding to a new state variable if we had one.
-                                        // Since I can't easily add new state variables without rewriting the whole component, 
-                                        // I will bind this to a temporary local update or just let them edit the TAIL of the prompt?
-                                        // Actually, I can just repurpose the existing textarea as the "Full Prompt" and hide it.
-                                        // And this new textarea can just be for show or effectively be where they type *extra* stuff?
-                                        // Let's implement the UI structure requested.
-                                        // Since I cannot add state dynamically here easily without re-rendering the whole file top-to-bottom or assuming.
-                                        // Wait, I CAN add state if I do it via an upper edit, but I am in a specific block.
-                                        // I will just render the 'prompt' in the hidden section.
+                                        const files = Array.from(e.target.files || []);
+                                        files.forEach(file => {
+                                            const reader = new FileReader();
+                                            reader.onload = (ev) => {
+                                                setChatImages(prev => [...prev, ev.target?.result as string]);
+                                            };
+                                            reader.readAsDataURL(file);
+                                        });
+                                        e.target.value = '';
                                     }}
+                                />
+
+                                {chatImages.length > 0 && editMode === 'chat' && (
+                                    <div className="flex flex-wrap gap-2 mb-2 p-1 bg-black/20 rounded border border-white/5 max-h-24 overflow-y-auto">
+                                        {chatImages.map((img, idx) => (
+                                            <div key={idx} className="relative w-10 h-10 group pl-0.5">
+                                                <img src={img} className="w-full h-full object-cover rounded border border-zinc-700 shadow-lg" />
+                                                <button
+                                                    onClick={() => setChatImages(prev => prev.filter((_, i) => i !== idx))}
+                                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <X className="w-2 h-2" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <textarea
+                                    value={additionalDetails}
+                                    onChange={(e) => setAdditionalDetails(e.target.value)}
+                                    placeholder={editMode === 'chat' ? "Type your command..." : "Add specific details or changes..."}
+                                    className="w-full h-16 bg-zinc-950/50 border border-white/10 rounded-sm p-2 text-[10px] text-zinc-300 focus:text-white resize-none outline-none font-mono focus:border-white/20 transition-colors"
                                 />
                             </div>
 
-                            {/* View Full Prompt Toggle */}
-                            <div className="pt-2">
-                                <details className="group">
-                                    <summary className="flex items-center gap-2 cursor-pointer text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors select-none list-none">
-                                        <div className="flex items-center gap-1">
-                                            <span className="group-open:rotate-90 transition-transform">▶</span>
-                                            View Full Prompt
+                            {/* View Full Prompt Toggle - Only in CHANGE mode */}
+                            {editMode === 'change' && (
+                                <div className="pt-2">
+                                    <details className="group">
+                                        <summary className="flex items-center gap-2 cursor-pointer text-[9px] text-zinc-500 hover:text-zinc-300 transition-colors select-none list-none">
+                                            <div className="flex items-center gap-1">
+                                                <span className="group-open:rotate-90 transition-transform">▶</span>
+                                                View Full Prompt
+                                            </div>
+                                        </summary>
+                                        <div className="mt-2 animate-in slide-in-from-top-1 fade-in duration-200">
+                                            <textarea
+                                                value={prompt}
+                                                onChange={(e) => setPrompt(e.target.value)}
+                                                className="w-full h-32 bg-zinc-950/30 border border-white/5 rounded-sm p-2 text-[9px] text-zinc-500 focus:text-zinc-300 resize-none outline-none font-mono"
+                                            />
                                         </div>
-                                    </summary>
-                                    <div className="mt-2 animate-in slide-in-from-top-1 fade-in duration-200">
-                                        <textarea
-                                            value={prompt}
-                                            onChange={(e) => setPrompt(e.target.value)}
-                                            className="w-full h-32 bg-zinc-950/30 border border-white/5 rounded-sm p-2 text-[9px] text-zinc-500 focus:text-zinc-300 resize-none outline-none font-mono"
-                                        />
-                                    </div>
-                                </details>
-                            </div>
+                                    </details>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -965,8 +1183,17 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
 
                     {viewMode === 'result' && generatedVideo ? (
-                        <div className="flex-1 w-full h-full flex items-center justify-center bg-black overflow-hidden relative">
+                        <div className="flex-1 w-full h-full flex items-center justify-center bg-black overflow-hidden relative group">
                             <video src={generatedVideo} controls autoPlay loop className="w-full h-full object-contain" />
+                            <div className="absolute bottom-6 right-6 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => handleDownload(generatedVideo, `content-ai-video-${Date.now()}.mp4`)}
+                                    className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-lg border border-white/20 transition-all flex items-center gap-2 text-xs font-bold shadow-2xl"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Download Video
+                                </button>
+                            </div>
                         </div>
                     ) : (
                         <div className="flex-1 relative bg-zinc-950/50 flex items-center justify-center overflow-hidden">
@@ -1031,12 +1258,12 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                     )}
 
                                     <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center gap-2">
-                                        {layers.length === 0 && (
+                                        {editMode !== 'chat' && layers.length === 0 && (
                                             <div className="bg-black/80 text-white text-xs px-3 py-1 rounded-full mb-2 border border-white/20 animate-pulse">
                                                 Add a product to start editing
                                             </div>
                                         )}
-                                        {!showFrameSelector && (
+                                        {editMode !== 'chat' && !showFrameSelector && (
                                             <Button
                                                 onClick={() => setShowFrameSelector(true)}
                                                 disabled={isExtractingFrame || layers.length === 0}

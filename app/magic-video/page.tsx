@@ -48,7 +48,7 @@ const defaultConfig: MagicVideoConfig = {
         mediaUrl: '/images/what-we-do/recreate-template-video-2.png', // Fallback
         link: '/magic-video/motion-control',
         title: 'Motion Control',
-        description: 'POWERED BY LUMA DREAM MACHINE'
+        description: 'POWERED BY KLING AI'
     }
 };
 
@@ -88,7 +88,7 @@ export default function MagicVideoPage() {
                         ...prev.motionControl,
                         ...(magicData?.motionControl || {}),
                         title: 'Motion Control',
-                        description: 'POWERED BY LUMA DREAM MACHINE'
+                        description: 'POWERED BY KLING AI'
                     }
                 }));
 
