@@ -81,11 +81,12 @@ export function Navbar() {
 
               {/* EXPLORE Section */}
               <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-sm tracking-widest leading-none transition-all ${pathname === '/explore' ? 'bg-cyan-500 text-black' : 'bg-cyan-500 text-white'}`}>EXPLORE</span>
                 <Link
                   href="/explore"
-                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${pathname === '/explore' ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500 hover:text-black hover:border-cyan-500'}`}
+                  className={`text-sm font-medium transition-all ${pathname === '/explore' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
                 >
-                  Explore
+                  Explore Library
                 </Link>
                 <Link
                   href="/templates"
@@ -214,21 +215,24 @@ export function Navbar() {
               </div>
 
               {/* Mobile Explore Section */}
-              <div className="px-4 flex items-center gap-4">
-                <Link
-                  href="/explore"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${pathname === '/explore' ? 'bg-cyan-500 border-cyan-500 text-black' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'}`}
-                >
-                  Explore
-                </Link>
-                <Link
-                  href="/templates"
-                  onClick={() => setIsMenuOpen(false)}
-                  className={`text-sm font-bold uppercase tracking-widest ${pathname === '/templates' ? 'text-white' : 'text-zinc-500'}`}
-                >
-                  Library
-                </Link>
+              <div className="px-4">
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-sm tracking-wider mb-2 inline-block ${pathname === '/explore' ? 'bg-cyan-500 text-black' : 'bg-cyan-500 text-white'}`}>EXPLORE</span>
+                <div className="flex flex-col gap-2 pl-2 border-l border-white/10 ml-1">
+                  <Link
+                    href="/explore"
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`text-sm transition-colors py-1 ${pathname === '/explore' ? 'text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                    Explore Library
+                  </Link>
+                  <Link
+                    href="/templates"
+                    onClick={() => setIsMenuOpen(false)}
+                    className={`text-sm transition-colors py-1 ${pathname === '/templates' ? 'text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
+                  >
+                    Full Library
+                  </Link>
+                </div>
               </div>
 
               {/* Mobile Magic/Video Generation Section */}
