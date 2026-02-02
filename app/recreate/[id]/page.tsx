@@ -104,6 +104,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         taskId: string | null;
         videoUrl: string | null;
     }>({ status: 'idle', taskId: null, videoUrl: null });
+    const [defaultPrompt, setDefaultPrompt] = useState<string>('Recreate the reference video EXACTLY, shot by shot. The ONLY change allowed is the integration of the provided product(s) in place of the original subject/object.');
 
     const [viewMode, setViewMode] = useState<'workspace' | 'result' | 'comparison'>('workspace');
     const [activeComparison, setActiveComparison] = useState<'reference' | 'result'>('result');
@@ -184,11 +185,16 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         let isMounted = true;
         async function loadTemplate() {
             try {
-                const { data, error } = await supabase.from('templates').select('*').eq('id', id).single();
+                const { getSectionContent } = await import('@/lib/db/content');
+                const [templateRes, promptRes] = await Promise.all([
+                    supabase.from('templates').select('*').eq('id', id).single(),
+                    getSectionContent('recreate_video_default_prompt')
+                ]);
+
                 if (isMounted) {
-                    if (data && !error) {
-                        setTemplate(data as Template);
-                        if (data.ai_model) setSelectedModel(data.ai_model);
+                    if (templateRes.data && !templateRes.error) {
+                        setTemplate(templateRes.data as Template);
+                        if (templateRes.data.ai_model) setSelectedModel(templateRes.data.ai_model);
                     } else {
                         setTemplate({
                             id: Number(id),
@@ -201,6 +207,10 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
                             views_count: '0',
                             is_trending: false
                         } as Template);
+                    }
+
+                    if (promptRes?.prompt) {
+                        setDefaultPrompt(promptRes.prompt);
                     }
                     setLoading(false);
                 }
@@ -226,26 +236,39 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
     useEffect(() => {
         if (!template) return;
 
-        let p = `Recreate the reference video "${template.title}" EXACTLY, shot by shot. `;
-        p += "The ONLY change allowed is the integration of the provided product(s) in place of the original subject/object.\n\n";
-
-        if (layers.length > 0) {
-            p += "PRODUCT INTEGRATION:\n";
+        let p = defaultPrompt;
+        if (p.includes('{{INSERTIONS}}')) {
+            let insertions = "";
+            if (layers.length > 0) {
+                insertions = "PRODUCT INTEGRATION:\n";
+                layers.forEach((layer, i) => {
+                    const sub = productSubstitutions[i] || layer.name;
+                    insertions += `• Product ${i + 1} (${sub}): Integrate realistically.\n`;
+                    if (layer.prompt) {
+                        insertions += `  Description: ${layer.prompt}\n`;
+                    }
+                    if (layer.details && layer.details.length > 0) {
+                        layer.details.forEach(d => {
+                            insertions += `  Detail: ${d.description}\n`;
+                        });
+                    }
+                });
+            }
+            p = p.replace('{{INSERTIONS}}', insertions);
+        } else if (layers.length > 0) {
+            // Append if no placeholder
+            p += "\n\nPRODUCT INTEGRATION:\n";
             layers.forEach((layer, i) => {
                 const sub = productSubstitutions[i] || layer.name;
                 p += `• Product ${i + 1} (${sub}): Integrate realistically.\n`;
-                if (layer.prompt) {
-                    p += `  Description: ${layer.prompt}\n`;
-                }
-                if (layer.details && layer.details.length > 0) {
-                    layer.details.forEach(d => {
-                        p += `  Detail: ${d.description}\n`;
-                    });
-                }
             });
         }
 
-        p += "\nSTRICT RECREATION REQUIREMENTS:\n";
+        if (p.includes('{{DURATION}}')) {
+            p = p.replace('{{DURATION}}', String(template.duration || 5));
+        }
+
+        p += "\n\nSTRICT RECREATION REQUIREMENTS:\n";
         p += `- EXACT DURATION: same as the reference video (${template.duration || 5} seconds). Do not change the speed.\n`;
         p += "- Camera movement: identical to original.\n";
         p += "- Lighting: identical direction, intensity, shadows.\n";
@@ -254,7 +277,7 @@ export default function RecreatePage({ params, searchParams }: { params: Promise
         p += "- OUTPUT VIDEO MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE VIDEO.\n";
 
         setPrompt(p);
-    }, [layers, productSubstitutions, template]);
+    }, [layers, productSubstitutions, template, defaultPrompt]);
 
     // Timer Logic
     useEffect(() => {

@@ -61,16 +61,20 @@ export function DirectorsCutEditor({ onBack, initialDefaultPrompt, initialPreset
 
     // Build Base Prompt (Concatenation)
     useEffect(() => {
-        let parts = [dbDefaultPrompt];
+        let p = dbDefaultPrompt;
 
-        if (selectedPreset) {
-            parts.push(selectedPreset.prompt_template);
+        if (p.includes('{{DURATION}}')) {
+            p = p.replace('{{DURATION}}', duration.toString());
+        } else {
+            // Backward compatibility
+            p += `\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${duration} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.`;
         }
 
-        // Duration Requirement
-        parts.push(`\n\nSTRICT RECREATION REQUIREMENTS:\n- EXACT DURATION: ${duration} seconds. Do not change the speed.\n- Maintain original style and lighting.\n- Photorealistic, high fidelity.`);
+        if (selectedPreset) {
+            p += ` ${selectedPreset.prompt_template}`;
+        }
 
-        setBasePrompt(parts.join(' '));
+        setBasePrompt(p);
     }, [dbDefaultPrompt, selectedPreset, duration]);
 
     // Presets State

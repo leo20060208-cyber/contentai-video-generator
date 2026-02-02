@@ -103,6 +103,7 @@ export default function RecreateImagePage({ params, searchParams }: { params: Pr
                         onCancel={() => router.back()}
                         disableTools={['background', 'person']} // Disable specific tools as requested
                         disableMasking={true} // Templates use Lab outline mask only
+                        isRecreate={true}
                     />
                 </div>
 

@@ -142,7 +142,10 @@ export default function LabPage() {
         <div className="min-h-screen bg-black pt-20 pb-10 px-4">
             <div className="max-w-[1600px] mx-auto">
                 <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter">ContentAI Lab</h1>
+                    <div className="flex items-center gap-6">
+                        <h1 className="text-3xl font-black text-white uppercase tracking-tighter">ContentAI Lab</h1>
+                        <DefaultPromptsEditor />
+                    </div>
                     <div className="text-xs text-zinc-500 font-mono">
                         {userEmail ? `Logged in as: ${userEmail}` : 'Not logged in'}
                     </div>
@@ -351,9 +354,6 @@ export default function LabPage() {
                             exit={{ opacity: 0, y: -20 }}
                         >
                             <MagicVideoManager />
-                            <div className="mt-8">
-                                <DefaultPromptsEditor />
-                            </div>
                         </motion.div>
                     )}
 

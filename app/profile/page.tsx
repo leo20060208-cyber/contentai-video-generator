@@ -30,13 +30,19 @@ function Tabs({ activeTab, onTabChange }: { activeTab: string, onTabChange: (tab
                 <button
                     key={tab.id}
                     onClick={() => onTabChange(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === tab.id
-                        ? 'bg-white text-black shadow-lg shadow-white/10'
-                        : 'bg-zinc-900/50 text-zinc-400 border border-white/5 hover:bg-zinc-800 hover:text-white'
+                    className={`flex items-center gap-2 px-6 py-2 text-[11px] font-bold uppercase tracking-[0.15em] transition-all whitespace-nowrap relative ${activeTab === tab.id
+                        ? 'text-white'
+                        : 'text-zinc-500 hover:text-zinc-300'
                         }`}
                 >
-                    <tab.icon className="w-4 h-4" />
+                    <tab.icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-orange-500' : 'text-zinc-500'}`} />
                     {tab.label}
+                    {activeTab === tab.id && (
+                        <motion.div
+                            layoutId="activeTabProfile"
+                            className="absolute bottom-0 left-6 right-6 h-0.5 bg-orange-500 rounded-full"
+                        />
+                    )}
                 </button>
             ))}
         </div>
@@ -464,41 +470,40 @@ export default function ProfilePage() {
                             {/* Mobile Logout Button */}
                             <button
                                 onClick={handleLogout}
-                                className="md:hidden p-3 rounded-2xl bg-zinc-900 border border-white/5 hover:bg-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all group"
+                                className="md:hidden p-2 text-zinc-500 hover:text-white transition-all group"
                                 title="Sign Out"
                             >
                                 <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
                             </button>
                         </div>
 
-                        {/* Stats & Desktop Logout */}
-                        <div className="w-full md:w-auto flex items-center gap-4">
-                            <div className="flex-1 md:flex-none flex justify-between md:justify-start gap-4 md:gap-6 px-4 py-2 rounded-xl bg-white/5 border border-white/5 overflow-x-auto no-scrollbar">
+                        <div className="w-full md:w-auto flex items-center gap-2">
+                            <div className="flex-1 md:flex-none flex justify-between md:justify-start gap-4 md:gap-8 px-2 py-2 overflow-x-auto no-scrollbar">
                                 <div className="text-center min-w-[50px]">
-                                    <div className="text-base md:text-lg font-semibold text-white/80">{profile?.credits?.toLocaleString() ?? 0}</div>
-                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Credits</div>
+                                    <div className="text-base md:text-lg font-bold text-white tracking-tight">{profile?.credits?.toLocaleString() ?? 0}</div>
+                                    <div className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Credits</div>
                                 </div>
-                                <div className="w-px bg-white/5" />
+                                <div className="w-px h-8 bg-white/5 self-center" />
                                 <div className="text-center min-w-[50px]">
-                                    <div className="text-base md:text-lg font-semibold text-white/80">{videos.length}</div>
-                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Videos</div>
+                                    <div className="text-base md:text-lg font-bold text-white tracking-tight">{videos.length}</div>
+                                    <div className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Videos</div>
                                 </div>
-                                <div className="w-px bg-white/5" />
+                                <div className="w-px h-8 bg-white/5 self-center" />
                                 <div className="text-center min-w-[50px]">
-                                    <div className="text-base md:text-lg font-semibold text-white/80">{userImages.length}</div>
-                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Images</div>
+                                    <div className="text-base md:text-lg font-bold text-white tracking-tight">{userImages.length}</div>
+                                    <div className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Images</div>
                                 </div>
-                                <div className="w-px bg-white/5" />
+                                <div className="w-px h-8 bg-white/5 self-center" />
                                 <div className="text-center min-w-[50px]">
-                                    <div className="text-base md:text-lg font-semibold text-white/80">{masks.length}</div>
-                                    <div className="text-[9px] font-medium text-zinc-500 uppercase tracking-wider">Masks</div>
+                                    <div className="text-base md:text-lg font-bold text-white tracking-tight">{masks.length}</div>
+                                    <div className="text-[8px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Masks</div>
                                 </div>
                             </div>
 
                             {/* Desktop Logout Button */}
                             <button
                                 onClick={handleLogout}
-                                className="hidden md:block p-3 rounded-2xl bg-zinc-900 border border-white/5 hover:bg-white/10 hover:border-white/20 text-zinc-400 hover:text-white transition-all group"
+                                className="hidden md:block p-2 text-zinc-500 hover:text-white transition-all group"
                                 title="Sign Out"
                             >
                                 <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />

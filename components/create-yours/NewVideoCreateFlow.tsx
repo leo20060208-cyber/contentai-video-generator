@@ -68,8 +68,8 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
     // Additional Tools
     const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
-    const [personImage, setPersonImage] = useState<string | null>(null);
     const [uploadType, setUploadType] = useState<'product' | 'background' | 'person' | 'detail'>('product');
+
     const [targetLayerId, setTargetLayerId] = useState<string | null>(null); // For detail image upload
     const [detailUploadTargetId, setDetailUploadTargetId] = useState<string | null>(null);
     const [showSavedMasksModal, setShowSavedMasksModal] = useState(false);
@@ -117,13 +117,18 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
     // Default Prompt State
     const [defaultPrompt, setDefaultPrompt] = useState("Recreate the reference video EXACTLY, shot by shot, frame by frame. The ONLY changes allowed are the instructions below. Maintain original camera movement, lighting, and physics.");
+    const [defaultChatPrompt, setDefaultChatPrompt] = useState("");
 
     useEffect(() => {
         async function loadDefault() {
             try {
                 const { getSectionContent } = await import('@/lib/db/content');
-                const data = await getSectionContent('video_editing_default_prompt');
-                if (data?.prompt) setDefaultPrompt(data.prompt);
+                const [changeData, chatData] = await Promise.all([
+                    getSectionContent('video_editing_default_prompt'),
+                    getSectionContent('video_editing_chat_default_prompt')
+                ]);
+                if (changeData?.prompt) setDefaultPrompt(changeData.prompt);
+                if (chatData?.prompt) setDefaultChatPrompt(chatData.prompt);
             } catch (e) { console.error("Failed to load default prompt", e); }
         }
         loadDefault();
@@ -135,7 +140,18 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
             const aspectStr = (videoRef.current?.videoWidth && videoRef.current?.videoHeight)
                 ? `\n\nDimensions: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}`
                 : '';
-            setPrompt(additionalDetails + aspectStr);
+
+            let finalChatPrompt = defaultChatPrompt;
+            if (finalChatPrompt) {
+                if (finalChatPrompt.includes('{{USER_MESSAGE}}')) {
+                    finalChatPrompt = finalChatPrompt.replace('{{USER_MESSAGE}}', additionalDetails);
+                } else {
+                    finalChatPrompt = `${finalChatPrompt}\n\n${additionalDetails}`;
+                }
+                setPrompt(finalChatPrompt + aspectStr);
+            } else {
+                setPrompt(additionalDetails + aspectStr);
+            }
             return;
         }
 
@@ -159,15 +175,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
             });
         }
 
-        if (backgroundImage) {
-            instructions += "\nBACKGROUND CHANGE:\n";
-            instructions += "Replace the environment/background with the provided background image. Keep the main subject and foreground elements intact.\n";
-        }
 
-        if (personImage) {
-            instructions += "\nPERSON REPLACEMENT / FACE SWAP:\n";
-            instructions += "Replace the main person/face in the video with the provided person image. Maintain original expression and lighting.\n";
-        }
 
         const hasMask = layers.some(l => l.maskPoints.length > 0);
         if (hasMask && !skipMask) {
@@ -201,7 +209,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         }
 
         if (prompt !== finalPrompt) setPrompt(finalPrompt);
-    }, [layers, productSubstitutions, backgroundImage, personImage, skipMask, videoDuration, prompt, defaultPrompt, additionalDetails]);
+    }, [layers, productSubstitutions, backgroundImage, skipMask, videoDuration, defaultPrompt, defaultChatPrompt, additionalDetails, editMode]);
 
     // Timer Logic
     useEffect(() => {
@@ -314,10 +322,8 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
             if (uploadType === 'background') {
                 setBackgroundImage(processed);
                 setUploadType('product');
-            } else if (uploadType === 'person') {
-                setPersonImage(processed);
-                setUploadType('product');
             } else if (uploadType === 'detail' && detailUploadTargetId) {
+
                 // Add new detail to specific layer
                 setLayers(layers.map(l => {
                     if (l.id === detailUploadTargetId) {
@@ -391,11 +397,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         if (activeTool !== 'brush' && activeTool !== 'eraser') return;
         if (currentStroke.length === 0) return;
 
-        // Calculate stroke width in SVG units (0-100) based on current container width
-        // so it scales with the image
-        const rect = imageContainerRef.current?.getBoundingClientRect();
-        const relativeWidth = rect ? (brushSize / rect.width) * 100 : 4;
-
+        // In SVG mode with vectorEffect="non-scaling-stroke", 'width' is pixels on screen
         if (selectedLayerId) {
             setLayers(layers.map(l => {
                 if (l.id === selectedLayerId) {
@@ -404,7 +406,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                         maskPoints: [...l.maskPoints, {
                             points: currentStroke,
                             type: activeTool,
-                            width: relativeWidth
+                            width: brushSize
                         }]
                     };
                 }
@@ -413,6 +415,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         }
         setCurrentStroke([]);
     };
+
 
     const clearMask = () => {
         if (selectedLayerId) {
@@ -441,28 +444,32 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
         layers.forEach(layer => {
             layer.maskPoints.forEach(stroke => {
                 if (stroke.points.length < 1) return;
-                // stroke.width is 0-100 relative to container width.
-                // We need to convert it to canvas pixels.
-                // If width=4 (4% of container), then in canvas w=1024, stroke width should be 0.04 * 1024.
-                ctx.lineWidth = (stroke.width / 100) * w;
+
+                // stroke.width is screen pixels. We must scale to canvas pixels.
+                // rect.width on screen -> w on canvas
+                const rect = imageContainerRef.current?.getBoundingClientRect();
+                const screenWidth = rect?.width || 1;
+                const canvasScaledWidth = (stroke.width / screenWidth) * w;
+
+                ctx.lineWidth = canvasScaledWidth;
+                ctx.strokeStyle = stroke.type === 'eraser' ? 'black' : 'white';
 
                 ctx.beginPath();
                 if (stroke.points.length === 1) {
-                    // Dot
                     ctx.lineTo(stroke.points[0][0] * w, stroke.points[0][1] * h);
-                    ctx.stroke();
                 } else {
                     ctx.moveTo(stroke.points[0][0] * w, stroke.points[0][1] * h);
                     for (let i = 1; i < stroke.points.length; i++) {
                         ctx.lineTo(stroke.points[i][0] * w, stroke.points[i][1] * h);
                     }
-                    ctx.stroke();
                 }
+                ctx.stroke();
             });
         });
 
         return canvas.toDataURL('image/png');
     };
+
 
 
     // --- GENERATION ---
@@ -657,10 +664,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                 const bgUrl = await uploadToSupabase(backgroundImage, 'backgrounds');
                 if (bgUrl) imagesPayload.push(bgUrl);
             }
-            if (personImage) {
-                const pUrl = await uploadToSupabase(personImage, 'people');
-                if (pUrl) imagesPayload.push(pUrl);
-            }
+
 
             // Add supplementary chat images if present
             if (editMode === 'chat' && chatImages.length > 0) {
@@ -869,9 +873,10 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                         <label
                                             className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer"
                                         >
-                                            <Plus className="w-3 h-3" /> Add
+                                            <Plus className="w-3 h-3" /> Add Product
                                             <input type="file" onChange={(e) => { handleProductUpload(e); setShowAddOptions(false); }} className="hidden" accept="image/*" />
                                         </label>
+
                                     </div>
                                 </div>
                                 <div className="space-y-1">
@@ -909,7 +914,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                             {/* Details Section */}
                                             <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures</span>
+                                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures (optional)</span>
                                                     <div className="relative group/tooltip">
                                                         <Info className="w-2.5 h-2.5 text-zinc-600" />
                                                         <div className="absolute bottom-full right-0 mb-2 w-40 bg-black/90 border border-white/10 p-2 rounded-sm opacity-0 group-hover/tooltip:opacity-100 pointer-events-none transition-opacity z-10">
@@ -957,7 +962,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                                     className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors"
                                                 >
                                                     <Plus className="w-2.5 h-2.5 text-zinc-500" />
-                                                    <span className="text-[9px] text-zinc-500">Add Detail Image</span>
+                                                    <span className="text-[9px] text-zinc-500">Add Detail Image (optional)</span>
                                                     <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
                                                 </label>
                                             </div>
@@ -979,31 +984,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                             </div>
                         )}
 
-                        {/* 3. Editing Tools (Person Only) - Only in CHANGE mode */}
-                        {editMode === 'change' && (
-                            <div className="p-4 border-b border-white/5 space-y-4">
-                                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Tools</h3>
 
-                                {/* Person / Face Swap Tool */}
-                                <div className="space-y-2">
-                                    <label className="flex items-center justify-between text-[11px] text-zinc-300">
-                                        <span className="flex items-center gap-2"><Wand2 className="w-3 h-3 text-pink-400" /> Change Person (Face Swap)</span>
-                                        {personImage && <button onClick={() => setPersonImage(null)} className="text-zinc-600 hover:text-red-400 text-[10px]">Remove</button>}
-                                    </label>
-                                    {!personImage ? (
-                                        <label onClick={() => setUploadType('person')} className="flex items-center justify-center w-full h-10 border border-dashed border-white/20 rounded-sm bg-white/5 hover:bg-white/10 cursor-pointer text-[10px] text-zinc-500 gap-2 transition-colors">
-                                            <Plus className="w-3 h-3" /> Upload Person
-                                            <input type="file" onChange={handleProductUpload} className="hidden" accept="image/*" />
-                                        </label>
-                                    ) : (
-                                        <div className="relative w-full h-20 bg-black/50 rounded-sm overflow-hidden border border-white/10">
-                                            <img src={personImage} className="w-full h-full object-contain opacity-80" />
-                                            <div className="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-sm">Person</div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
 
                         {/* 4. Prompt */}
                         <div className="p-4 space-y-3">
@@ -1065,7 +1046,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                             {/* Additional Prompt Input */}
                             <div className="space-y-1">
                                 <div className="flex justify-between items-center px-1">
-                                    <label className="text-[9px] text-zinc-400 font-medium">Add Prompt</label>
+                                    <label className="text-[9px] text-zinc-400 font-medium">Add Prompt (optional)</label>
                                     {editMode === 'chat' && (
                                         <button
                                             onClick={() => chatImageInputRef.current?.click()}
@@ -1302,38 +1283,53 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                     >
                                         <img src={extractedFrameUrl} alt="Frame" className="w-full h-full object-contain pointer-events-none select-none" />
 
-                                        {/* Simple SVG Overlay for Drawing Strokes Visualization */}
-                                        <svg
-                                            className="absolute inset-0 w-full h-full pointer-events-none"
-                                            viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
-                                        >
+
+                                        {/* SVG Overlay for Masks */}
+                                        <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                            <defs>
+                                                {layers.map((layer) => (
+                                                    <mask key={`mask-def-${layer.id}`} id={`mask-${layer.id}`}>
+                                                        <rect x="0" y="0" width="100%" height="100%" fill="black" />
+                                                        {layer.maskPoints.map((stroke, i) => (
+                                                            <polyline
+                                                                key={`stroke-${layer.id}-${i}`}
+                                                                points={stroke.points.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
+                                                                fill="none"
+                                                                stroke={stroke.type === 'eraser' ? 'black' : 'white'}
+                                                                strokeWidth={stroke.width || 40}
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                vectorEffect="non-scaling-stroke"
+                                                            />
+                                                        ))}
+                                                    </mask>
+                                                ))}
+                                            </defs>
+
+                                            {/* Layer Masks */}
                                             {layers.map((layer) => (
-                                                <g key={layer.id} opacity={0.6}>
-                                                    {layer.maskPoints.map((stroke, i) => (
-                                                        <polyline
-                                                            key={i}
-                                                            points={stroke.points.map(p => `${p[0] * dimensions.width},${p[1] * dimensions.height}`).join(' ')}
-                                                            fill="none"
-                                                            stroke={stroke.type === 'eraser' ? 'black' : layer.maskColor} /* Eraser visualization needs to handle backdrop? Actually eraser just draws over in black/bg color usually or uses mask composition. For now, solid color is better. User requested round brush. */
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={(stroke.width / 100) * dimensions.width}
-                                                        />
-                                                    ))}
-                                                </g>
+                                                <rect
+                                                    key={`layer-rect-${layer.id}`}
+                                                    x="0" y="0" width="100%" height="100%"
+                                                    fill={layer.maskColor}
+                                                    opacity="0.6"
+                                                    mask={`url(#mask-${layer.id})`}
+                                                    style={{ pointerEvents: 'none' }}
+                                                />
                                             ))}
-                                            {/* Current Stroke - Drawing Live */}
+
+                                            {/* Current Stroke Preview */}
                                             {currentStroke.length > 0 && (
-                                                <g opacity={0.6}>
-                                                    <polyline
-                                                        points={currentStroke.map(p => `${p[0] * dimensions.width},${p[1] * dimensions.height}`).join(' ')}
-                                                        fill="none"
-                                                        stroke={activeTool === 'eraser' ? 'black' : (selectedLayerId ? layers.find(l => l.id === selectedLayerId)?.maskColor : 'red')}
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={brushSize} // Use direct brushSize in pixels locally
-                                                    />
-                                                </g>
+                                                <polyline
+                                                    points={currentStroke.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
+                                                    fill="none"
+                                                    stroke={activeTool === 'eraser' ? 'rgba(255,255,255,0.5)' : (selectedLayerId ? layers.find(l => l.id === selectedLayerId)?.maskColor : 'rgba(236, 72, 153, 0.5)')}
+                                                    strokeWidth={brushSize}
+                                                    strokeOpacity={activeTool === 'eraser' ? 1 : 0.8}
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    vectorEffect="non-scaling-stroke"
+                                                />
                                             )}
                                         </svg>
 
@@ -1351,6 +1347,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                                 }}
                                             />
                                         )}
+
                                     </div>
 
                                     {/* Vertical Right Toolbar */}

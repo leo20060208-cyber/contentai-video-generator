@@ -77,8 +77,8 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
 
     // Canvas Refs
     const canvasContainerRef = useRef<HTMLDivElement>(null);
-    const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
     const isDrawingRef = useRef(false);
+
 
     // Cursor Position
     const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
@@ -235,50 +235,8 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
         setCurrentStroke([]);
     };
 
-    // Render Overlay Canvas
-    useEffect(() => {
-        const canvas = overlayCanvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    // Render Overlay Canvas (Removed in favor of SVG)
 
-        // Sync canvas size with display size
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        const drawStroke = (stroke: MaskStroke | { points: number[][], type: string, width: number }) => {
-            if (stroke.points.length < 2) return;
-            ctx.beginPath();
-            ctx.strokeStyle = stroke.type === 'brush' ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.8)';
-            ctx.lineWidth = stroke.width;
-
-            // Composite operation for eraser
-            if (stroke.type === 'eraser') {
-                ctx.globalCompositeOperation = 'destination-out';
-            } else {
-                ctx.globalCompositeOperation = 'source-over';
-            }
-
-            ctx.moveTo(stroke.points[0][0] * canvas.width, stroke.points[0][1] * canvas.height);
-            for (let i = 1; i < stroke.points.length; i++) {
-                ctx.lineTo(stroke.points[i][0] * canvas.width, stroke.points[i][1] * canvas.height);
-            }
-            ctx.stroke();
-        };
-
-        // Draw saved strokes
-        maskStrokes.forEach(drawStroke);
-
-        // Draw current stroke
-        if (currentStroke.length > 0) {
-            drawStroke({ points: currentStroke, type: activeTool, width: brushSize });
-        }
-    }, [maskStrokes, currentStroke, activeTool, brushSize]);
 
     const handleAddContextImage = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -308,16 +266,29 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                 ctx.lineJoin = 'round';
 
                 maskStrokes.forEach(stroke => {
-                    ctx.beginPath();
+                    if (stroke.points.length < 1) return;
+
+                    // stroke.width is screen pixels. Scale to canvas pixels.
+                    const rect = canvasContainerRef.current?.getBoundingClientRect();
+                    const screenWidth = rect?.width || 1;
+                    const canvasScaledWidth = (stroke.width / screenWidth) * canvas.width;
+
+                    ctx.lineWidth = canvasScaledWidth;
                     ctx.strokeStyle = stroke.type === 'brush' ? 'white' : 'black';
-                    ctx.lineWidth = stroke.width * (canvas.width / (overlayCanvasRef.current?.width || 1));
-                    ctx.moveTo(stroke.points[0][0] * canvas.width, stroke.points[0][1] * canvas.height);
-                    for (let i = 1; i < stroke.points.length; i++) {
-                        ctx.lineTo(stroke.points[i][0] * canvas.width, stroke.points[i][1] * canvas.height);
+
+                    ctx.beginPath();
+                    if (stroke.points.length === 1) {
+                        ctx.lineTo(stroke.points[0][0] * canvas.width, stroke.points[0][1] * canvas.height);
+                    } else {
+                        ctx.moveTo(stroke.points[0][0] * canvas.width, stroke.points[0][1] * canvas.height);
+                        for (let i = 1; i < stroke.points.length; i++) {
+                            ctx.lineTo(stroke.points[i][0] * canvas.width, stroke.points[i][1] * canvas.height);
+                        }
                     }
                     ctx.stroke();
                 });
                 resolve(canvas.toDataURL('image/png'));
+
             };
             img.src = image;
         });
@@ -524,10 +495,49 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                         draggable={false}
                     />
 
-                    <canvas
-                        ref={overlayCanvasRef}
-                        className="absolute inset-0 w-full h-full pointer-events-none"
-                    />
+                    {/* SVG Overlay for Masks (Video Style) */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <defs>
+                            <mask id="living-bg-mask">
+                                <rect x="0" y="0" width="100%" height="100%" fill="black" />
+                                {maskStrokes.map((stroke, i) => (
+                                    <polyline
+                                        key={`stroke-${i}`}
+                                        points={stroke.points.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
+                                        fill="none"
+                                        stroke={stroke.type === 'eraser' ? 'black' : 'white'}
+                                        strokeWidth={stroke.width}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        vectorEffect="non-scaling-stroke"
+                                    />
+                                ))}
+                            </mask>
+                        </defs>
+
+                        {/* Red Mask Layer */}
+                        <rect
+                            x="0" y="0" width="100%" height="100%"
+                            fill="#EF4444"
+                            opacity="0.6"
+                            mask="url(#living-bg-mask)"
+                            style={{ pointerEvents: 'none' }}
+                        />
+
+                        {/* Current Stroke Preview */}
+                        {currentStroke.length > 0 && (
+                            <polyline
+                                points={currentStroke.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
+                                fill="none"
+                                stroke={activeTool === 'eraser' ? 'rgba(255,255,255,0.5)' : '#EF4444'}
+                                strokeWidth={brushSize}
+                                strokeOpacity={activeTool === 'eraser' ? 1 : 0.8}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                vectorEffect="non-scaling-stroke"
+                            />
+                        )}
+                    </svg>
 
                     {/* Custom Brush Cursor */}
                     {!isGenerating && isHoveringCanvas && (
@@ -539,10 +549,11 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                                 left: cursorPos.x,
                                 top: cursorPos.y,
                                 transform: 'translate(-50%, -50%)',
-                                backgroundColor: activeTool === 'brush' ? 'rgba(255,255,255,0.2)' : 'rgba(255,0,0,0.2)',
+                                backgroundColor: activeTool === 'eraser' ? 'rgba(255,255,255,0.2)' : 'rgba(239, 68, 68, 0.5)',
                             }}
                         />
                     )}
+
                 </div>
             </div>
 

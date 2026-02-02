@@ -41,9 +41,10 @@ interface ImageCreateFlowProps {
     initialPrompt?: string | null;
     disableTools?: ('background' | 'person')[];
     disableMasking?: boolean; // For templates: disable painting masks (use Lab outline only)
+    isRecreate?: boolean; // New: Use recreate_image_default_prompt
 }
 
-export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResultImage, initialProductImage, initialProductOutlineImage, initialPrompt, disableTools = [] }: ImageCreateFlowProps) => {
+export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResultImage, initialProductImage, initialProductOutlineImage, initialPrompt, disableTools = [], isRecreate = false }: ImageCreateFlowProps) => {
     const router = useRouter();
     const pathname = usePathname();
     const { user, session, profile, deductCreditsOptimistic } = useAuth();
@@ -51,8 +52,15 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
     // STATE
     const [referenceImage, setReferenceImage] = useState<string | null>(initialReferenceImage || null);
     const [backgroundImage, setBackgroundImage] = useState<string | null>(null); // NEW
-    const [personImage, setPersonImage] = useState<string | null>(null); // Face Swap / Person Replacement
     const [defaultPrompt, setDefaultPrompt] = useState<string>('RECREATE this reference image EXACTLY. Maintain the SAME composition, lighting, shadows, colors, perspective, and dimensions. The output must be IDENTICAL to the reference except for the modifications below.'); // Fallback default
+    const [defaultChatPrompt, setDefaultChatPrompt] = useState<string>(''); // Fallback: user input only
+
+    const handleReferenceLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        const img = e.currentTarget;
+        setDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+        setAspectRatio(img.naturalWidth / img.naturalHeight);
+    };
+
 
     // Tools State
     const [activeTool, setActiveTool] = useState<'move' | 'brush' | 'eraser'>('brush');
@@ -100,12 +108,6 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
     const [beforeImageSource, setBeforeImageSource] = useState<'reference' | 'product'>('reference');
     const [isHoveringCanvas, setIsHoveringCanvas] = useState(false);
 
-    const handleReferenceLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-        const img = e.currentTarget;
-        setDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-        setAspectRatio(img.naturalWidth / img.naturalHeight);
-    };
-
     // Additional State for Refinement
     // Additional State for Refinement
     const [isRefining, setIsRefining] = useState(false);
@@ -114,7 +116,6 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
     const [showMaskSelectModal, setShowMaskSelectModal] = useState(false);
 
     // State for editable prompt parts
-    const [productSubstitutions, setProductSubstitutions] = useState<string[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState('');
     const [editMode, setEditMode] = useState<'change' | 'chat'>('change');
     const [chatHistory, setChatHistory] = useState<{ type: 'user' | 'result', content: string, images?: string[] }[]>([]);
@@ -131,12 +132,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
     // Ref for auto-scrolling to substitution inputs
     const substitutionSectionRef = useRef<HTMLDivElement>(null);
-    const [pendingFocusIndex, setPendingFocusIndex] = useState<number | null>(null);
 
     // Reset states when reference image changes
     useEffect(() => {
         if (!referenceImage) {
-            setProductSubstitutions([]);
             setAdditionalDetails('');
             setPrompt('');
         }
@@ -146,28 +145,32 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
     useEffect(() => {
         const loadDefaultPrompt = async () => {
             try {
-                const data = await getSectionContent('image_editing_default_prompt');
-                if (data?.prompt) {
-                    setDefaultPrompt(data.prompt);
+                const [changeData, chatData, recreateData] = await Promise.all([
+                    getSectionContent('image_editing_default_prompt'),
+                    getSectionContent('image_editing_chat_default_prompt'),
+                    getSectionContent('recreate_image_default_prompt')
+                ]);
+
+                if (isRecreate && recreateData?.prompt) {
+                    setDefaultPrompt(recreateData.prompt);
+                } else if (changeData?.prompt) {
+                    setDefaultPrompt(changeData.prompt);
+                }
+
+                if (chatData?.prompt) {
+                    setDefaultChatPrompt(chatData.prompt);
                 }
             } catch (error) {
                 console.error('Error loading default prompt:', error);
-                // Keep hardcoded fallback
+                // Keep hardcoded fallbacks
             }
         };
         loadDefaultPrompt();
-    }, []);
+    }, [isRecreate]);
 
-    // Sync substitutions array with ALL layers (products + masks)
+    // Sync layers
     useEffect(() => {
-        // Both products and masks can have substitution instructions
-        setProductSubstitutions(prev => {
-            const newSubs = [...prev];
-            while (newSubs.length < layers.length) {
-                newSubs.push('');
-            }
-            return newSubs.slice(0, layers.length);
-        });
+        // ... (Cleanup or removal of substitution array sync logic)
     }, [layers]);
 
     // Build the final prompt - use template from DB with dynamic insertions
@@ -179,9 +182,21 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
         if (editMode === 'chat') {
             const dimensionReq = (dimensions.width > 0 && dimensions.height > 0)
-                ? `\n\nDimensions: ${dimensions.width}x${dimensions.height}`
+                ? `\n\nSTRICT DIMENSION REQUIREMENT: Output MUST be exactly ${dimensions.width}x${dimensions.height}. Preserve all composition and framing. OUTPUT IMAGE MUST HAVE THE SAME RESOLUTION AND ASPECT RATIO AS THE REFERENCE IMAGE`
                 : '';
-            setPrompt(additionalDetails + dimensionReq);
+
+            let finalChatPrompt = defaultChatPrompt;
+            if (finalChatPrompt) {
+                // If there's a template, inject user message
+                if (finalChatPrompt.includes('{{USER_MESSAGE}}')) {
+                    finalChatPrompt = finalChatPrompt.replace('{{USER_MESSAGE}}', additionalDetails);
+                } else {
+                    finalChatPrompt = `${finalChatPrompt}\n\n${additionalDetails}`;
+                }
+                setPrompt(finalChatPrompt + dimensionReq);
+            } else {
+                setPrompt(additionalDetails + dimensionReq);
+            }
             return;
         }
 
@@ -213,7 +228,6 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         currentImageIndex = 2;
 
         layers.forEach((layer, i) => {
-            const instruction = productSubstitutions[i]?.trim();
             const colorName = layer.maskColor === '#FF0000' ? 'RED' : layer.maskColor === '#0000FF' ? 'BLUE' : layer.maskColor === '#00FF00' ? 'GREEN' : layer.maskColor === '#FFFF00' ? 'YELLOW' : 'COLORED';
 
             if (layer.type === 'product') {
@@ -228,10 +242,10 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                     });
                 }
 
-                insertions += `• PRODUCT ${i + 1}: Look at the ${colorName} area in Image 2 (Mask Guide). REPLACE the object at that location with the PRODUCT from Image ${productImgIdx}. ${instruction || ''} ${layer.prompt ? `Description: ${layer.prompt}` : ''} ${detailTxt}\n`;
+                insertions += `• PRODUCT ${i + 1}: Look at the ${colorName} area in Image 2 (Mask Guide). REPLACE the object at that location with the PRODUCT from Image ${productImgIdx}. ${layer.prompt ? `Description: ${layer.prompt}` : ''} ${detailTxt}\n`;
             } else {
                 // Mask layer (just text instruction usually)
-                insertions += `• EDIT: Applies to the ${colorName} area shown in Image 2. ${instruction || 'Modify this area.'}\n`;
+                insertions += `• EDIT: Applies to the ${colorName} area shown in Image 2. ${layer.prompt || 'Modify this area.'}\n`;
             }
         });
 
@@ -266,7 +280,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         }
 
         setPrompt(finalPrompt);
-    }, [referenceImage, productSubstitutions, additionalDetails, layers, defaultPrompt]);
+    }, [referenceImage, additionalDetails, layers, defaultPrompt, defaultChatPrompt, editMode, dimensions]);
 
     // --- HANDLERS ---
 
@@ -314,10 +328,8 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
         setIsUploadingProduct(false);
         setIsSegmentingUpload(false);
 
-        // If adding a product, scroll to substitution section and focus input
+        // If adding a product, scroll to layers section
         if (uploadType === 'product') {
-            const newIndex = layers.filter(l => l.type === 'product').length; // Index of new product
-            setPendingFocusIndex(newIndex);
             setTimeout(() => {
                 substitutionSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }, 100);
@@ -1038,34 +1050,124 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                 <div className="flex items-center justify-between mb-3">
                                     <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Additional Layers</h3>
                                     <label className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-0.5 rounded-sm flex items-center gap-1 cursor-pointer">
-                                        <Plus className="w-3 h-3" /> Add
+                                        <Plus className="w-3 h-3" /> Add Product
                                         <input type="file" className="hidden" accept="image/*" onChange={handleDirectLayerAdd} />
                                     </label>
+
                                 </div>
                                 <div className="space-y-1">
                                     {layers.map((layer, i) => (
-                                        <div key={layer.id} onClick={() => setSelectedLayerId(layer.id)} className={`flex items-center gap-2 p-2 rounded-sm cursor-pointer ${selectedLayerId === layer.id ? 'bg-white/10' : 'hover:bg-white/5'}`}>
-                                            <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: layer.maskColor }} title="Mask Color" />
-                                            <img src={layer.url} className="w-6 h-6 object-contain bg-black/40 rounded-sm" />
-                                            <span className="text-[10px] text-zinc-300 flex-1 truncate">Layer {i + 1}</span>
+                                        <div
+                                            key={layer.id}
+                                            onClick={() => setSelectedLayerId(layer.id)}
+                                            className={`flex flex-col gap-1 p-2 rounded-sm border transition-colors cursor-pointer ${selectedLayerId === layer.id ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-8 rounded-full" style={{ backgroundColor: layer.maskColor }} />
+                                                <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[10px] text-white truncate font-medium">{layer.type === 'mask' ? 'Mask Layer' : `Product ${i + 1}`}</div>
+                                                    <div className="text-[9px] text-zinc-500 truncate">{layer.type === 'product' ? 'Product Layer' : 'Modifier Layer'}</div>
+                                                </div>
 
-                                            {/* Mask Tool Toggle */}
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setSelectedLayerId(layer.id);
-                                                    setActiveTool(activeTool === 'brush' ? 'move' : 'brush');
-                                                }}
-                                                className={`p-1 rounded-sm ${selectedLayerId === layer.id && activeTool === 'brush' ? 'bg-purple-500/20 text-purple-400' : 'text-zinc-600 hover:text-zinc-400'}`}
-                                                title="Paint Mask"
-                                            >
-                                                <Brush className="w-3 h-3" />
-                                            </button>
+                                                {/* Mask Tool Toggle */}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedLayerId(layer.id);
+                                                        setActiveTool(activeTool === 'brush' ? 'move' : 'brush');
+                                                    }}
+                                                    className={`p-1 rounded-sm ${selectedLayerId === layer.id && activeTool === 'brush' ? 'bg-purple-500/20 text-purple-400' : 'text-zinc-600 hover:text-zinc-400'}`}
+                                                    title="Paint Mask"
+                                                >
+                                                    <Brush className="w-3 h-3" />
+                                                </button>
 
-                                            <button onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
+                                                <button onClick={(e) => { e.stopPropagation(); removeLayer(layer.id); }}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
+                                            </div>
+
+                                            {/* Product Prompt */}
+                                            <div className="mt-2 px-1" onClick={(e) => e.stopPropagation()}>
+                                                <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
+                                                <textarea
+                                                    value={layer.prompt}
+                                                    onChange={(e) => {
+                                                        const newLayers = [...layers];
+                                                        newLayers[i] = { ...newLayers[i], prompt: e.target.value };
+                                                        setLayers(newLayers);
+                                                    }}
+                                                    placeholder="Describe the product..."
+                                                    className="w-full h-10 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
+                                                />
+                                            </div>
+
+                                            {/* Details Section */}
+                                            <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures (optional)</span>
+                                                </div>
+
+                                                {/* List of Details */}
+                                                {(layer.details || []).map((detail, dIndex) => (
+                                                    <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
+                                                        <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
+                                                            <img src={detail.url} className="w-full h-full object-cover" />
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const newDetails = layer.details.filter(d => d.id !== detail.id);
+                                                                    const newLayers = [...layers];
+                                                                    newLayers[i] = { ...newLayers[i], details: newDetails };
+                                                                    setLayers(newLayers);
+                                                                }}
+                                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
+                                                            >
+                                                                <X className="w-3 h-3 text-white" />
+                                                            </button>
+                                                        </div>
+                                                        <textarea
+                                                            placeholder="Describe placement or texture..."
+                                                            className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none resize-none h-8 py-0.5 leading-tight"
+                                                            value={detail.description}
+                                                            onChange={(e) => {
+                                                                const newDetails = [...layer.details];
+                                                                newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
+                                                                const newLayers = [...layers];
+                                                                newLayers[i] = { ...newLayers[i], details: newDetails };
+                                                                setLayers(newLayers);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ))}
+
+                                                {/* Add Detail Button */}
+                                                <label className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors">
+                                                    <Plus className="w-2.5 h-2.5 text-zinc-500" />
+                                                    <span className="text-[9px] text-zinc-500">Add Detail Image (optional)</span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (file) {
+                                                                const reader = new FileReader();
+                                                                reader.onload = (loadEv) => {
+                                                                    const processed = loadEv.target?.result as string;
+                                                                    const newDetails = [...(layer.details || []), { id: crypto.randomUUID(), url: processed, description: '' }];
+                                                                    const newLayers = [...layers];
+                                                                    newLayers[i] = { ...newLayers[i], details: newDetails };
+                                                                    setLayers(newLayers);
+                                                                };
+                                                                reader.readAsDataURL(file);
+                                                            }
+                                                        }}
+                                                    />
+                                                </label>
+                                            </div>
                                         </div>
                                     ))}
-                                    {layers.length === 0 && <div className="text-[10px] text-zinc-600 italic px-1">No layers added</div>}
+                                    {layers.length === 0 && <div className="text-[10px] text-zinc-600 italic px-1">No products added</div>}
                                 </div>
 
                                 {/* Skip Mask Option */}
@@ -1081,160 +1183,18 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                             </div>
                         )}
 
-                        {/* 3. Editing Tools - Only in CHANGE mode */}
-                        {editMode === 'change' && (
-                            <div className="p-4 border-b border-white/5 space-y-4">
-                                <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Tools</h3>
 
-                                {/* Person / Face Swap Tool */}
-                                {!disableTools.includes('person') && (
-                                    <div className="space-y-2 pt-2 border-t border-white/5">
-                                        <label className="flex items-center justify-between text-[11px] text-zinc-300">
-                                            <span className="flex items-center gap-2"><User className="w-3 h-3 text-orange-400" /> Change Person (Face Swap)</span>
-                                            {personImage && <button onClick={() => setPersonImage(null)} className="text-zinc-600 hover:text-red-400 text-[10px]">Remove</button>}
-                                        </label>
-                                        {!personImage ? (
-                                            <label className="flex items-center justify-center w-full h-10 border border-dashed border-white/20 rounded-sm bg-white/5 hover:bg-white/10 cursor-pointer text-[10px] text-zinc-500 gap-2 transition-colors">
-                                                <Plus className="w-3 h-3" /> Upload Person
-                                                <input type="file" onChange={(e) => handleUpload(e, setPersonImage)} className="hidden" accept="image/*" />
-                                            </label>
-                                        ) : (
-                                            <div className="relative w-full h-20 bg-black/50 rounded-sm overflow-hidden border border-white/10">
-                                                <img src={personImage} className="w-full h-full object-contain opacity-80" />
-                                                <div className="absolute top-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-sm">Person</div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-
-
-                            </div>
-                        )}
 
                         {/* 4. Smart Prompt Section */}
                         <div className="p-4 space-y-3 border-b border-white/5">
 
 
-                            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between">
-                                Prompt {editMode === 'change' && <span className="text-purple-500 flex items-center gap-1"><Sparkles className="w-3 h-3" /> Auto</span>}
+                            <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex justify-between items-center">
+                                Prompt
+                                {editMode === 'change' && <span className="text-purple-500 flex items-center gap-1 text-[9px]"><Sparkles className="w-3 h-3" /> Auto-Generated</span>}
                             </h3>
 
-                            {/* Product Substitution Inputs - Only in CHANGE OBJECTS mode */}
-                            {editMode === 'change' && layers.length > 0 && (
-                                <div ref={substitutionSectionRef} className="space-y-2">
-                                    <label className="text-[10px] text-zinc-400 font-medium flex items-center gap-1">
-                                        <Layers className="w-3 h-3" /> What does each layer replace?
-                                    </label>
-                                    {layers.map((layer, i) => (
-                                        <div key={layer.id} className="bg-black/20 p-2 rounded-sm border border-white/5 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <div className="relative w-8 h-8 shrink-0 bg-black/40 rounded-sm overflow-hidden border border-white/10">
-                                                    <img src={layer.url} className="w-full h-full object-contain" />
-                                                    <div className="absolute top-0 right-0 bg-zinc-800 text-[8px] text-zinc-400 px-1">{layer.type === 'product' ? 'Prod' : 'Mask'}</div>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <input
-                                                        value={productSubstitutions[i] || ''}
-                                                        onChange={(e) => {
-                                                            const newSubs = [...productSubstitutions];
-                                                            newSubs[i] = e.target.value;
-                                                            setProductSubstitutions(newSubs);
-                                                        }}
-                                                        placeholder={layer.type === 'product' ? `Replace [object] with ${i + 1}...` : "Describe change..."}
-                                                        className="w-full bg-transparent border-b border-white/10 text-[10px] text-zinc-300 focus:border-white/40 focus:outline-none pb-1 placeholder:text-zinc-600"
-                                                    />
-                                                    <div className="text-[10px] text-white truncate font-medium">{layer.type === 'mask' ? 'Mask Layer' : `Product ${i + 1}`}</div>
-                                                </div>
-                                                <button onClick={() => removeLayer(layer.id)}><X className="w-3 h-3 text-zinc-600 hover:text-red-400" /></button>
-                                            </div>
-
-                                            {/* Product Prompt */}
-                                            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-                                                <div className="text-[9px] text-zinc-500 mb-1">Product Prompt</div>
-                                                <textarea
-                                                    value={layer.prompt}
-                                                    onChange={(e) => {
-                                                        const newLayers = [...layers];
-                                                        newLayers[i] = { ...newLayers[i], prompt: e.target.value };
-                                                        setLayers(newLayers);
-                                                    }}
-                                                    placeholder="Describe the product..."
-                                                    className="w-full h-10 bg-black/20 border border-white/5 rounded-sm p-1.5 text-[10px] text-zinc-300 focus:outline-none focus:border-white/10 resize-none"
-                                                />
-                                            </div>
-
-                                            {/* DETAIL ENHANCEMENT */}
-                                            <div className="pl-10 space-y-2">
-                                                <div className="flex items-start gap-2">
-                                                    <Layers className="w-3 h-3 text-zinc-600 mt-1" />
-                                                    <div className="flex-1 space-y-2">
-                                                        <span className="text-[9px] text-zinc-500 uppercase tracking-wider">Details & Textures</span>
-
-                                                        {/* List of Details */}
-                                                        {(layer.details || []).map((detail, dIndex) => (
-                                                            <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
-                                                                <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
-                                                                    <img src={detail.url} className="w-full h-full object-cover" />
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const newDetails = layer.details.filter(d => d.id !== detail.id);
-                                                                            const newLayers = [...layers];
-                                                                            newLayers[i] = { ...newLayers[i], details: newDetails };
-                                                                            setLayers(newLayers);
-                                                                        }}
-                                                                        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/d:opacity-100 transition-opacity"
-                                                                    >
-                                                                        <X className="w-3 h-3 text-white" />
-                                                                    </button>
-                                                                </div>
-                                                                <textarea
-                                                                    placeholder="Describe placement or texture..."
-                                                                    className="flex-1 bg-transparent text-[9px] text-zinc-300 focus:outline-none resize-none h-8 py-0.5 leading-tight"
-                                                                    value={detail.description}
-                                                                    onChange={(e) => {
-                                                                        const newDetails = [...layer.details];
-                                                                        newDetails[dIndex] = { ...newDetails[dIndex], description: e.target.value };
-                                                                        const newLayers = [...layers];
-                                                                        newLayers[i] = { ...newLayers[i], details: newDetails };
-                                                                        setLayers(newLayers);
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        ))}
-
-                                                        {/* Add Detail Button */}
-                                                        <label className="flex items-center justify-center gap-1 py-1 bg-white/5 hover:bg-white/10 border border-dashed border-white/10 rounded-sm cursor-pointer transition-colors">
-                                                            <Plus className="w-2.5 h-2.5 text-zinc-500" />
-                                                            <span className="text-[9px] text-zinc-500">Add Detail Image</span>
-                                                            <input
-                                                                type="file"
-                                                                accept="image/*"
-                                                                className="hidden"
-                                                                onChange={(e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (file) {
-                                                                        const reader = new FileReader();
-                                                                        reader.onload = (loadEv) => {
-                                                                            const processed = loadEv.target?.result as string;
-                                                                            const newDetails = [...(layer.details || []), { id: crypto.randomUUID(), url: processed, description: '' }];
-                                                                            const newLayers = [...layers];
-                                                                            newLayers[i] = { ...newLayers[i], details: newDetails };
-                                                                            setLayers(newLayers);
-                                                                        };
-                                                                        reader.readAsDataURL(file);
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </label>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <p className="text-[9px] text-zinc-600 italic">e.g. "the black jacket" or "remove the person on the left"</p>
-                                </div>
-                            )}
+                            {/* Product Substitution Inputs Removed - Now in Sidebar Cards */}
 
                             {/* Chat History Section */}
                             {editMode === 'chat' && chatHistory.length > 0 && (
@@ -1279,7 +1239,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                             {/* Additional Details -> Add Prompt */}
                             <div className="space-y-1">
                                 <div className="flex justify-between items-center px-1">
-                                    <label className="text-[10px] text-zinc-400 font-medium">Add Prompt</label>
+                                    <label className="text-[10px] text-zinc-400 font-medium">Add Prompt (optional)</label>
                                     {editMode === 'chat' && (
                                         <button
                                             onClick={() => chatImageInputRef.current?.click()}
@@ -1351,37 +1311,58 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                     </div>
 
                     {/* Generate Button */}
-                    <div className="p-4 border-t border-white/10 bg-black/20">
-                        {/* Generate Button Area */}
-                        <div className="p-4 border-t border-white/10 bg-black/20 space-y-3">
-                            {/* Dimension Inputs */}
-                            {/* Dimension Inputs Removed */}
+                    <div className="p-4 border-t border-white/10 bg-black/20 space-y-3">
+                        {/* Dimension Inputs */}
+                        {/* Dimension Inputs Removed */}
 
-                            <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-sm border border-white/5 mb-4">
+                        <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-sm border border-white/5 mb-4">
+                            <button
+                                onClick={() => setModelTier('normal')}
+                                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-sm transition-all ${modelTier === 'normal' ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            >
+                                <span className="text-[9px] font-bold uppercase tracking-wider">Normal 1K</span>
+                                <span className="text-[7px] font-medium opacity-60">6 Credits</span>
+                            </button>
+                            <button
+                                onClick={() => setModelTier('pro')}
+                                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-sm transition-all ${modelTier === 'pro' ? 'bg-gradient-to-br from-purple-900/80 to-blue-900/80 text-white shadow-md border border-purple-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            >
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-400">Pro 2K</span>
+                                <span className="text-[7px] font-medium opacity-60">18 Credits</span>
+                            </button>
+                        </div>
+
+                        {(!profile || (profile.credits || 0) < (modelTier === 'pro' ? 18 : 6)) ? (
+                            <div className="flex gap-2">
                                 <button
-                                    onClick={() => setModelTier('normal')}
-                                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-sm transition-all ${modelTier === 'normal' ? 'bg-zinc-800 text-white shadow-md' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => router.push(`/pricing?returnUrl=${encodeURIComponent(pathname)}`)}
+                                    className="flex-1 h-10 text-[11px] font-bold tracking-[0.2em] uppercase rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all bg-orange-500/10 border border-orange-500/50 text-orange-500 hover:bg-orange-500/20"
                                 >
-                                    <span className="text-[9px] font-bold uppercase tracking-wider">Normal 1K</span>
-                                    <span className="text-[7px] font-medium opacity-60">6 Credits</span>
+                                    <span className="text-sm font-black tracking-[0.2em] uppercase">GET CREDITS</span>
+                                    <span className="text-[9px] font-medium uppercase tracking-wide text-orange-400">Insufficient Credits (Need {modelTier === 'pro' ? 18 : 6})</span>
                                 </button>
                                 <button
-                                    onClick={() => setModelTier('pro')}
-                                    className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-sm transition-all ${modelTier === 'pro' ? 'bg-gradient-to-br from-purple-900/80 to-blue-900/80 text-white shadow-md border border-purple-500/20' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                    onClick={() => window.open('/guide/image-editing', '_blank')}
+                                    className="w-10 h-10 flex items-center justify-center rounded-sm bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                                    title="Read Guide"
                                 >
-                                    <span className="text-[9px] font-bold uppercase tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-blue-400">Pro 2K</span>
-                                    <span className="text-[7px] font-medium opacity-60">18 Credits</span>
+                                    <BookOpen className="w-4 h-4" />
                                 </button>
                             </div>
-
-                            {(!profile || (profile.credits || 0) < (modelTier === 'pro' ? 18 : 6)) ? (
+                        ) : (
+                            <div className="space-y-2">
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() => router.push(`/pricing?returnUrl=${encodeURIComponent(pathname)}`)}
-                                        className="flex-1 h-10 text-[11px] font-bold tracking-[0.2em] uppercase rounded-sm flex flex-col items-center justify-center gap-0.5 transition-all bg-orange-500/10 border border-orange-500/50 text-orange-500 hover:bg-orange-500/20"
+                                        onClick={handleGenerate}
+                                        disabled={isGenerating || !referenceImage}
+                                        className={`flex-1 h-10 text-[11px] font-bold tracking-[0.2em] uppercase rounded-sm flex items-center justify-center gap-2 transition-all ${isGenerating || !referenceImage ? 'bg-white/5 text-zinc-600 border border-white/5 cursor-not-allowed' : 'bg-white text-black hover:bg-zinc-200'}`}
                                     >
-                                        <span className="text-sm font-black tracking-[0.2em] uppercase">GET CREDITS</span>
-                                        <span className="text-[9px] font-medium uppercase tracking-wide text-orange-400">Insufficient Credits (Need {modelTier === 'pro' ? 18 : 6})</span>
+                                        {isGenerating ? <><Sparkles className="w-4 h-4 animate-spin" /> Processing...</> : (
+                                            <div className="flex flex-col items-center leading-none">
+                                                <span>Generate {modelTier === 'pro' ? '(Pro)' : ''}</span>
+                                                <span className="text-[8px] opacity-60 font-medium normal-case tracking-normal">Cost: {modelTier === 'pro' ? '18' : '6'} Credits</span>
+                                            </div>
+                                        )}
                                     </button>
                                     <button
                                         onClick={() => window.open('/guide/image-editing', '_blank')}
@@ -1391,34 +1372,9 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                         <BookOpen className="w-4 h-4" />
                                     </button>
                                 </div>
-                            ) : (
-                                <div className="space-y-2">
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={handleGenerate}
-                                            disabled={isGenerating || !referenceImage}
-                                            className={`flex-1 h-10 text-[11px] font-bold tracking-[0.2em] uppercase rounded-sm flex items-center justify-center gap-2 transition-all ${isGenerating || !referenceImage ? 'bg-white/5 text-zinc-600 border border-white/5 cursor-not-allowed' : 'bg-white text-black hover:bg-zinc-200'}`}
-                                        >
-                                            {isGenerating ? <><Sparkles className="w-4 h-4 animate-spin" /> Processing...</> : (
-                                                <div className="flex flex-col items-center leading-none">
-                                                    <span>Generate {modelTier === 'pro' ? '(Pro)' : ''}</span>
-                                                    <span className="text-[8px] opacity-60 font-medium normal-case tracking-normal">Cost: {modelTier === 'pro' ? '18' : '6'} Credits</span>
-                                                </div>
-                                            )}
-                                        </button>
-                                        <button
-                                            onClick={() => window.open('/guide/image-editing', '_blank')}
-                                            className="w-10 h-10 flex items-center justify-center rounded-sm bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                                            title="Read Guide"
-                                        >
-                                            <BookOpen className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
-
                 </div>
 
                 {/* CENTER: Canvas / Result View */}
