@@ -210,6 +210,15 @@ export interface Template {
 
     // Allowed Tiers Configuration
     allowed_tiers?: string[]; // e.g. ['normal', 'pro']
+
+    // Explore Library Fields
+    is_explore?: boolean;
+    explore_grid_cols?: number;
+    explore_grid_rows?: number;
+
+    // Additional fields used in Lab
+    video_url?: string | null;
+    is_pro?: boolean;
 }
 
 // Mock data removed as per user request

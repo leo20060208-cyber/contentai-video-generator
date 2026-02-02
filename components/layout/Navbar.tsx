@@ -76,6 +76,24 @@ export function Navbar() {
                   Image Editing
                 </Link>
               </div>
+
+              <div className="h-4 w-px bg-white/10" />
+
+              {/* EXPLORE Section */}
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/explore"
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${pathname === '/explore' ? 'bg-cyan-500 border-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 hover:bg-cyan-500 hover:text-black hover:border-cyan-500'}`}
+                >
+                  Explore
+                </Link>
+                <Link
+                  href="/templates"
+                  className={`text-sm font-medium transition-all ${pathname === '/templates' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  Library
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -193,6 +211,24 @@ export function Navbar() {
                     Image Editing
                   </Link>
                 </div>
+              </div>
+
+              {/* Mobile Explore Section */}
+              <div className="px-4 flex items-center gap-4">
+                <Link
+                  href="/explore"
+                  onClick={() => setIsMenuOpen(false)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border ${pathname === '/explore' ? 'bg-cyan-500 border-cyan-500 text-black' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'}`}
+                >
+                  Explore
+                </Link>
+                <Link
+                  href="/templates"
+                  onClick={() => setIsMenuOpen(false)}
+                  className={`text-sm font-bold uppercase tracking-widest ${pathname === '/templates' ? 'text-white' : 'text-zinc-500'}`}
+                >
+                  Library
+                </Link>
               </div>
 
               {/* Mobile Magic/Video Generation Section */}

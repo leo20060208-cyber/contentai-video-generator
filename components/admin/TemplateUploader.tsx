@@ -130,6 +130,9 @@ export function TemplateUploader({
     const [productSlots, setProductSlots] = useState<ProductSlotData[]>(
         initialData?.product_slots || []
     );
+    const [isExplore, setIsExplore] = useState(initialData?.is_explore || false);
+    const [exploreGridCols, setExploreGridCols] = useState(initialData?.explore_grid_cols || 1);
+    const [exploreGridRows, setExploreGridRows] = useState(initialData?.explore_grid_rows || 1);
 
     // Sync state with initialData when it changes (for editing)
     useEffect(() => {
@@ -156,6 +159,9 @@ export function TemplateUploader({
             setImageDescriptions(initialData.image_descriptions || []);
             setImageInstructions(initialData.image_instructions || '');
             setProductSlots(initialData.product_slots || []);
+            setIsExplore(initialData.is_explore || false);
+            setExploreGridCols(initialData.explore_grid_cols || 1);
+            setExploreGridRows(initialData.explore_grid_rows || 1);
 
             // Reset new file uploads
             setBeforeVideo(null);
@@ -473,6 +479,11 @@ export function TemplateUploader({
 
                 // Allowed Tiers
                 allowed_tiers: allowedTiers,
+
+                // Explore fields
+                is_explore: isExplore,
+                explore_grid_cols: exploreGridCols,
+                explore_grid_rows: exploreGridRows,
             };
 
             // ALWAYS set is_trending (for both INSERT and UPDATE)
@@ -620,7 +631,74 @@ export function TemplateUploader({
                                             </span>
                                         </label>
                                     </div>
+
+                                    {/* Explore Library Toggle */}
+                                    <div className="bg-cyan-500/10 border border-cyan-500/20 p-2 rounded-lg">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isExplore}
+                                                onChange={(e) => setIsExplore(e.target.checked)}
+                                                className="w-4 h-4 rounded border-white/10 bg-zinc-800 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0"
+                                            />
+                                            <span className="text-sm text-cyan-400 font-bold">
+                                                🚀 Add to Explore Library
+                                            </span>
+                                        </label>
+                                    </div>
                                 </div>
+
+                                {/* Explore Layout Config */}
+                                {isExplore && (
+                                    <div className="bg-cyan-500/5 p-4 rounded-lg border border-cyan-500/10 animate-in fade-in slide-in-from-top-2">
+                                        <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-4">Explore Library Grid Config</h3>
+                                        <div className="grid grid-cols-2 gap-8">
+                                            <div>
+                                                <label className="block text-xs text-zinc-400 mb-2">Column Span (Width)</label>
+                                                <div className="flex gap-2">
+                                                    {[1, 2].map(cols => (
+                                                        <button
+                                                            key={cols}
+                                                            type="button"
+                                                            onClick={() => setExploreGridCols(cols)}
+                                                            className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${exploreGridCols === cols ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-zinc-800 text-zinc-500 hover:text-white'}`}
+                                                        >
+                                                            {cols === 1 ? 'Small (1x)' : 'Wide (2x)'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-zinc-400 mb-2">Row Span (Height)</label>
+                                                <div className="flex gap-2">
+                                                    {[1, 2].map(rows => (
+                                                        <button
+                                                            key={rows}
+                                                            type="button"
+                                                            onClick={() => setExploreGridRows(rows)}
+                                                            className={`flex-1 py-1.5 rounded-md text-xs font-bold transition-all ${exploreGridRows === rows ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-zinc-800 text-zinc-500 hover:text-white'}`}
+                                                        >
+                                                            {rows === 1 ? 'Short (1x)' : 'Tall (2x)'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 flex justify-center">
+                                            <div className="p-2 border border-cyan-500/20 rounded-lg bg-black/40">
+                                                <div className="text-[10px] text-cyan-500/50 uppercase tracking-tighter mb-1 text-center">Preview Aspect</div>
+                                                <div
+                                                    className="bg-cyan-500/20 border-2 border-cyan-500/40 rounded shadow-inner transition-all duration-300"
+                                                    style={{
+                                                        width: exploreGridCols * 40,
+                                                        height: exploreGridRows * 40,
+                                                        maxWidth: '100%'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Allowed Tiers Selection - IMAGES ONLY */}
                                 {templateType === 'image' && (
