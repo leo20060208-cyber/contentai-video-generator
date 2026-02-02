@@ -214,26 +214,6 @@ export function Navbar() {
                 </div>
               </div>
 
-              {/* Mobile Explore Section */}
-              <div className="px-4">
-                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-sm tracking-wider mb-2 inline-block ${pathname === '/explore' ? 'bg-cyan-500 text-black' : 'bg-cyan-500 text-white'}`}>EXPLORE</span>
-                <div className="flex flex-col gap-2 pl-2 border-l border-white/10 ml-1">
-                  <Link
-                    href="/explore"
-                    onClick={() => setIsMenuOpen(false)}
-                    className={`text-sm transition-colors py-1 ${pathname === '/explore' ? 'text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
-                  >
-                    Explore Library
-                  </Link>
-                  <Link
-                    href="/templates"
-                    onClick={() => setIsMenuOpen(false)}
-                    className={`text-sm transition-colors py-1 ${pathname === '/templates' ? 'text-white font-bold' : 'text-zinc-400 hover:text-white'}`}
-                  >
-                    Full Library
-                  </Link>
-                </div>
-              </div>
 
               {/* Mobile Magic/Video Generation Section */}
               <div className="px-4">
