@@ -77,24 +77,7 @@ export function Navbar() {
                 </Link>
               </div>
 
-              <div className="h-4 w-px bg-white/10" />
 
-              {/* EXPLORE Section */}
-              <div className="flex items-center gap-3">
-                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-sm tracking-widest leading-none transition-all ${pathname === '/explore' ? 'bg-cyan-500 text-black' : 'bg-cyan-500 text-white'}`}>EXPLORE</span>
-                <Link
-                  href="/explore"
-                  className={`text-sm font-medium transition-all ${pathname === '/explore' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  Explore Library
-                </Link>
-                <Link
-                  href="/templates"
-                  className={`text-sm font-medium transition-all ${pathname === '/templates' ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
-                >
-                  Library
-                </Link>
-              </div>
             </div>
           </div>
 
