@@ -700,8 +700,8 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Allowed Tiers Selection - IMAGES ONLY */}
-                                {templateType === 'image' && (
+                                {/* Allowed Tiers Selection - IMAGES ONLY - Hidden in Explore */}
+                                {!isExplore && templateType === 'image' && (
                                     <div className="bg-zinc-800/50 p-4 rounded-lg border border-white/5">
                                         <label className="block text-xs text-zinc-400 mb-2">Allowed Generation Tiers</label>
                                         <div className="flex gap-4">
@@ -745,8 +745,8 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* AI Model Selection - ONLY FOR VIDEO */}
-                                {templateType === 'video' && (
+                                {/* AI Model Selection - ONLY FOR VIDEO - Hidden in Explore */}
+                                {!isExplore && templateType === 'video' && (
                                     <div>
                                         <label className="block text-xs text-zinc-400 mb-2">AI Model *</label>
                                         <select
@@ -810,45 +810,49 @@ export function TemplateUploader({
                                     </div>
                                 </div>
 
-                                {/* Product Image (Optional - for Before/After Toggle) */}
-                                <div className="p-4 bg-zinc-800/30 border border-white/5 rounded-lg">
-                                    <label className="block text-sm font-semibold text-white mb-3">Original Product Image (Optional)</label>
-                                    <p className="text-xs text-zinc-400 mb-3">
-                                        Upload the product image used to create this result.
-                                        This enables the "Reference vs Product" toggle in the Recreate page.
-                                    </p>
-                                    <div className="w-1/2">
-                                        <ImageUpload
-                                            label="Product Image"
-                                            image={productImage}
-                                            existingUrl={existingProductImageUrl}
-                                            onChange={handleProductImage}
-                                        />
+                                {/* Product Image (Optional - for Before/After Toggle) - Hidden in Explore */}
+                                {!isExplore && (
+                                    <div className="p-4 bg-zinc-800/30 border border-white/5 rounded-lg">
+                                        <label className="block text-sm font-semibold text-white mb-3">Original Product Image (Optional)</label>
+                                        <p className="text-xs text-zinc-400 mb-3">
+                                            Upload the product image used to create this result.
+                                            This enables the "Reference vs Product" toggle in the Recreate page.
+                                        </p>
+                                        <div className="w-1/2">
+                                            <ImageUpload
+                                                label="Product Image"
+                                                image={productImage}
+                                                existingUrl={existingProductImageUrl}
+                                                onChange={handleProductImage}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Marked Product Image (Optional - for AI Context) */}
-                                <div className="p-4 bg-zinc-800/30 border border-white/5 rounded-lg">
-                                    <label className="block text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                                        Marked Product Image (Optional)
-                                        <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full uppercase tracking-wider">AI Context</span>
-                                    </label>
-                                    <p className="text-xs text-zinc-400 mb-3">
-                                        Upload an image with the product underlined or highlighted.
-                                        This helps the AI understand exactly where the product is in the scene.
-                                    </p>
-                                    <div className="w-1/2">
-                                        <ImageUpload
-                                            label="Marked Image (Underlined)"
-                                            image={productOutlineImage}
-                                            existingUrl={existingProductOutlineImageUrl}
-                                            onChange={handleProductOutlineImage}
-                                        />
+                                {/* Marked Product Image (Optional - for AI Context) - Hidden in Explore */}
+                                {!isExplore && (
+                                    <div className="p-4 bg-zinc-800/30 border border-white/5 rounded-lg">
+                                        <label className="block text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                                            Marked Product Image (Optional)
+                                            <span className="text-[10px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full uppercase tracking-wider">AI Context</span>
+                                        </label>
+                                        <p className="text-xs text-zinc-400 mb-3">
+                                            Upload an image with the product underlined or highlighted.
+                                            This helps the AI understand exactly where the product is in the scene.
+                                        </p>
+                                        <div className="w-1/2">
+                                            <ImageUpload
+                                                label="Marked Image (Underlined)"
+                                                image={productOutlineImage}
+                                                existingUrl={existingProductOutlineImageUrl}
+                                                onChange={handleProductOutlineImage}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                {/* Mask Detection Result Preview (Video Only usually) */}
-                                {isOriginal && templateType === 'video' && replacedObjectMask && (
+                                {/* Mask Detection Result Preview (Video Only usually) - Hidden in Explore */}
+                                {!isExplore && isOriginal && templateType === 'video' && replacedObjectMask && (
                                     <div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-xl">
                                         <div className="flex items-start gap-4">
                                             {/* Mask Preview Image */}
@@ -881,8 +885,8 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Mask Timing (Green Highlight Duration) - Only for Original Video */}
-                                {isOriginal && templateType === 'video' && beforeVideo && (
+                                {/* Mask Timing (Green Highlight Duration) - Only for Original Video - Hidden in Explore */}
+                                {!isExplore && isOriginal && templateType === 'video' && beforeVideo && (
                                     <div className="mt-4 bg-zinc-800/50 p-3 rounded-lg border border-white/5">
                                         <label className="block text-xs text-zinc-400 mb-2">Mask Active Duration (Green Overlay Impact)</label>
                                         <div className="flex items-center gap-4">
@@ -932,166 +936,168 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Product Slots Configuration */}
-                                <div className="mt-4 bg-zinc-800/50 p-4 rounded-lg border border-white/5 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h3 className="text-sm font-semibold text-white">Product Slots</h3>
-                                            <p className="text-[10px] text-zinc-500">Define products with optional time ranges</p>
+                                {/* Product Slots Configuration - Hidden in Explore */}
+                                {!isExplore && (
+                                    <div className="mt-4 bg-zinc-800/50 p-4 rounded-lg border border-white/5 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h3 className="text-sm font-semibold text-white">Product Slots</h3>
+                                                <p className="text-[10px] text-zinc-500">Define products with optional time ranges</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const newSlot: ProductSlotData = {
+                                                        id: `slot-${Date.now()}`,
+                                                        name: `Product ${productSlots.length + 1}`,
+                                                        description: '',
+                                                        isRequired: true,
+                                                        timeRange: null,
+                                                        type: 'product'
+                                                    };
+                                                    setProductSlots([...productSlots, newSlot]);
+                                                }}
+                                                className="flex items-center gap-1 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-2 py-1 rounded transition-colors"
+                                            >
+                                                <Plus className="w-3 h-3" />
+                                                Add Slot
+                                            </button>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const newSlot: ProductSlotData = {
-                                                    id: `slot-${Date.now()}`,
-                                                    name: `Product ${productSlots.length + 1}`,
-                                                    description: '',
-                                                    isRequired: true,
-                                                    timeRange: null,
-                                                    type: 'product'
-                                                };
-                                                setProductSlots([...productSlots, newSlot]);
-                                            }}
-                                            className="flex items-center gap-1 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-2 py-1 rounded transition-colors"
-                                        >
-                                            <Plus className="w-3 h-3" />
-                                            Add Slot
-                                        </button>
-                                    </div>
 
-                                    {productSlots.length === 0 ? (
-                                        <div className="text-center py-4 text-zinc-500 text-xs border border-dashed border-zinc-700 rounded-lg">
-                                            No slots defined. Add slots to define product positions with time ranges.
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            {productSlots.map((slot, idx) => (
-                                                <div key={slot.id} className="p-2 bg-zinc-900 rounded border border-zinc-700 space-y-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-zinc-500 text-xs w-4">{idx + 1}.</span>
-                                                        <input
-                                                            type="text"
-                                                            value={slot.name}
-                                                            onChange={(e) => {
-                                                                const newSlots = [...productSlots];
-                                                                newSlots[idx].name = e.target.value;
-                                                                setProductSlots(newSlots);
-                                                            }}
-                                                            placeholder="Product name"
-                                                            className="flex-1 px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-white text-xs focus:border-orange-500 focus:outline-none"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setProductSlots(productSlots.filter((_, i) => i !== idx));
-                                                            }}
-                                                            className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
-                                                        >
-                                                            <Trash2 className="w-3 h-3" />
-                                                        </button>
-                                                    </div>
-                                                    {/* Slot Type Selector */}
-                                                    <div className="flex items-center gap-2 pl-6">
-                                                        <span className="text-[10px] text-zinc-500">Type:</span>
-                                                        <div className="flex bg-black/40 rounded p-0.5 border border-zinc-700">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newSlots = [...productSlots];
-                                                                    newSlots[idx].type = 'product';
-                                                                    setProductSlots(newSlots);
-                                                                }}
-                                                                className={`text-[10px] px-2 py-0.5 rounded transition-colors ${!slot.type || slot.type === 'product' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-                                                            >
-                                                                Product
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newSlots = [...productSlots];
-                                                                    newSlots[idx].type = 'person';
-                                                                    setProductSlots(newSlots);
-                                                                }}
-                                                                className={`text-[10px] px-2 py-0.5 rounded transition-colors ${slot.type === 'person' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-                                                            >
-                                                                Person
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 flex-wrap pl-6">
-                                                        <label className="flex items-center gap-1 cursor-pointer">
+                                        {productSlots.length === 0 ? (
+                                            <div className="text-center py-4 text-zinc-500 text-xs border border-dashed border-zinc-700 rounded-lg">
+                                                No slots defined. Add slots to define product positions with time ranges.
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {productSlots.map((slot, idx) => (
+                                                    <div key={slot.id} className="p-2 bg-zinc-900 rounded border border-zinc-700 space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-zinc-500 text-xs w-4">{idx + 1}.</span>
                                                             <input
-                                                                type="checkbox"
-                                                                checked={slot.isRequired}
+                                                                type="text"
+                                                                value={slot.name}
                                                                 onChange={(e) => {
                                                                     const newSlots = [...productSlots];
-                                                                    newSlots[idx].isRequired = e.target.checked;
+                                                                    newSlots[idx].name = e.target.value;
                                                                     setProductSlots(newSlots);
                                                                 }}
-                                                                className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-orange-500"
+                                                                placeholder="Product name"
+                                                                className="flex-1 px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-white text-xs focus:border-orange-500 focus:outline-none"
                                                             />
-                                                            <span className="text-[10px] text-zinc-400">Required</span>
-                                                        </label>
-                                                        {templateType === 'video' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setProductSlots(productSlots.filter((_, i) => i !== idx));
+                                                                }}
+                                                                className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                        {/* Slot Type Selector */}
+                                                        <div className="flex items-center gap-2 pl-6">
+                                                            <span className="text-[10px] text-zinc-500">Type:</span>
+                                                            <div className="flex bg-black/40 rounded p-0.5 border border-zinc-700">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newSlots = [...productSlots];
+                                                                        newSlots[idx].type = 'product';
+                                                                        setProductSlots(newSlots);
+                                                                    }}
+                                                                    className={`text-[10px] px-2 py-0.5 rounded transition-colors ${!slot.type || slot.type === 'product' ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                                >
+                                                                    Product
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const newSlots = [...productSlots];
+                                                                        newSlots[idx].type = 'person';
+                                                                        setProductSlots(newSlots);
+                                                                    }}
+                                                                    className={`text-[10px] px-2 py-0.5 rounded transition-colors ${slot.type === 'person' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                                >
+                                                                    Person
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 flex-wrap pl-6">
                                                             <label className="flex items-center gap-1 cursor-pointer">
                                                                 <input
                                                                     type="checkbox"
-                                                                    checked={slot.timeRange !== null}
+                                                                    checked={slot.isRequired}
                                                                     onChange={(e) => {
                                                                         const newSlots = [...productSlots];
-                                                                        newSlots[idx].timeRange = e.target.checked ? { startSecond: 0, endSecond: 5 } : null;
+                                                                        newSlots[idx].isRequired = e.target.checked;
                                                                         setProductSlots(newSlots);
                                                                     }}
-                                                                    className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-blue-500"
+                                                                    className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-orange-500"
                                                                 />
-                                                                <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
-                                                                    <Clock className="w-2.5 h-2.5" /> Time
-                                                                </span>
+                                                                <span className="text-[10px] text-zinc-400">Required</span>
                                                             </label>
-                                                        )}
-                                                        {slot.timeRange && (
-                                                            <div className="flex items-center gap-1">
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.5"
-                                                                    value={slot.timeRange.startSecond}
-                                                                    onChange={(e) => {
-                                                                        const newSlots = [...productSlots];
-                                                                        if (newSlots[idx].timeRange) {
-                                                                            newSlots[idx].timeRange!.startSecond = parseFloat(e.target.value) || 0;
-                                                                        }
-                                                                        setProductSlots(newSlots);
-                                                                    }}
-                                                                    className="w-12 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white text-[10px] text-center"
-                                                                />
-                                                                <span className="text-zinc-500 text-[10px]">-</span>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.5"
-                                                                    value={slot.timeRange.endSecond}
-                                                                    onChange={(e) => {
-                                                                        const newSlots = [...productSlots];
-                                                                        if (newSlots[idx].timeRange) {
-                                                                            newSlots[idx].timeRange!.endSecond = parseFloat(e.target.value) || 0;
-                                                                        }
-                                                                        setProductSlots(newSlots);
-                                                                    }}
-                                                                    className="w-12 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white text-[10px] text-center"
-                                                                />
-                                                                <span className="text-zinc-500 text-[10px]">s</span>
-                                                            </div>
-                                                        )}
+                                                            {templateType === 'video' && (
+                                                                <label className="flex items-center gap-1 cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={slot.timeRange !== null}
+                                                                        onChange={(e) => {
+                                                                            const newSlots = [...productSlots];
+                                                                            newSlots[idx].timeRange = e.target.checked ? { startSecond: 0, endSecond: 5 } : null;
+                                                                            setProductSlots(newSlots);
+                                                                        }}
+                                                                        className="w-3 h-3 rounded border-zinc-600 bg-zinc-800 text-blue-500"
+                                                                    />
+                                                                    <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">
+                                                                        <Clock className="w-2.5 h-2.5" /> Time
+                                                                    </span>
+                                                                </label>
+                                                            )}
+                                                            {slot.timeRange && (
+                                                                <div className="flex items-center gap-1">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="0.5"
+                                                                        value={slot.timeRange.startSecond}
+                                                                        onChange={(e) => {
+                                                                            const newSlots = [...productSlots];
+                                                                            if (newSlots[idx].timeRange) {
+                                                                                newSlots[idx].timeRange!.startSecond = parseFloat(e.target.value) || 0;
+                                                                            }
+                                                                            setProductSlots(newSlots);
+                                                                        }}
+                                                                        className="w-12 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white text-[10px] text-center"
+                                                                    />
+                                                                    <span className="text-zinc-500 text-[10px]">-</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="0.5"
+                                                                        value={slot.timeRange.endSecond}
+                                                                        onChange={(e) => {
+                                                                            const newSlots = [...productSlots];
+                                                                            if (newSlots[idx].timeRange) {
+                                                                                newSlots[idx].timeRange!.endSecond = parseFloat(e.target.value) || 0;
+                                                                            }
+                                                                            setProductSlots(newSlots);
+                                                                        }}
+                                                                        className="w-12 px-1 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white text-[10px] text-center"
+                                                                    />
+                                                                    <span className="text-zinc-500 text-[10px]">s</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
-                                {/* Advanced Assets (Clean Plate) - Only for Original/Refined & Video */}
-                                {isOriginal && templateType === 'video' && (
+                                {/* Advanced Assets (Clean Plate) - Only for Original/Refined & Video - Hidden in Explore */}
+                                {!isExplore && isOriginal && templateType === 'video' && (
                                     <div className="mt-4 bg-zinc-800/50 p-4 rounded-lg border border-white/5 space-y-4">
                                         <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                                             <Sparkles className="w-4 h-4 text-yellow-500" />
@@ -1122,14 +1128,14 @@ export function TemplateUploader({
                                     </div>
                                 )}
 
-                                {/* Recreation Details */}
+                                {/* Recreation Details / Description */}
                                 <div className="space-y-4 border-t border-zinc-800 pt-4">
-                                    <h3 className="text-sm font-semibold text-white">Recreation Details</h3>
+                                    <h3 className="text-sm font-semibold text-white">{isExplore ? 'Description' : 'Recreation Details'}</h3>
 
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
-                                            <label className="block text-xs text-zinc-400">{isVideoEdit ? 'Base Context (Optional)' : 'AI Prompt (Auto-Generated)'}</label>
-                                            {!isVideoEdit && templateType === 'video' && (
+                                            <label className="block text-xs text-zinc-400">{isExplore ? 'Description' : (isVideoEdit ? 'Base Context (Optional)' : 'AI Prompt (Auto-Generated)')}</label>
+                                            {!isExplore && !isVideoEdit && templateType === 'video' && (
                                                 <button
                                                     type="button"
                                                     onClick={() => generatePrompt()}
@@ -1145,7 +1151,7 @@ export function TemplateUploader({
                                             value={transformationPrompt}
                                             onChange={e => setTransformationPrompt(e.target.value)}
                                             className="w-full bg-zinc-800 rounded-lg border border-white/5 p-2 text-white text-sm focus:outline-none focus:border-orange-500 h-32 resize-none"
-                                            placeholder={isVideoEdit ? "e.g. A futuristic city scene" : "The AI will describe the video and the masked object here..."}
+                                            placeholder={isExplore ? "Brief description of this template..." : (isVideoEdit ? "e.g. A futuristic city scene" : "The AI will describe the video and the masked object here...")}
                                         />
                                     </div>
                                 </div>

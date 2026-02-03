@@ -202,12 +202,6 @@ export default function LabPage() {
                         Motion Refs
                     </button>
                     <button
-                        onClick={() => setActiveTab('explore')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'explore' ? 'bg-cyan-500 text-white' : 'text-zinc-500 hover:text-white'}`}
-                    >
-                        Explore Library
-                    </button>
-                    <button
                         onClick={() => setActiveTab('faqs')}
                         className={`px-4 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${activeTab === 'faqs' ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'}`}
                     >
@@ -394,78 +388,6 @@ export default function LabPage() {
                             exit={{ opacity: 0, y: -20 }}
                         >
                             <PromptPresetsManager initialCategory="motion_reference" isReelFormat={true} />
-                        </motion.div>
-                    )}
-
-                    {activeTab === 'explore' && (
-                        <motion.div
-                            key="explore"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                        >
-                            <div className="bg-zinc-900 border border-white/10 rounded-xl overflow-hidden">
-                                <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-950">
-                                    <div className="flex items-center gap-4">
-                                        <h3 className="text-lg font-bold text-white">Explore Library Templates</h3>
-                                        <div className="text-xs text-cyan-500 font-mono">
-                                            {templates.filter(t => t.is_explore).length} ITEMS
-                                        </div>
-                                    </div>
-                                    <div className="relative w-64">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                                        <input
-                                            type="text"
-                                            placeholder="Search items..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="w-full bg-zinc-900 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-white/20"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="divide-y divide-white/5 max-h-[800px] overflow-y-auto">
-                                    {templates.filter(t => t.is_explore && t.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                                        <div className="p-8 text-center text-zinc-500">No explore items found.</div>
-                                    ) : (
-                                        templates.filter(t => t.is_explore && t.title.toLowerCase().includes(searchQuery.toLowerCase())).map((template) => (
-                                            <div key={template.id} className="p-4 hover:bg-white/5 transition-colors flex items-center justify-between group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-16 h-16 bg-zinc-800 rounded-lg overflow-hidden border border-white/10 relative shrink-0">
-                                                        {(template.after_video_url || template.before_video_url) ? (
-                                                            <video src={template.after_video_url || (template.before_video_url as string)} className="w-full h-full object-cover" muted loop />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center text-zinc-600"><Video className="w-6 h-6" /></div>
-                                                        )}
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-bold text-white text-sm">{template.title}</h3>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <span className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-[10px] text-cyan-500">
-                                                                {template.explore_grid_cols}x{template.explore_grid_rows}
-                                                            </span>
-                                                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{template.category}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => { setEditingTemplate(template); setIsEditModalOpen(true); }}
-                                                        className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors"
-                                                    >
-                                                        <Edit2 className="w-4 h-4" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(template.id)}
-                                                        className="p-2 hover:bg-red-500/20 rounded-lg text-red-500 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
                         </motion.div>
                     )}
 

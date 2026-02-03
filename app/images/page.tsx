@@ -103,6 +103,8 @@ export default function ImagesPage() {
                     if (t.before_video_url || t.after_video_url) return false;
                     // Must NOT be specific problematic titles
                     if (t.title.toLowerCase().includes('messi')) return false;
+                    // Must NOT be explore library template
+                    if (t.is_explore) return false;
 
                     // Must be image type OR one of the Allowed Categories
                     const catUpper = (t.category || '').toUpperCase();

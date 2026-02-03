@@ -296,7 +296,8 @@ export default function VideosPage() {
                         !BLACKLIST.includes(t.title) &&
                         (t.type === 'video' || t.before_video_url || t.after_video_url) &&
                         t.type !== 'image' &&
-                        t.before_image_url && t.before_image_url.length > 10 // Ensure valid cover
+                        t.before_image_url && t.before_image_url.length > 10 && // Ensure valid cover
+                        !t.is_explore // Exclude explore library templates
                     )
                     .map((t: any) => ({
                         id: t.id,

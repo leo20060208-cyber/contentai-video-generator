@@ -215,6 +215,7 @@ export interface Template {
     is_explore?: boolean;
     explore_grid_cols?: number;
     explore_grid_rows?: number;
+    library_type?: 'video' | 'image' | 'live_background' | 'image_to_video' | 'motion_control';
 
     // Additional fields used in Lab
     video_url?: string | null;
@@ -553,4 +554,38 @@ export async function getSavedTemplates(userId: string): Promise<number[]> {
     }
 
     return (data || []).map(item => item.template_id);
+}
+
+export async function toggleSavedTemplate(userId: string, templateId: number): Promise<boolean> {
+    if (!isSupabaseConfigured) return false;
+
+    try {
+        const { data: existing, error: checkError } = await supabase
+            .from('saved_templates')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('template_id', templateId)
+            .single();
+
+        if (existing) {
+            const { error: deleteError } = await supabase
+                .from('saved_templates')
+                .delete()
+                .eq('user_id', userId)
+                .eq('template_id', templateId);
+
+            if (deleteError) throw deleteError;
+            return false; // Unsaved
+        } else {
+            const { error: insertError } = await supabase
+                .from('saved_templates')
+                .insert([{ user_id: userId, template_id: templateId }]);
+
+            if (insertError) throw insertError;
+            return true; // Saved
+        }
+    } catch (err) {
+        console.error('Error toggling saved template:', err);
+        return false;
+    }
 }
