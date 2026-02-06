@@ -94,6 +94,7 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
     const [selectedPresetId, setSelectedPresetId] = useState<string | 'default'>('default');
     const [previewPreset, setPreviewPreset] = useState<PromptPreset | null>(null);
     const [currentTemplate, setCurrentTemplate] = useState('');
+    const [presetsEnabled, setPresetsEnabled] = useState(true); // Toggle state
 
     useEffect(() => {
         if (initialDefaultPrompt && initialPresets && initialPresets.length > 0) return; // Skip if all props provided
@@ -122,6 +123,17 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                         .order('created_at', { ascending: false });
                     if (data) setPresets(data);
                 } catch (e) { console.error(e); }
+            }
+
+            // Load Preset Enabled Toggle
+            try {
+                const enabledData = await getSectionContent('living_background_presets_enabled');
+                console.log('[LivingBackground] Loaded living_background_presets_enabled:', enabledData);
+                const isEnabled = enabledData?.enabled !== false;
+                console.log('[LivingBackground] Setting presetsEnabled to:', isEnabled);
+                setPresetsEnabled(isEnabled);
+            } catch (e) {
+                console.error('[LivingBackground] Error loading presets enabled:', e);
             }
         }
         loadData();
@@ -699,71 +711,7 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                                     </button>
                                 </div>
 
-                                {/* PRESETS BUTTON */}
-                                <div className="relative">
-                                    <button
-                                        onClick={() => setShowPresets(!showPresets)}
-                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black transition-all border border-white/5 flex items-center gap-1 ${showPresets ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
-                                    >
-                                        <Sparkles className="w-3 h-3" />
-                                        {selectedPresetId !== 'default' ? (presets.find(p => p.id === selectedPresetId)?.name.toUpperCase() || 'BACKGROUNDS') : 'BACKGROUNDS'}
-                                    </button>
 
-                                    {/* PRESETS POPUP */}
-                                    <AnimatePresence>
-                                        {showPresets && (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: 10 }}
-                                                className="absolute bottom-full left-0 mb-2 w-72 bg-zinc-900 border border-white/10 rounded-xl p-2 shadow-xl z-50 max-h-[400px] overflow-y-auto custom-scrollbar"
-                                            >
-                                                <div className="space-y-1">
-                                                    <button
-                                                        onClick={() => handlePresetSelect('default')}
-                                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors flex flex-col gap-0.5 ${selectedPresetId === 'default' ? 'bg-white text-black' : 'text-zinc-400 hover:bg-white/5 hover:text-white'}`}
-                                                    >
-                                                        <span className="font-bold">Yours (Default)</span>
-                                                        <span className={`text-[9px] ${selectedPresetId === 'default' ? 'text-zinc-600' : 'text-zinc-500'}`}>Use your configured instructions</span>
-                                                    </button>
-
-                                                    {presets.map(preset => (
-                                                        <button
-                                                            key={preset.id}
-                                                            onClick={() => openPreview(preset)}
-                                                            className={`w-full text-left p-2 rounded-lg text-xs transition-colors flex gap-3 ${selectedPresetId === preset.id ? 'bg-white text-black' : 'text-zinc-400 hover:bg-white/5 hover:text-white bg-black/20'}`}
-                                                        >
-                                                            {/* Video Thumbnail */}
-                                                            <div className="w-16 h-16 shrink-0 bg-black rounded overflow-hidden relative border border-white/10">
-                                                                {preset.preview_video_url ? (
-                                                                    <video
-                                                                        src={preset.preview_video_url}
-                                                                        className="w-full h-full object-cover"
-                                                                        muted
-                                                                        loop
-                                                                        autoPlay
-                                                                        playsInline
-                                                                    />
-                                                                ) : (
-                                                                    <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-600">
-                                                                        <Sparkles className="w-4 h-4" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="flex flex-col gap-1 py-1 min-w-0">
-                                                                <span className="font-bold truncate">{preset.name}</span>
-                                                                {preset.description && (
-                                                                    <span className={`text-[9px] line-clamp-2 leading-tight ${selectedPresetId === preset.id ? 'text-zinc-600' : 'text-zinc-500'}`}>{preset.description}</span>
-                                                                )}
-                                                            </div>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
                             </div>
 
                             <div className="flex items-center gap-2">

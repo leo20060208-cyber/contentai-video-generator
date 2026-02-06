@@ -25,6 +25,10 @@ export function DefaultPromptsEditor() {
     const [imageEditPrompt, setImageEditPrompt] = useState('');
     const [imageEditChatPrompt, setImageEditChatPrompt] = useState('');
 
+    // 5. Preset Toggles
+    const [livingBackgroundPresetsEnabled, setLivingBackgroundPresetsEnabled] = useState(true);
+    const [transitionPresetsEnabled, setTransitionPresetsEnabled] = useState(true);
+
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -47,7 +51,9 @@ export function DefaultPromptsEditor() {
                 videoEditData,
                 videoEditChatData,
                 imageEditData,
-                imageEditChatData
+                imageEditChatData,
+                livingPresetsData,
+                transitionPresetsData
             ] = await Promise.all([
                 getSectionContent('living_background_default_prompt'),
                 getSectionContent('directors_cut_default_prompt'),
@@ -56,7 +62,9 @@ export function DefaultPromptsEditor() {
                 getSectionContent('video_editing_default_prompt'),
                 getSectionContent('video_editing_chat_default_prompt'),
                 getSectionContent('image_editing_default_prompt'),
-                getSectionContent('image_editing_chat_default_prompt')
+                getSectionContent('image_editing_chat_default_prompt'),
+                getSectionContent('living_background_presets_enabled'),
+                getSectionContent('transition_presets_enabled')
             ]);
 
             // Set prompts with fallbacks
@@ -68,6 +76,15 @@ export function DefaultPromptsEditor() {
             setVideoEditChatPrompt(videoEditChatData?.prompt || 'USER REQUEST: {{USER_MESSAGE}}\n\nRespond precisely to the user\'s command for video modification. Maintain temporal consistency and original style.');
             setImageEditPrompt(imageEditData?.prompt || 'RECREATE reference image EXACTLY. Maintain original framing, lighting, and style. Only apply requested modifications.\n\n{{INSERTIONS}}');
             setImageEditChatPrompt(imageEditChatData?.prompt || 'USER REQUEST: {{USER_MESSAGE}}\n\nModify the image based on the user\'s requests. Keep the output resolution identical to the input.');
+
+
+
+            console.log('[Lab] Loaded livingPresetsData:', livingPresetsData);
+            console.log('[Lab] Loaded transitionPresetsData:', transitionPresetsData);
+
+            // Set preset toggles
+            setLivingBackgroundPresetsEnabled(livingPresetsData?.enabled !== false); // Default to true
+            setTransitionPresetsEnabled(transitionPresetsData?.enabled !== false); // Default to true
 
         } catch (error) {
             console.error('Error loading prompts:', error);
@@ -89,8 +106,15 @@ export function DefaultPromptsEditor() {
                 updateSectionContent('video_editing_default_prompt', { prompt: videoEditPrompt }),
                 updateSectionContent('video_editing_chat_default_prompt', { prompt: videoEditChatPrompt }),
                 updateSectionContent('image_editing_default_prompt', { prompt: imageEditPrompt }),
-                updateSectionContent('image_editing_chat_default_prompt', { prompt: imageEditChatPrompt })
+                updateSectionContent('image_editing_chat_default_prompt', { prompt: imageEditChatPrompt }),
             ]);
+
+            // Save preset toggles separately with logging
+            console.log('[Lab] Saving living_background_presets_enabled:', livingBackgroundPresetsEnabled);
+            await updateSectionContent('living_background_presets_enabled', { enabled: livingBackgroundPresetsEnabled });
+
+            console.log('[Lab] Saving transition_presets_enabled:', transitionPresetsEnabled);
+            await updateSectionContent('transition_presets_enabled', { enabled: transitionPresetsEnabled });
 
             setSaveStatus('success');
             setTimeout(() => setSaveStatus('idle'), 2000);
@@ -272,6 +296,53 @@ export function DefaultPromptsEditor() {
                                                 placeholder="Enter template for Image Editing Chat Mode..."
                                                 rows={4}
                                             />
+                                        </section>
+
+                                        {/* 5. Preset Controls */}
+                                        <section className="pt-8 border-t border-white/5">
+                                            <SectionHeader
+                                                icon={Sparkles}
+                                                title="Preset Controls"
+                                                description="Enable or disable preset buttons in editors."
+                                            />
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-zinc-800 hover:border-purple-500/30 transition-colors">
+                                                    <div className="flex-1">
+                                                        <label className="text-sm font-medium text-white cursor-pointer">Living Background Presets</label>
+                                                        <p className="text-xs text-zinc-500 mt-0.5">Show preset button in Living Background editor</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newValue = !livingBackgroundPresetsEnabled;
+                                                            console.log('[Lab] Living Background toggle clicked. Old:', livingBackgroundPresetsEnabled, 'New:', newValue);
+                                                            setLivingBackgroundPresetsEnabled(newValue);
+                                                        }}
+                                                        className={`relative w-12 h-6 rounded-full transition-colors ${livingBackgroundPresetsEnabled ? 'bg-purple-500' : 'bg-zinc-700'
+                                                            }`}
+                                                    >
+                                                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${livingBackgroundPresetsEnabled ? 'translate-x-6' : 'translate-x-0'
+                                                            }`} />
+                                                    </button>
+                                                </div>
+                                                <div className="flex items-center justify-between p-3 rounded-lg bg-black/40 border border-zinc-800 hover:border-purple-500/30 transition-colors">
+                                                    <div className="flex-1">
+                                                        <label className="text-sm font-medium text-white cursor-pointer">Transition Presets</label>
+                                                        <p className="text-xs text-zinc-500 mt-0.5">Show preset button in Directors Cut editor</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newValue = !transitionPresetsEnabled;
+                                                            console.log('[Lab] Transition toggle clicked. Old:', transitionPresetsEnabled, 'New:', newValue);
+                                                            setTransitionPresetsEnabled(newValue);
+                                                        }}
+                                                        className={`relative w-12 h-6 rounded-full transition-colors ${transitionPresetsEnabled ? 'bg-purple-500' : 'bg-zinc-700'
+                                                            }`}
+                                                    >
+                                                        <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${transitionPresetsEnabled ? 'translate-x-6' : 'translate-x-0'
+                                                            }`} />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </section>
                                     </div>
                                 )}
