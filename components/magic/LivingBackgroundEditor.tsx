@@ -67,7 +67,7 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
     useEffect(() => {
         setFullPromptPreview(`${userPrompt ? userPrompt + '. ' : ''}${basePrompt}`);
     }, [userPrompt, basePrompt]);
-    const [duration, setDuration] = useState<5 | 10>(5);
+    const [duration, setDuration] = useState<number>(5);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationProgress, setGenerationProgress] = useState(0);
     const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
@@ -686,7 +686,7 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                                             <span className="flex items-center gap-1">
                                                 GENERATE
                                             </span>
-                                            <span className="text-[7px] opacity-40">COST: {duration === 10 ? 55 : 30} CR</span>
+                                            <span className="text-[7px] opacity-40">COST: {Math.ceil(duration * 6)} CR</span>
                                         </>
                                     )}
                                 </button>
@@ -696,19 +696,20 @@ export function LivingBackgroundEditor({ image, onBack, initialDefaultPrompt, in
                         {/* Control Badges */}
                         <div className="flex items-center justify-between px-2 pb-1 relative">
                             <div className="flex items-center gap-2">
-                                <div className="flex bg-transparent p-1">
-                                    <button
-                                        onClick={() => setDuration(5)}
-                                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${duration === 5 ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
-                                    >
-                                        5s
-                                    </button>
-                                    <button
-                                        onClick={() => setDuration(10)}
-                                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${duration === 10 ? 'bg-white/10 text-white' : 'text-zinc-500 hover:text-white'}`}
-                                    >
-                                        10s
-                                    </button>
+                                <div className="flex bg-transparent p-1 items-center gap-3">
+                                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">DURATION</span>
+                                    <div className="flex items-center gap-2 bg-zinc-800/50 rounded-lg px-2 py-1">
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="15"
+                                            step="1"
+                                            value={duration}
+                                            onChange={(e) => setDuration(Number(e.target.value))}
+                                            className="w-24 h-1 bg-zinc-600 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-[10px] font-bold text-white w-6 text-right">{duration}s</span>
+                                    </div>
                                 </div>
 
 

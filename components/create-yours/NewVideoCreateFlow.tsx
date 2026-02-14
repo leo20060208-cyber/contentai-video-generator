@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Upload, Sparkles, Plus, Layers, Image as ImageIcon, Video, Play, Pause, Wand2, Search, Check, Info, Brush, Eraser, Move, BookOpen, ImagePlus, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { X, Upload, Sparkles, Plus, Layers, Image as ImageIcon, Video, Play, Pause, Wand2, Search, Check, Info, Brush, Eraser, Move, BookOpen, ImagePlus, ChevronRight, ChevronLeft, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -27,7 +27,7 @@ interface ProductLayer {
     maskColor: string;
 }
 
-const LAYER_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+const LAYER_COLORS = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#F97316', '#06B6D4', '#84CC16'];
 
 interface NewVideoCreateFlowProps {
     onCancel?: () => void;
@@ -79,7 +79,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
     const [prompt, setPrompt] = useState('');
     const [productSubstitutions, setProductSubstitutions] = useState<string[]>([]);
     const [additionalDetails, setAdditionalDetails] = useState('');
-    const [editMode, setEditMode] = useState<'change' | 'chat'>('change');
+    const [editMode, setEditMode] = useState<'change' | 'chat'>('chat');
     const [chatHistory, setChatHistory] = useState<{ type: 'user' | 'result', content: string, images?: string[] }[]>([]);
     const [chatImages, setChatImages] = useState<string[]>([]);
     const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -383,6 +383,29 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
 
     const handleBrushStart = (e: React.MouseEvent | React.TouchEvent) => {
         if (activeTool !== 'brush' && activeTool !== 'eraser') return;
+
+        // Auto-create mask layer in Chat Mode if none selected
+        if (editMode === 'chat' && !selectedLayerId) {
+            // Check if we already have a chat mask (optional optimization)
+            const existingMask = layers.find(l => l.name === 'Chat Mask');
+            if (existingMask) {
+                setSelectedLayerId(existingMask.id);
+            } else {
+                const newLayer: ProductLayer = {
+                    id: crypto.randomUUID(),
+                    url: '', // Mask layer doesn't need a product image
+                    type: 'mask',
+                    name: 'Chat Mask',
+                    prompt: 'Edit this area',
+                    maskPoints: [],
+                    maskColor: '#F97316', // Orange
+                    details: []
+                };
+                setLayers([...layers, newLayer]);
+                setSelectedLayerId(newLayer.id);
+            }
+        }
+
         const p = getPoint(e);
         if (p) setCurrentStroke([p]);
     };
@@ -585,8 +608,8 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
             return;
         }
 
-        if (videoDuration > 25) {
-            alert("Video duration exceeds the maximum limit of 25 seconds.");
+        if (videoDuration > 30) {
+            alert("Video duration exceeds the maximum limit of 30 seconds.");
             return;
         }
 
@@ -860,7 +883,17 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                 ref={videoRef}
                                 src={videoUrl}
                                 className="hidden"
-                                onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration)}
+                                onLoadedMetadata={(e) => {
+                                    const duration = e.currentTarget.duration;
+                                    if (duration > 30) {
+                                        alert("Video duration exceeds the maximum limit of 30 seconds. Please upload a shorter video.");
+                                        setVideoFile(null);
+                                        setVideoUrl(null);
+                                        setVideoDuration(0);
+                                    } else {
+                                        setVideoDuration(duration);
+                                    }
+                                }}
                             />
                         )}
 
@@ -888,7 +921,7 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                         >
                                             <div className="flex items-center gap-2">
                                                 <div className="w-2 h-8 rounded-full" style={{ backgroundColor: layer.maskColor }}></div>
-                                                <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />
+                                                {layer.url && <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-[10px] text-white truncate font-medium">{layer.name}</div>
                                                     <div className="text-[9px] text-zinc-500 truncate">Product {i + 1}</div>
@@ -1098,6 +1131,27 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                                     placeholder={editMode === 'chat' ? "Type your command..." : "Add specific details or changes..."}
                                     className="w-full h-16 bg-zinc-950/50 border border-white/10 rounded-sm p-2 text-[10px] text-zinc-300 focus:text-white resize-none outline-none font-mono focus:border-white/20 transition-colors"
                                 />
+
+                                {/* Paint Button (Chat Mode Only) */}
+                                {editMode === 'chat' && (
+                                    extractedFrameUrl ? (
+                                        <button
+                                            onClick={() => setExtractedFrameUrl(null)}
+                                            className="w-full py-1.5 mt-1 bg-zinc-800 hover:bg-zinc-700 border border-white/10 rounded-sm text-[10px] font-bold text-red-400 uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <X className="w-3 h-3" />
+                                            Cancel Painting
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => setShowFrameSelector(true)}
+                                            className="w-full py-1.5 mt-1 bg-zinc-800 hover:bg-zinc-700 border border-white/10 rounded-sm text-[10px] font-bold text-zinc-300 uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <Brush className="w-3 h-3" />
+                                            Paint / Edit Frame
+                                        </button>
+                                    )
+                                )}
                             </div>
 
                             {/* View Full Prompt Toggle */}
@@ -1178,250 +1232,274 @@ export const NewVideoCreateFlow = ({ onCancel, initialVideo }: NewVideoCreateFlo
                             </div>
                         </div>
                     ) : (
-                        <div className="flex-1 relative bg-zinc-950/50 flex items-center justify-center overflow-hidden">
-                            {!videoUrl ? (
-                                <div className="text-center text-zinc-600 space-y-2">
-                                    <Video className="w-12 h-12 mx-auto opacity-20" />
-                                    <p className="text-xs">Upload a video to start editing</p>
-                                </div>
-                            ) : !extractedFrameUrl ? (
-                                <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/40">
-                                    <video
-                                        ref={videoRef}
-                                        src={videoUrl}
-                                        className="w-full h-full object-contain"
-                                        controls
-                                        crossOrigin="anonymous"
-                                        onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration)}
-                                    />
+                        <div className="flex-1 relative bg-zinc-950/50 flex flex-row overflow-hidden">
 
-                                    {/* Frame Selector Overlay */}
-                                    {showFrameSelector && (
-                                        <div className="absolute inset-x-0 bottom-0 bg-black/80 backdrop-blur-md p-4 flex flex-col items-center gap-3 z-30 animate-in slide-in-from-bottom-10 fade-in duration-300 border-t border-white/10">
-                                            <div className="text-white text-xs font-medium uppercase tracking-wider flex items-center gap-2">
-                                                <Move className="w-3 h-3 text-purple-400" /> Select Frame to Mask
-                                            </div>
-                                            <div className="w-full max-w-sm flex items-center gap-4">
-                                                <input
-                                                    type="range"
-                                                    min="0"
-                                                    max={videoDuration || 10}
-                                                    step="0.1"
-                                                    className="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                                    onChange={(e) => {
-                                                        if (videoRef.current) {
-                                                            videoRef.current.currentTime = parseFloat(e.target.value);
-                                                        }
-                                                    }}
-                                                />
-                                                <span className="text-[10px] font-mono text-zinc-400 w-12 text-right">
-                                                    {videoRef.current?.currentTime.toFixed(1)}s
-                                                </span>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    onClick={() => setShowFrameSelector(false)}
-                                                    variant="ghost"
-                                                    className="h-7 text-[10px] text-zinc-400 hover:text-white"
-                                                >
-                                                    Cancel
-                                                </Button>
-                                                <Button
-                                                    onClick={() => {
-                                                        handleExtractFrame();
-                                                        setShowFrameSelector(false);
-                                                    }}
-                                                    className="h-7 bg-white text-black hover:bg-zinc-200 text-[10px] font-bold uppercase rounded-sm px-6"
-                                                >
-                                                    Use This Frame
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center gap-2">
-                                        {editMode !== 'chat' && layers.length === 0 && (
-                                            <div className="bg-black/80 text-white text-xs px-3 py-1 rounded-full mb-2 border border-white/20 animate-pulse">
-                                                Add a product to start editing
-                                            </div>
-                                        )}
-                                        {editMode !== 'chat' && !showFrameSelector && (
-                                            <Button
-                                                onClick={() => setShowFrameSelector(true)}
-                                                disabled={isExtractingFrame || layers.length === 0}
-                                                className="bg-zinc-900/80 backdrop-blur text-white border border-white/10 hover:bg-white hover:text-black font-medium uppercase tracking-widest text-[10px] px-6 py-2 rounded-sm shadow-xl transition-all"
-                                            >
-                                                {isExtractingFrame ? <div className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin mr-2" /> : <Move className="w-3 h-3 mr-2" />}
-                                                {isExtractingFrame ? 'Processing...' : 'Select Frame'}
-                                            </Button>
-                                        )}
+                            {/* LEFT SIDE: EDITOR CANVAS */}
+                            <div className="flex-1 relative flex items-center justify-center bg-zinc-950/50 px-4">
+                                {!videoUrl ? (
+                                    <div className="text-center text-zinc-600 space-y-2">
+                                        <Video className="w-12 h-12 mx-auto opacity-20" />
+                                        <p className="text-xs">Upload a video to start editing</p>
                                     </div>
-                                </div>
-                            ) : (
-                                /* EDITOR CANVAS */
-                                <div className="w-full h-full flex flex-row items-center justify-center gap-6 pl-10 pr-10">
-                                    <div
-                                        ref={imageContainerRef}
-                                        className={`relative shadow-2xl ${activeTool === 'brush' ? 'cursor-none' : ''}`}
-                                        style={{ aspectRatio: `${dimensions.width}/${dimensions.height}`, maxHeight: '90%', maxWidth: 'calc(100% - 120px)', touchAction: 'none' }}
-                                        onMouseDown={handleBrushStart}
-                                        onMouseMove={(e) => {
-                                            setMousePos({ x: e.clientX, y: e.clientY });
-                                            handleBrushMove(e);
-                                        }}
-                                        onMouseUp={handleBrushEnd}
-                                        onMouseEnter={() => setIsHoveringCanvas(true)}
-                                        onMouseLeave={() => { setIsHoveringCanvas(false); handleBrushEnd(); }}
-                                        onTouchStart={handleBrushStart}
-                                        onTouchMove={(e) => {
-                                            if (e.touches[0]) {
-                                                setMousePos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-                                            }
-                                            handleBrushMove(e);
-                                        }}
-                                        onTouchEnd={handleBrushEnd}
-                                    >
-                                        <img src={extractedFrameUrl} alt="Frame" className="w-full h-full object-contain pointer-events-none select-none" />
+                                ) : !extractedFrameUrl ? (
+                                    <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/40">
+                                        <video
+                                            ref={videoRef}
+                                            src={videoUrl}
+                                            className="w-full h-full object-contain"
+                                            controls
+                                            crossOrigin="anonymous"
+                                            onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration)}
+                                        />
 
-
-                                        {/* SVG Overlay for Masks */}
-                                        <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                            <defs>
-                                                {layers.map((layer) => (
-                                                    <mask key={`mask-def-${layer.id}`} id={`mask-${layer.id}`}>
-                                                        <rect x="0" y="0" width="100%" height="100%" fill="black" />
-                                                        {layer.maskPoints.map((stroke, i) => (
-                                                            <polyline
-                                                                key={`stroke-${layer.id}-${i}`}
-                                                                points={stroke.points.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
-                                                                fill="none"
-                                                                stroke={stroke.type === 'eraser' ? 'black' : 'white'}
-                                                                strokeWidth={stroke.width || 40}
-                                                                strokeLinecap="round"
-                                                                strokeLinejoin="round"
-                                                                vectorEffect="non-scaling-stroke"
-                                                            />
-                                                        ))}
-                                                    </mask>
-                                                ))}
-                                            </defs>
-
-                                            {/* Layer Masks */}
-                                            {layers.map((layer) => (
-                                                <rect
-                                                    key={`layer-rect-${layer.id}`}
-                                                    x="0" y="0" width="100%" height="100%"
-                                                    fill={layer.maskColor}
-                                                    opacity="0.6"
-                                                    mask={`url(#mask-${layer.id})`}
-                                                    style={{ pointerEvents: 'none' }}
-                                                />
-                                            ))}
-
-                                            {/* Current Stroke Preview */}
-                                            {currentStroke.length > 0 && (
-                                                <polyline
-                                                    points={currentStroke.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
-                                                    fill="none"
-                                                    stroke={activeTool === 'eraser' ? 'rgba(255,255,255,0.5)' : (selectedLayerId ? layers.find(l => l.id === selectedLayerId)?.maskColor : 'rgba(236, 72, 153, 0.5)')}
-                                                    strokeWidth={brushSize}
-                                                    strokeOpacity={activeTool === 'eraser' ? 1 : 0.8}
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    vectorEffect="non-scaling-stroke"
-                                                />
-                                            )}
-                                        </svg>
-
-                                        {/* Custom Brush Cursor */}
-                                        {(activeTool === 'brush' || activeTool === 'eraser') && isHoveringCanvas && layers.length > 0 && (
-                                            <div
-                                                className="fixed rounded-full border-2 border-white/50 pointer-events-none z-[100] transform -translate-x-1/2 -translate-y-1/2 shadow-xl"
-                                                style={{
-                                                    left: mousePos.x,
-                                                    top: mousePos.y,
-                                                    width: brushSize,
-                                                    height: brushSize,
-                                                    backgroundColor: activeTool === 'eraser' ? 'rgba(255,255,255,0.2)' : (selectedLayerId ? layers.find(l => l.id === selectedLayerId)?.maskColor : 'rgba(255,0,0,0.5)'),
-                                                    opacity: 0.8
-                                                }}
-                                            />
-                                        )}
-
-                                    </div>
-
-                                    {/* Vertical Right Toolbar */}
-                                    {layers.length > 0 && (
-                                        <div className="flex flex-col items-center gap-4 bg-transparent px-3 py-6 rounded-full z-50 flex-none">
-                                            {/* Tools */}
-                                            <div className="flex flex-col items-center gap-2">
-                                                <button
-                                                    onClick={() => setActiveTool('brush')}
-                                                    className={`p-2 rounded-full transition-all ${activeTool === 'brush' ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
-                                                    title="Brush Tool"
-                                                >
-                                                    <Brush size={20} />
-                                                </button>
-                                                <button
-                                                    onClick={() => setActiveTool('eraser')}
-                                                    className={`p-2 rounded-full transition-all ${activeTool === 'eraser' ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
-                                                    title="Eraser Tool"
-                                                >
-                                                    <Eraser size={20} />
-                                                </button>
-                                            </div>
-
-                                            {/* Brush Size Slider */}
-                                            {(activeTool === 'brush' || activeTool === 'eraser') && (
-                                                <div className="relative flex items-center justify-center border-t border-white/10 pt-4 mt-2 h-24 w-8">
+                                        {/* Frame Selector Overlay */}
+                                        {showFrameSelector && (
+                                            <div className="absolute inset-x-0 bottom-0 bg-black/80 backdrop-blur-md p-4 flex flex-col items-center gap-3 z-30 animate-in slide-in-from-bottom-10 fade-in duration-300 border-t border-white/10">
+                                                <div className="text-white text-xs font-medium uppercase tracking-wider flex items-center gap-2">
+                                                    <Move className="w-3 h-3 text-purple-400" /> Select Frame to Mask
+                                                </div>
+                                                <div className="w-full max-w-sm flex items-center gap-4">
                                                     <input
                                                         type="range"
-                                                        min="10"
-                                                        max="100"
-                                                        value={brushSize}
-                                                        onChange={(e) => setBrushSize(Number(e.target.value))}
-                                                        className="absolute w-20 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white -rotate-90"
-                                                        style={{ transformOrigin: 'center' }}
+                                                        min="0"
+                                                        max={videoDuration || 10}
+                                                        step="0.1"
+                                                        className="flex-1 h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                                        onChange={(e) => {
+                                                            if (videoRef.current) {
+                                                                videoRef.current.currentTime = parseFloat(e.target.value);
+                                                            }
+                                                        }}
                                                     />
+                                                    <span className="text-[10px] font-mono text-zinc-400 w-12 text-right">
+                                                        {videoRef.current?.currentTime.toFixed(1)}s
+                                                    </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        onClick={() => setShowFrameSelector(false)}
+                                                        variant="ghost"
+                                                        className="h-7 text-[10px] text-zinc-400 hover:text-white"
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() => {
+                                                            handleExtractFrame();
+                                                            setShowFrameSelector(false);
+                                                        }}
+                                                        className="h-7 bg-white text-black hover:bg-zinc-200 text-[10px] font-bold uppercase rounded-sm px-6"
+                                                    >
+                                                        Use This Frame
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center gap-2">
+                                            {editMode !== 'chat' && layers.length === 0 && (
+                                                <div className="bg-black/80 text-white text-xs px-3 py-1 rounded-full mb-2 border border-white/20 animate-pulse">
+                                                    Add a product to start editing
                                                 </div>
                                             )}
-
-                                            {/* Clear Button */}
-                                            <button
-                                                onClick={clearMask}
-                                                className="mt-2 p-2 rounded-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all border border-transparent hover:border-red-500/30"
-                                                title="Clear Mask"
-                                            >
-                                                <X size={20} />
-                                            </button>
+                                            {editMode !== 'chat' && !showFrameSelector && (
+                                                <Button
+                                                    onClick={() => setShowFrameSelector(true)}
+                                                    disabled={isExtractingFrame || layers.length === 0}
+                                                    className="bg-zinc-900/80 backdrop-blur text-white border border-white/10 hover:bg-white hover:text-black font-medium uppercase tracking-widest text-[10px] px-6 py-2 rounded-sm shadow-xl transition-all"
+                                                >
+                                                    {isExtractingFrame ? <div className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin mr-2" /> : <Move className="w-3 h-3 mr-2" />}
+                                                    {isExtractingFrame ? 'Processing...' : 'Select Frame'}
+                                                </Button>
+                                            )}
                                         </div>
-                                    )}
+                                    </div>
+                                ) : (
+                                    /* EDITOR CANVAS (Left Side of Split) */
+                                    <div className="w-full h-full flex flex-col items-center justify-center relative">
+                                        <div
+                                            ref={imageContainerRef}
+                                            className={`relative shadow-2xl ${activeTool === 'brush' ? 'cursor-none' : ''}`}
+                                            style={{ aspectRatio: `${dimensions.width}/${dimensions.height}`, maxHeight: '90%', maxWidth: '100%', touchAction: 'none' }}
+                                            onMouseDown={handleBrushStart}
+                                            onMouseMove={(e) => {
+                                                setMousePos({ x: e.clientX, y: e.clientY });
+                                                handleBrushMove(e);
+                                            }}
+                                            onMouseUp={handleBrushEnd}
+                                            onMouseEnter={() => setIsHoveringCanvas(true)}
+                                            onMouseLeave={() => { setIsHoveringCanvas(false); handleBrushEnd(); }}
+                                            onTouchStart={handleBrushStart}
+                                            onTouchMove={(e) => {
+                                                if (e.touches[0]) {
+                                                    setMousePos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+                                                }
+                                                handleBrushMove(e);
+                                            }}
+                                            onTouchEnd={handleBrushEnd}
+                                        >
+                                            <img src={extractedFrameUrl} alt="Frame" className="w-full h-full object-contain pointer-events-none select-none" />
+
+
+                                            {/* SVG Overlay for Masks */}
+                                            <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                <defs>
+                                                    {layers.map((layer) => (
+                                                        <mask key={`mask-def-${layer.id}`} id={`mask-${layer.id}`}>
+                                                            <rect x="0" y="0" width="100%" height="100%" fill="black" />
+                                                            {layer.maskPoints.map((stroke, i) => (
+                                                                <polyline
+                                                                    key={`stroke-${layer.id}-${i}`}
+                                                                    points={stroke.points.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
+                                                                    fill="none"
+                                                                    stroke={stroke.type === 'eraser' ? 'black' : 'white'}
+                                                                    strokeWidth={stroke.width || 40}
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    vectorEffect="non-scaling-stroke"
+                                                                />
+                                                            ))}
+                                                        </mask>
+                                                    ))}
+                                                </defs>
+
+                                                {/* Layer Masks */}
+                                                {layers.map((layer) => (
+                                                    <rect
+                                                        key={`layer-rect-${layer.id}`}
+                                                        x="0" y="0" width="100%" height="100%"
+                                                        fill={layer.maskColor}
+                                                        opacity="0.6"
+                                                        mask={`url(#mask-${layer.id})`}
+                                                        style={{ pointerEvents: 'none' }}
+                                                    />
+                                                ))}
+
+                                                {/* Current Stroke Preview */}
+                                                {currentStroke.length > 0 && (
+                                                    <polyline
+                                                        points={currentStroke.map(p => `${p[0] * 100} ${p[1] * 100}`).join(', ')}
+                                                        fill="none"
+                                                        stroke={activeTool === 'eraser' ? 'rgba(255,255,255,0.5)' : (selectedLayerId ? layers.find(l => l.id === selectedLayerId)?.maskColor : 'rgba(249, 115, 22, 0.5)')}
+                                                        strokeWidth={brushSize}
+                                                        strokeOpacity={activeTool === 'eraser' ? 1 : 0.8}
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        vectorEffect="non-scaling-stroke"
+                                                    />
+                                                )}
+                                            </svg>
+
+                                            {/* Custom Brush Cursor */}
+                                            {(activeTool === 'brush' || activeTool === 'eraser') && isHoveringCanvas && layers.length > 0 && (
+                                                <div
+                                                    className="fixed rounded-full border-2 border-white/50 pointer-events-none z-[100] transform -translate-x-1/2 -translate-y-1/2 shadow-xl"
+                                                    style={{
+                                                        left: mousePos.x,
+                                                        top: mousePos.y,
+                                                        width: brushSize,
+                                                        height: brushSize,
+                                                        backgroundColor: activeTool === 'eraser' ? 'rgba(255,255,255,0.2)' : (selectedLayerId ? layers.find(l => l.id === selectedLayerId)?.maskColor : 'rgba(249, 115, 22, 0.5)'),
+                                                        opacity: 0.8
+                                                    }}
+                                                />
+                                            )}
+
+                                        </div>
+
+                                        {/* Vertical Right Toolbar */}
+                                        {(layers.length > 0 || editMode === 'chat') && (
+                                            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center gap-4 bg-zinc-900/80 backdrop-blur-md px-2 py-4 rounded-full z-50 border border-white/10">
+                                                {/* Back Button */}
+                                                <button
+                                                    onClick={() => setExtractedFrameUrl(null)}
+                                                    className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all border-b border-white/10 pb-4 mb-2"
+                                                    title="Exit Painting"
+                                                >
+                                                    <ChevronLeft size={16} />
+                                                </button>
+
+                                                {/* Tools */}
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <button
+                                                        onClick={() => setActiveTool('brush')}
+                                                        className={`p-2 rounded-full transition-all ${activeTool === 'brush' ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                                                        title="Brush Tool"
+                                                    >
+                                                        <Brush size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setActiveTool('eraser')}
+                                                        className={`p-2 rounded-full transition-all ${activeTool === 'eraser' ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                                                        title="Eraser Tool"
+                                                    >
+                                                        <Eraser size={16} />
+                                                    </button>
+                                                </div>
+
+                                                {/* Brush Size Slider */}
+                                                {(activeTool === 'brush' || activeTool === 'eraser') && (
+                                                    <div className="relative flex items-center justify-center border-t border-white/10 pt-4 mt-2 h-24 w-8">
+                                                        <input
+                                                            type="range"
+                                                            min="10"
+                                                            max="100"
+                                                            value={brushSize}
+                                                            onChange={(e) => setBrushSize(Number(e.target.value))}
+                                                            className="absolute w-20 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white -rotate-90"
+                                                            style={{ transformOrigin: 'center' }}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Clear Button */}
+                                                <button
+                                                    onClick={clearMask}
+                                                    className="mt-2 p-2 rounded-full text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all border border-transparent hover:border-red-500/30"
+                                                    title="Clear Mask"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* RIGHT SIDE: REFERENCE VIDEO (Split View) */}
+                            {extractedFrameUrl && videoUrl && (
+                                <div className="hidden lg:flex w-[25%] border-l border-white/10 bg-black/20 flex-col items-center justify-center p-4 relative">
+                                    <div className="absolute top-4 left-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest bg-black/50 px-2 py-1 rounded-sm backdrop-blur-sm">
+                                        Reference Video
+                                    </div>
+                                    <video src={videoUrl} controls className="w-full max-h-full object-contain rounded-sm shadow-xl" />
                                 </div>
                             )}
+
                         </div>
                     )}
                 </div>
-            </div>
 
-            <SavedMasksModal
-                isOpen={showSavedMasksModal}
-                onClose={() => setShowSavedMasksModal(false)}
-                onSelect={(url) => {
-                    const newLayer: ProductLayer = {
-                        id: crypto.randomUUID(),
-                        url: url,
-                        type: 'mask',
-                        name: 'Saved Mask',
-                        prompt: '',
-                        maskPoints: [],
-                        maskColor: LAYER_COLORS[layers.length % LAYER_COLORS.length],
-                        details: []
-                    };
-                    setLayers([...layers, newLayer]);
-                    setSelectedLayerId(newLayer.id);
-                    setShowSavedMasksModal(false);
-                }}
-            />
+                <SavedMasksModal
+                    isOpen={showSavedMasksModal}
+                    onClose={() => setShowSavedMasksModal(false)}
+                    onSelect={(url) => {
+                        const newLayer: ProductLayer = {
+                            id: crypto.randomUUID(),
+                            url: url,
+                            type: 'mask',
+                            name: 'Saved Mask',
+                            prompt: '',
+                            maskPoints: [],
+                            maskColor: LAYER_COLORS[layers.length % LAYER_COLORS.length],
+                            details: []
+                        };
+                        setLayers([...layers, newLayer]);
+                        setSelectedLayerId(newLayer.id);
+                        setShowSavedMasksModal(false);
+                    }}
+                />
+            </div>
         </div>
     );
 };

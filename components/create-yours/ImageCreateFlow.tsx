@@ -29,7 +29,7 @@ interface ProductLayer {
     maskColor: string;
 }
 
-const MASK_COLORS = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00', '#FFA500', '#800080']; // Red, Blue, Green, Yellow, Orange, Purple
+const MASK_COLORS = ['#FF0000', '#0000FF', '#00FF00', '#FFFF00', '#F97316', '#800080']; // Red, Blue, Green, Yellow, Orange, Purple
 
 
 interface ImageCreateFlowProps {
@@ -117,7 +117,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
     // State for editable prompt parts
     const [additionalDetails, setAdditionalDetails] = useState('');
-    const [editMode, setEditMode] = useState<'change' | 'chat'>('change');
+    const [editMode, setEditMode] = useState<'change' | 'chat'>('chat');
     const [chatHistory, setChatHistory] = useState<{ type: 'user' | 'result', content: string, images?: string[] }[]>([]);
     const [chatImages, setChatImages] = useState<string[]>([]);
     const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -407,6 +407,29 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
 
     const handleBrushStart = (e: React.MouseEvent | React.TouchEvent) => {
         if (activeTool !== 'brush' && activeTool !== 'eraser') return;
+
+        // Auto-create mask layer in Chat Mode if none selected
+        if (editMode === 'chat' && !selectedLayerId) {
+            // Check if we already have a chat mask (optional optimization)
+            const existingMask = layers.find(l => l.type === 'mask' && l.url === 'chat-mask');
+            if (existingMask) {
+                setSelectedLayerId(existingMask.id);
+            } else {
+                const newLayer: ProductLayer = {
+                    id: crypto.randomUUID(),
+                    url: 'chat-mask', // Marker for chat mask
+                    type: 'mask',
+                    x: 0, y: 0, scale: 1, rotation: 0, zIndex: 100,
+                    prompt: 'Edit this area',
+                    maskPoints: [],
+                    maskColor: '#F97316', // Orange
+                    details: []
+                };
+                setLayers([...layers, newLayer]);
+                setSelectedLayerId(newLayer.id);
+            }
+        }
+
         const p = getPoint(e);
         if (p) {
             const stroke = [p, p];
@@ -1064,7 +1087,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                         >
                                             <div className="flex items-center gap-2">
                                                 <div className="w-2 h-8 rounded-full" style={{ backgroundColor: layer.maskColor }} />
-                                                <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />
+                                                {layer.url && <img src={layer.url} className="w-8 h-8 object-contain bg-black/40 rounded-sm" />}
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-[10px] text-white truncate font-medium">{layer.type === 'mask' ? 'Mask Layer' : `Product ${i + 1}`}</div>
                                                     <div className="text-[9px] text-zinc-500 truncate">{layer.type === 'product' ? 'Product Layer' : 'Modifier Layer'}</div>
@@ -1111,7 +1134,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                                 {(layer.details || []).map((detail, dIndex) => (
                                                     <div key={detail.id} className="flex gap-2 items-start bg-black/20 p-1 rounded-sm border border-white/5">
                                                         <div className="relative w-8 h-8 shrink-0 rounded-sm overflow-hidden border border-white/5 group/d">
-                                                            <img src={detail.url} className="w-full h-full object-cover" />
+                                                            {detail.url && <img src={detail.url} className="w-full h-full object-cover" />}
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
@@ -1212,7 +1235,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                                     <div className="space-y-2">
                                                         {item.images && item.images.length > 0 && (
                                                             <div className="flex flex-wrap gap-1">
-                                                                {item.images.map((img, i) => (
+                                                                {item.images.map((img, i) => img && (
                                                                     <img key={i} src={img} className="w-16 h-16 object-cover rounded border border-white/10" />
                                                                 ))}
                                                             </div>
@@ -1224,7 +1247,7 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                                         setGeneratedImage(item.content);
                                                         setViewMode('result');
                                                     }}>
-                                                        <img src={item.content} className="w-20 h-20 object-cover rounded-sm border border-white/10" />
+                                                        {item.content && <img src={item.content} className="w-20 h-20 object-cover rounded-sm border border-white/10" />}
                                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-sm text-[8px] text-white">
                                                             View
                                                         </div>
@@ -1488,7 +1511,8 @@ export const ImageCreateFlow = ({ onCancel, initialReferenceImage, initialResult
                                     </div>
 
                                     {/* Floating Toolbar - Vertical Static Right */}
-                                    {layers.length > 0 && (
+                                    {/* Floating Toolbar - Vertical Static Right */}
+                                    {(layers.length > 0 || editMode === 'chat') && (
                                         <div className="flex flex-col items-center gap-4 bg-transparent px-3 py-6 rounded-full z-50 flex-none">
                                             {/* Layer Indicator */}
                                             <div className="mb-2 flex flex-col items-center gap-2 border-b border-white/10 pb-4 w-full">

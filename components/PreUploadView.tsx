@@ -56,8 +56,27 @@ export function PreUploadView({ type, onUpload }: PreUploadViewProps) {
     }, [type, config.stepsKey, config.defaultTitle, config.defaultDesc]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            onUpload(e.target.files[0]);
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (type === 'video' && file.type.startsWith('video/')) {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = () => {
+                window.URL.revokeObjectURL(video.src);
+                if (video.duration > 30) {
+                    alert("Video duration exceeds the maximum limit of 30 seconds. Please select a shorter video.");
+                } else {
+                    onUpload(file);
+                }
+            };
+            video.onerror = () => {
+                window.URL.revokeObjectURL(video.src);
+                onUpload(file); // Fallback: allow upload if metadata fails, let editor handle it
+            };
+            video.src = URL.createObjectURL(file);
+        } else {
+            onUpload(file);
         }
     };
 

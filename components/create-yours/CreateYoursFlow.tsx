@@ -118,19 +118,65 @@ The final result must look like the same video, with the same movements and ligh
         if (!file) return;
         if (!file.type.startsWith('video/')) { alert('Please upload a video file'); return; }
 
+        const url = URL.createObjectURL(file);
         const video = document.createElement('video');
         video.preload = 'metadata';
+        video.muted = true; // Crucial for some browsers to load metadata without interaction
+        video.playsInline = true;
+
         video.onloadedmetadata = () => {
-            window.URL.revokeObjectURL(video.src);
+            let duration = video.duration;
+            console.log('Video metadata loaded, raw duration:', duration);
+
+            // Handle infinity/NaN issues
+            if (!Number.isFinite(duration)) {
+                console.warn('Video duration is infinite or NaN', duration);
+                video.currentTime = 1e101; // Hack to force update duration
+                return;
+            }
+
+            validateAndSet(duration);
+        };
+
+        // Fallback for duration issues
+        video.ondurationchange = () => {
             const duration = video.duration;
-            // No duration limit - let user upload any length
+            console.log('Video duration changed:', duration);
+            if (Number.isFinite(duration) && duration > 0) {
+                validateAndSet(duration);
+            }
+        };
+
+        const validateAndSet = (duration: number) => {
+            // Remove listeners to avoid double triggers
+            video.onloadedmetadata = null;
+            video.ondurationchange = null;
+
+            // DEBUG: Show user what we see
+            // alert(`DEBUG: Detected duration: ${duration}s`); 
+
+            // Validate video duration (3-30 seconds)
+            if (duration < 3) {
+                alert(`El vídeo es demasiado corto (${duration.toFixed(1)}s). La duración mínima es de 3 segundos.`);
+                URL.revokeObjectURL(url);
+                if (e.target) e.target.value = '';
+                return;
+            }
+            if (duration > 30) {
+                alert(`El vídeo es demasiado largo (${duration.toFixed(1)}s). La duración máxima es de 30 segundos.`);
+                URL.revokeObjectURL(url);
+                if (e.target) e.target.value = '';
+                return;
+            }
+
             setVideoDuration(duration);
             setVideoFile(file);
-            setVideoUrl(URL.createObjectURL(file));
+            setVideoUrl(url);
             setSelectedTimestamp(duration / 2);
             setTempTimestamp(duration / 2);
         };
-        video.src = URL.createObjectURL(file);
+
+        video.src = url;
     };
 
     const handleExtractFrame = async () => {
@@ -269,6 +315,12 @@ The final result must look like the same video, with the same movements and ligh
     const handleGenerate = async () => {
         if (!videoFile || (products.length === 0 && !prompt)) {
             alert('Please upload a video and add at least one product or instruction.');
+            return;
+        }
+
+        // Safety check for duration
+        if (videoDuration < 3 || videoDuration > 30) {
+            alert(`El vídeo debe durar entre 3 y 30 segundos. Duración actual: ${videoDuration.toFixed(1)}s`);
             return;
         }
 
